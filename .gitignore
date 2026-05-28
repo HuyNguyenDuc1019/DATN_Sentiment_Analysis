@@ -1,0 +1,20 @@
+# Bỏ qua môi trường ảo Python
+backend/venv/
+venv/
+
+# Bỏ qua thư viện của Node.js
+frontend/node_modules/
+node_modules/
+
+# Bỏ qua các file trọng số AI quá nặng (tránh lỗi GitHub)
+backend/phobert_saved_model/*.bin
+backend/phobert_saved_model/*.safetensors
+ml_training/*.pkl
+
+# Bỏ qua các file cache của hệ thống
+__pycache__/
+*.pyc
+.DS_Store
+
+# Bỏ qua các file môi trường bảo mật
+.env
