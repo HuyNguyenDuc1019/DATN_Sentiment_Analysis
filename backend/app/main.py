@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from .schemas import PredictRequest, PredictResponse
+from .schemas import PredictRequest, PredictResponse, BatchPredictRequest
 from .predictor import SentimentPredictor
 import os
+import time
 
 app = FastAPI(
     title="Foody Sentiment Analysis API",
@@ -50,3 +51,55 @@ async def predict_sentiment(request: PredictRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình dự đoán: {str(e)}")
+
+# =====================================================================
+# API MỚI: XỬ LÝ HÀNG LOẠT (BATCH PROCESSING) TỐI ƯU CHO CPU
+# =====================================================================
+@app.post("/predict/batch")
+async def predict_batch(request: BatchPredictRequest):
+    if predictor is None:
+        raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")
+        
+    start_time = time.time()
+    
+    all_texts = request.texts
+    total_texts = len(all_texts)
+    results = []
+
+    # CHUNKING: Chia mảng lớn thành các mảng nhỏ (10 câu/lần) để chống văng RAM
+    CHUNK_SIZE = 10 
+
+    try:
+        for i in range(0, total_texts, CHUNK_SIZE):
+            chunk_texts = all_texts[i : i + CHUNK_SIZE]
+            
+            for text in chunk_texts:
+                # Bỏ qua nếu có chuỗi rỗng nằm lẫn trong mảng
+                if not text.strip():
+                    continue
+                    
+                # Tận dụng luôn class SentimentPredictor đã đóng gói của bạn
+                pred_result = predictor.predict(text)
+                
+                # Trích xuất dữ liệu từ object/dict trả về của predictor
+                # (Xử lý linh hoạt việc trả về dict hay Pydantic model)
+                label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
+                confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
+                
+                results.append({
+                    "text": text,
+                    "label": label,
+                    "confidence": confidence
+                })
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình xử lý mảng: {str(e)}")
+
+    end_time = time.time()
+    processing_time = round(end_time - start_time, 2)
+
+    return {
+        "results": results,
+        "total_processed": total_texts,
+        "processing_time": f"{processing_time}s"
+    }
