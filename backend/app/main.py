@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from .schemas import PredictRequest, PredictResponse, BatchPredictRequest
+from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, FeedbackRequest
+from .database import supabase
 from .predictor import SentimentPredictor
+
 import os
 import time
 
@@ -103,3 +105,23 @@ async def predict_batch(request: BatchPredictRequest):
         "total_processed": total_texts,
         "processing_time": f"{processing_time}s"
     }
+# =====================================================================
+# API MỚI: VÒNG LẶP PHẢN HỒI (HUMAN-IN-THE-LOOP)
+# =====================================================================
+@app.post("/feedback")
+async def save_feedback(request: FeedbackRequest):
+    try:
+        # Gọi lệnh Insert dữ liệu vào bảng feedback_data trên Supabase
+        data, count = supabase.table("feedback_data").insert({
+            "original_content": request.original_content,
+            "old_ai_label": request.old_ai_label,
+            "corrected_label": request.corrected_label
+        }).execute()
+        
+        return {
+            "status": "success",
+            "message": "Đã lưu đính chính thành công, cảm ơn bạn đã đóng góp dữ liệu!",
+            "data": data[1] # Dữ liệu trả về từ Supabase sau khi insert
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu dữ liệu vào cơ sở dữ liệu: {str(e)}")
