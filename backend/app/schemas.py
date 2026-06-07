@@ -11,3 +11,9 @@ class PredictResponse(BaseModel):
 
 class BatchPredictRequest(BaseModel):
     texts: List[str]
+    
+# Thêm class này xuống dưới cùng
+class FeedbackRequest(BaseModel):
+    original_content: str
+    old_ai_label: int
+    corrected_label: int
