@@ -55,7 +55,7 @@ async def predict_sentiment(request: PredictRequest):
         raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình dự đoán: {str(e)}")
 
 # =====================================================================
-# API MỚI: XỬ LÝ HÀNG LOẠT (BATCH PROCESSING) TỐI ƯU CHO CPU
+# API MỚI: XỬ LÝ HÀNG LOẠT & LƯU DATABASE (CHUẨN SAAS)
 # =====================================================================
 @app.post("/predict/batch")
 async def predict_batch(request: BatchPredictRequest):
@@ -72,19 +72,16 @@ async def predict_batch(request: BatchPredictRequest):
     CHUNK_SIZE = 10 
 
     try:
+        # Giai đoạn 1: AI Dự đoán cảm xúc
         for i in range(0, total_texts, CHUNK_SIZE):
             chunk_texts = all_texts[i : i + CHUNK_SIZE]
             
             for text in chunk_texts:
-                # Bỏ qua nếu có chuỗi rỗng nằm lẫn trong mảng
                 if not text.strip():
                     continue
                     
-                # Tận dụng luôn class SentimentPredictor đã đóng gói của bạn
                 pred_result = predictor.predict(text)
                 
-                # Trích xuất dữ liệu từ object/dict trả về của predictor
-                # (Xử lý linh hoạt việc trả về dict hay Pydantic model)
                 label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
                 confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
                 
@@ -94,6 +91,27 @@ async def predict_batch(request: BatchPredictRequest):
                     "confidence": confidence
                 })
                 
+        # Giai đoạn 2: Chuẩn bị gói dữ liệu để đưa lên Supabase
+        db_records = []
+        for item in results:
+            db_records.append({
+                "content": item["text"], 
+                "ai_label": item["label"], # 👈 ĐỔI TÊN CỘT THÀNH ai_label (giống hệt Supabase)
+                "confidence": item["confidence"],
+                "user_id": request.user_id,
+                "source_url": request.source_url # 👈 LƯU THÊM CÁI LINK VÀO DB
+            })
+
+        # Giai đoạn 3: Bắn dữ liệu vào bảng scraped_reviews
+        if db_records:
+            try:
+                # Gọi lệnh insert hàng loạt
+                supabase.table("scraped_reviews").insert(db_records).execute()
+                print(f"✅ Đã lưu thành công {len(db_records)} bình luận vào Database!")
+            except Exception as db_error:
+                # Chỉ in lỗi ra Terminal chứ không làm sập API, để Frontend vẫn nhận được kết quả phân tích
+                print(f"❌ Lỗi khi lưu vào Supabase: {str(db_error)}")
+                
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình xử lý mảng: {str(e)}")
 
@@ -102,26 +120,28 @@ async def predict_batch(request: BatchPredictRequest):
 
     return {
         "results": results,
-        "total_processed": total_texts,
-        "processing_time": f"{processing_time}s"
+        "total_processed": len(results),
+        "processing_time": f"{processing_time}s",
+        "message": "Phân tích và lưu trữ thành công"
     }
+
 # =====================================================================
 # API MỚI: VÒNG LẶP PHẢN HỒI (HUMAN-IN-THE-LOOP)
 # =====================================================================
 @app.post("/feedback")
 async def save_feedback(request: FeedbackRequest):
     try:
-        # Gọi lệnh Insert dữ liệu vào bảng feedback_data trên Supabase
         data, count = supabase.table("feedback_data").insert({
             "original_content": request.original_content,
             "old_ai_label": request.old_ai_label,
-            "corrected_label": request.corrected_label
+            "corrected_label": request.corrected_label,
+            "user_id": request.user_id # Lưu lại công lao của người đóng góp
         }).execute()
         
         return {
             "status": "success",
             "message": "Đã lưu đính chính thành công, cảm ơn bạn đã đóng góp dữ liệu!",
-            "data": data[1] # Dữ liệu trả về từ Supabase sau khi insert
+            "data": data[1] if data else None
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi lưu dữ liệu vào cơ sở dữ liệu: {str(e)}")
