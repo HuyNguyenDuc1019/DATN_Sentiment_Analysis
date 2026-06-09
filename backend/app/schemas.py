@@ -11,9 +11,11 @@ class PredictResponse(BaseModel):
 
 class BatchPredictRequest(BaseModel):
     texts: List[str]
-    
-# Thêm class này xuống dưới cùng
+    user_id: str  # Cổng nhận user_id từ Node.js gửi sang
+    source_url: str  # Cổng nhận URL nguồn của bình luận để lưu vào database cùng với feedback
+
 class FeedbackRequest(BaseModel):
     original_content: str
     old_ai_label: int
     corrected_label: int
+    user_id: str  # Nhận thêm user_id để biết ai là người đóng góp feedback
