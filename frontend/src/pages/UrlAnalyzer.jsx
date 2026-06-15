@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { HiOutlineLink, HiOutlineSparkles, HiOutlineChartBar, HiFaceSmile, HiFaceFrown } from 'react-icons/hi2';
 import { analyzeUrl } from '@/services/api';
+// ============== LOGIC MỚI: IMPORT SUPABASE CLIENT ==============
+import { supabase } from '@/services/supabaseClient'; 
+// ===============================================================
 import { computeStats } from '@/utils/stats';
 import StatCard from '@/components/ui/StatCard';
 import SentimentPieChart from '@/components/charts/SentimentPieChart';
@@ -40,11 +43,33 @@ const UrlAnalyzer = () => {
 
     const ticker = setInterval(() => setProgress((p) => Math.min(p + 1.5, 88)), 300);
     try {
-      const data = await analyzeUrl({ url: url.trim() });
+      // 🚀 BƯỚC MỚI: Lấy thông tin phiên làm việc hiện tại để lấy user_id của tài khoản đăng nhập
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id || "anonymous_user";
+
+      // 🚀 BƯỚC MỚI: Đóng gói đúng cấu trúc Payload (BatchPredictRequest) khớp với Backend Python của bạn ấy
+      const payload = {
+        texts: [url.trim()],          // Đưa link vào mảng texts
+        user_id: currentUserId,       // ID người dùng đăng nhập từ Supabase
+        source_url: url.trim()        // Link gốc
+      };
+
+      // Gọi hàm truyền payload mới đã chuẩn hóa cấu trúc dữ liệu
+      const data = await analyzeUrl(payload);
+      
       clearInterval(ticker);
       setProgress(100);
-      setResults(data);
-      toast.success(`Phân tích xong ${data.length} bình luận từ URL!`);
+      
+      // 🚀 BƯỚC MỚI: Do API /predict/batch trả về Object chứa { results: [...] }, 
+      // ta cần trích xuất chính xác mảng results bên trong ra để truyền cho các biểu đồ/bảng bên dưới
+      if (data && data.results) {
+        setResults(data.results);
+        toast.success(`Phân tích xong ${data.results.length} bình luận từ URL!`);
+      } else {
+        setResults([]);
+        toast.error("Không nhận được định dạng mảng kết quả từ Backend.");
+      }
+      
     } catch (err) {
       clearInterval(ticker);
       setError(err.message);

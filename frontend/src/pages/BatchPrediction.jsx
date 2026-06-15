@@ -9,6 +9,9 @@ import {
   HiOutlineSparkles,
 } from 'react-icons/hi2';
 import { predictBatch } from '@/services/api';
+// ============== LOGIC MỚI: IMPORT SUPABASE CLIENT ==============
+import { supabase } from '@/services/supabaseClient';
+// ===============================================================
 import { computeStats } from '@/utils/stats';
 import StatCard from '@/components/ui/StatCard';
 import SentimentPieChart from '@/components/charts/SentimentPieChart';
@@ -78,11 +81,29 @@ const BatchPrediction = () => {
         // Simulate progress while waiting
         const ticker = setInterval(() => setProgress((p) => Math.min(p + 2, 90)), 200);
         try {
-          const data = await predictBatch({ texts });
+          // 🚀 BƯỚC MỚI: Lấy thông tin phiên làm việc hiện tại để lấy user_id từ Supabase
+          const { data: { session } } = await supabase.auth.getSession();
+          const currentUserId = session?.user?.id || "anonymous_user";
+
+          // 🚀 BƯỚC MỚI: Đóng gói Payload chuẩn cấu trúc BatchPredictRequest của Backend Python
+          const payload = {
+            texts: texts,                 // Mảng các câu bình luận bóc từ file CSV
+            user_id: currentUserId,       // ID người dùng đăng nhập thành công
+            source_url: file.name         // Lưu vết tên file CSV vào cột source_url của database
+          };
+
+          const data = await predictBatch(payload);
           clearInterval(ticker);
           setProgress(100);
-          setResults(data);
-          toast.success(`Phân tích xong ${data.length} bình luận!`);
+
+          // 🚀 BƯỚC MỚI: Trích xuất chính xác mảng dữ liệu nằm bên trong thuộc tính .results 
+          if (data && data.results) {
+            setResults(data.results);
+            toast.success(`Phân tích xong ${data.results.length} bình luận!`);
+          } else {
+            setResults([]);
+            toast.error("Không tìm thấy cấu trúc mảng trả về từ Backend.");
+          }
         } catch (err) {
           clearInterval(ticker);
           setError(err.message);

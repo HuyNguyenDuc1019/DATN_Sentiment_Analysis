@@ -4,6 +4,9 @@ import { motion } from 'framer-motion';
 import { HiOutlineEye, HiOutlineEyeSlash, HiOutlineLockClosed, HiOutlineEnvelope } from 'react-icons/hi2';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+// ============== LOGIC MỚI: IMPORT KẾT NỐI SUPABASE ==============
+import { supabase } from '../services/supabaseClient'; 
+// ===============================================================
 
 const Login = () => {
   const { login } = useAuth();
@@ -33,6 +36,19 @@ const Login = () => {
     setLoading(true);
     setError(null);
     try {
+      // ============== LOGIC MỚI: ĐĂNG NHẬP THẲNG LÊN SUPABASE ==============
+      const { data: supabaseData, error: supabaseError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      // Nếu Supabase trả về lỗi (Ví dụ: sai tài khoản/mật khẩu trên hệ thống)
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
+      // ====================================================================
+
+      // Giữ nguyên logic cũ: Lưu trạng thái auth vào context hiện tại của bạn và chuyển trang
       await login(email, password);
       navigate(from, { replace: true });
     } catch (err) {
