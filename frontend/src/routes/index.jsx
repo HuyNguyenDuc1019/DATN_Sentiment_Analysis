@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from '@/layouts/AppLayout';
 import Spinner from '@/components/ui/Spinner';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 // Lazy-loaded pages
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -10,6 +11,7 @@ const UrlAnalyzer = lazy(() => import('@/pages/UrlAnalyzer'));
 const FeedbackCenter = lazy(() => import('@/pages/FeedbackCenter'));
 const Reports = lazy(() => import('@/pages/Reports'));
 const Settings = lazy(() => import('@/pages/Settings'));
+const Login = lazy(() => import('@/pages/Login'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
@@ -19,7 +21,24 @@ const PageLoader = () => (
 
 const AppRoutes = () => (
   <Routes>
-    <Route element={<AppLayout />}>
+    {/* Public route */}
+    <Route
+      path="/login"
+      element={
+        <Suspense fallback={<PageLoader />}>
+          <Login />
+        </Suspense>
+      }
+    />
+
+    {/* Protected routes */}
+    <Route
+      element={
+        <ProtectedRoute>
+          <AppLayout />
+        </ProtectedRoute>
+      }
+    >
       <Route
         path="/"
         element={
