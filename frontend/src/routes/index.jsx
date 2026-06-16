@@ -12,6 +12,7 @@ const FeedbackCenter = lazy(() => import('@/pages/FeedbackCenter'));
 const Reports = lazy(() => import('@/pages/Reports'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
+const Register = lazy(() => import('@/pages/Register')); // Đã tích hợp từ file thứ nhất
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
@@ -21,12 +22,20 @@ const PageLoader = () => (
 
 const AppRoutes = () => (
   <Routes>
-    {/* Public route */}
+    {/* Public routes */}
     <Route
       path="/login"
       element={
         <Suspense fallback={<PageLoader />}>
           <Login />
+        </Suspense>
+      }
+    />
+    <Route
+      path="/register"
+      element={
+        <Suspense fallback={<PageLoader />}>
+          <Register />
         </Suspense>
       }
     />
