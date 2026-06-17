@@ -7,11 +7,11 @@ import {
   HiOutlineDocumentText,
   HiXMark,
   HiOutlineSparkles,
+  HiOutlineChartBar,
+  HiFaceSmile,
+  HiFaceFrown,
 } from 'react-icons/hi2';
 import { predictBatch } from '@/services/api';
-// ============== LOGIC MỚI: IMPORT SUPABASE CLIENT ==============
-import { supabase } from '@/services/supabaseClient';
-// ===============================================================
 import { computeStats } from '@/utils/stats';
 import StatCard from '@/components/ui/StatCard';
 import SentimentPieChart from '@/components/charts/SentimentPieChart';
@@ -20,7 +20,32 @@ import ResultsTable from '@/components/table/ResultsTable';
 import FeedbackModal from '@/components/modals/FeedbackModal';
 import ErrorState from '@/components/ui/ErrorState';
 import Spinner from '@/components/ui/Spinner';
-import { HiOutlineChartBar, HiFaceSmile, HiFaceFrown } from 'react-icons/hi2';
+
+const CSV_SOURCE_URL = 'CSV_Upload';
+const TEXT_COLUMN_NAMES = ['comment', 'comments', 'text', 'review', 'content', 'binh_luan', 'noi_dung'];
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizePrediction = (value) => {
+  if (value === 1 || value === '1') return 1;
+  if (value === 0 || value === '0') return 0;
+
+  const text = String(value || '').trim().toLowerCase();
+  if (['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(text)) return 1;
+  if (['negative', 'neg', 'label_0', 'tiêu cực', 'tieu cuc'].includes(text)) return 0;
+
+  return 0;
+};
+
+const normalizeConfidence = (value) => {
+  const num = Number(value) || 0;
+  return num > 1 ? num / 100 : num;
+};
+
+const normalizeResult = (item) => ({
+  text: item.text ?? item.content ?? item.comment ?? '',
+  prediction: normalizePrediction(item.prediction ?? item.label ?? item.ai_label),
+  confidence: normalizeConfidence(item.confidence),
+});
 
 const BatchPrediction = () => {
   const [file, setFile] = useState(null);
@@ -33,10 +58,11 @@ const BatchPrediction = () => {
   const inputRef = useRef(null);
 
   const handleFile = (f) => {
-    if (!f.name.endsWith('.csv')) { 
-      toast.error('Vui lòng chọn file .csv'); 
-      return; 
+    if (!f.name.toLowerCase().endsWith('.csv')) {
+      toast.error('Vui lòng chọn file .csv');
+      return;
     }
+
     setFile(f);
     setResults([]);
     setError(null);
@@ -51,18 +77,19 @@ const BatchPrediction = () => {
 
   const analyze = () => {
     if (!file) return;
+
     setLoading(true);
     setProgress(0);
     setError(null);
+    setResults([]);
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (parsed) => {
-        // Find text column – look for common names
         const cols = parsed.meta.fields || [];
         const textCol = cols.find((c) =>
-          ['comment', 'text', 'review', 'content', 'bình luận', 'noi_dung'].includes(c.toLowerCase())
+          TEXT_COLUMN_NAMES.includes(c.trim().toLowerCase())
         ) || cols[0];
 
         if (!textCol) {
@@ -71,39 +98,42 @@ const BatchPrediction = () => {
           return;
         }
 
-        const texts = parsed.data.map((row) => row[textCol]).filter(Boolean);
+        const texts = parsed.data
+          .map((row) => row[textCol]?.trim())
+          .filter(Boolean);
+
         if (!texts.length) {
           setError('File CSV trống hoặc không có dữ liệu hợp lệ.');
           setLoading(false);
           return;
         }
 
-        // Simulate progress while waiting
+        const userId = localStorage.getItem('user_id');
+        if (!userId || !UUID_PATTERN.test(userId)) {
+          setError('Thiếu user_id hợp lệ. Hãy đăng nhập hoặc lưu UUID user vào localStorage.user_id trước khi phân tích file.');
+          setLoading(false);
+          return;
+        }
+
         const ticker = setInterval(() => setProgress((p) => Math.min(p + 2, 90)), 200);
+
         try {
-          // 🚀 BƯỚC MỚI: Lấy thông tin phiên làm việc hiện tại để lấy user_id từ Supabase
-          const { data: { session } } = await supabase.auth.getSession();
-          const currentUserId = session?.user?.id || "anonymous_user";
+          const data = await predictBatch({
+            texts,
+            user_id: userId,
+            source_url: CSV_SOURCE_URL,
+          });
 
-          // 🚀 BƯỚC MỚI: Đóng gói Payload chuẩn cấu trúc BatchPredictRequest của Backend Python
-          const payload = {
-            texts: texts,                 // Mảng các câu bình luận bóc từ file CSV
-            user_id: currentUserId,       // ID người dùng đăng nhập thành công
-            source_url: file.name         // Lưu vết tên file CSV vào cột source_url của database
-          };
-
-          const data = await predictBatch(payload);
           clearInterval(ticker);
-          setProgress(100);
+          const normalizedResults = Array.isArray(data) ? data.map(normalizeResult) : [];
 
-          // 🚀 BƯỚC MỚI: Trích xuất chính xác mảng dữ liệu nằm bên trong thuộc tính .results 
-          if (data && data.results) {
-            setResults(data.results);
-            toast.success(`Phân tích xong ${data.results.length} bình luận!`);
-          } else {
-            setResults([]);
-            toast.error("Không tìm thấy cấu trúc mảng trả về từ Backend.");
+          if (!normalizedResults.length) {
+            throw new Error('Backend xử lý xong nhưng không có kết quả để hiển thị.');
           }
+
+          setProgress(100);
+          setResults(normalizedResults);
+          toast.success(`Phân tích xong ${normalizedResults.length} bình luận!`);
         } catch (err) {
           clearInterval(ticker);
           setError(err.message);
@@ -129,13 +159,11 @@ const BatchPrediction = () => {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-display font-bold text-2xl text-ink dark:text-white">Batch Prediction</h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Upload file CSV để phân tích hàng loạt bình luận</p>
       </motion.div>
 
-      {/* Upload zone */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -166,6 +194,7 @@ const BatchPrediction = () => {
                   <p className="text-slate-400 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
                 </div>
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); setFile(null); setResults([]); setError(null); }}
                   className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
                 >
@@ -187,7 +216,6 @@ const BatchPrediction = () => {
           </AnimatePresence>
         </div>
 
-        {/* Progress */}
         <AnimatePresence>
           {loading && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4">
@@ -209,9 +237,9 @@ const BatchPrediction = () => {
           )}
         </AnimatePresence>
 
-        {/* Analyze button */}
         <div className="mt-4 flex justify-end">
           <button
+            type="button"
             onClick={analyze}
             disabled={!file || loading}
             className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
@@ -222,10 +250,8 @@ const BatchPrediction = () => {
         </div>
       </motion.div>
 
-      {/* Error */}
       {error && <ErrorState message={error} onRetry={() => setError(null)} />}
 
-      {/* Results */}
       {results.length > 0 && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
