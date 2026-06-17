@@ -1,58 +1,63 @@
 import axios from 'axios';
-// ============== LOGIC MỚI: IMPORT KẾT NỐI SUPABASE ==============
-import { supabase } from './supabaseClient'; 
-// ===============================================================
 
-// Base axios instance
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
-  timeout: 60000,
+  baseURL: 'http://localhost:8000',
+  timeout: 180000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor for logging & TỰ ĐỘNG ĐÍNH KÈM TOKEN SUPABASE (GIỮ NGUYÊN)
 api.interceptors.request.use(
-  async (config) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        config.headers.Authorization = `Bearer ${session.access_token}`;
-      }
-    } catch (authError) {
-      console.error('Không thể lấy Token từ Supabase:', authError);
-    }
-    return config;
-  },
+  (config) => config,
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for unified error handling (GIỮ NGUYÊN HOÀN TOÀN CỦA BẠN)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const message =
       error.response?.data?.detail ||
       error.response?.data?.message ||
-      (error.code === 'ECONNABORTED' ? 'Request timeout. Backend quá lâu phản hồi.' : 'Không thể kết nối tới Backend. Kiểm tra uvicorn đã chạy chưa.');
+      (error.code === 'ECONNABORTED'
+        ? 'Request timeout. Backend quá lâu phản hồi.'
+        : 'Không thể kết nối tới Backend. Kiểm tra uvicorn đã chạy chưa.');
+
     return Promise.reject(new Error(message));
   }
 );
 
-/** Batch predict from an array of texts */
+const normalizePrediction = (value) => {
+  if (value === 1 || value === '1') return 1;
+  if (value === 0 || value === '0') return 0;
+
+  const text = String(value || '').trim().toLowerCase();
+  if (['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(text)) return 1;
+  if (['negative', 'neg', 'label_0', 'tiêu cực', 'tieu cuc'].includes(text)) return 0;
+
+  return 0;
+};
+
+const normalizeConfidence = (value) => {
+  const num = Number(value) || 0;
+  return num > 1 ? num / 100 : num;
+};
+
+const normalizeResult = (item) => ({
+  text: item.text ?? item.content ?? item.comment ?? '',
+  prediction: normalizePrediction(item.prediction ?? item.label ?? item.ai_label),
+  confidence: normalizeConfidence(item.confidence),
+});
+
 export const predictBatch = async (payload) => {
   const { data } = await api.post('/predict/batch', payload);
-  return data;
+  const results = Array.isArray(data) ? data : data.results;
+  return (results || []).map(normalizeResult);
 };
 
-/** Analyze comments from a URL (Shopee / Foody) 
- * ĐÃ SỬA ĐỒNG BỘ: Chuyển hướng endpoint ngầm sang /predict/batch để khớp cấu trúc Python của nhóm bạn
-*/
 export const analyzeUrl = async (payload) => {
-  const { data } = await api.post('/predict/batch', payload);
+  const { data } = await api.post('/predict/url', payload);
   return data;
 };
 
-/** Submit correction feedback */
 export const submitFeedback = async (payload) => {
   await api.post('/feedback', payload);
 };
