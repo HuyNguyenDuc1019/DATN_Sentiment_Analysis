@@ -25,6 +25,28 @@ const CSV_SOURCE_URL = 'CSV_Upload';
 const TEXT_COLUMN_NAMES = ['comment', 'comments', 'text', 'review', 'content', 'binh_luan', 'noi_dung'];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const normalizePrediction = (value) => {
+  if (value === 1 || value === '1') return 1;
+  if (value === 0 || value === '0') return 0;
+
+  const text = String(value || '').trim().toLowerCase();
+  if (['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(text)) return 1;
+  if (['negative', 'neg', 'label_0', 'tiêu cực', 'tieu cuc'].includes(text)) return 0;
+
+  return 0;
+};
+
+const normalizeConfidence = (value) => {
+  const num = Number(value) || 0;
+  return num > 1 ? num / 100 : num;
+};
+
+const normalizeResult = (item) => ({
+  text: item.text ?? item.content ?? item.comment ?? '',
+  prediction: normalizePrediction(item.prediction ?? item.label ?? item.ai_label),
+  confidence: normalizeConfidence(item.confidence),
+});
+
 const BatchPrediction = () => {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -55,9 +77,11 @@ const BatchPrediction = () => {
 
   const analyze = () => {
     if (!file) return;
+
     setLoading(true);
     setProgress(0);
     setError(null);
+    setResults([]);
 
     Papa.parse(file, {
       header: true,
@@ -86,22 +110,30 @@ const BatchPrediction = () => {
 
         const userId = localStorage.getItem('user_id');
         if (!userId || !UUID_PATTERN.test(userId)) {
-          setError('Thiếu user_id hợp lệ. Hãy đăng nhập hoặc lưu UUID của user vào localStorage.user_id trước khi phân tích file.');
+          setError('Thiếu user_id hợp lệ. Hãy đăng nhập hoặc lưu UUID user vào localStorage.user_id trước khi phân tích file.');
           setLoading(false);
           return;
         }
 
         const ticker = setInterval(() => setProgress((p) => Math.min(p + 2, 90)), 200);
+
         try {
           const data = await predictBatch({
             texts,
             user_id: userId,
             source_url: CSV_SOURCE_URL,
           });
+
           clearInterval(ticker);
+          const normalizedResults = Array.isArray(data) ? data.map(normalizeResult) : [];
+
+          if (!normalizedResults.length) {
+            throw new Error('Backend xử lý xong nhưng không có kết quả để hiển thị.');
+          }
+
           setProgress(100);
-          setResults(data);
-          toast.success(`Phân tích xong ${data.length} bình luận!`);
+          setResults(normalizedResults);
+          toast.success(`Phân tích xong ${normalizedResults.length} bình luận!`);
         } catch (err) {
           clearInterval(ticker);
           setError(err.message);
@@ -162,6 +194,7 @@ const BatchPrediction = () => {
                   <p className="text-slate-400 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
                 </div>
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); setFile(null); setResults([]); setError(null); }}
                   className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
                 >
@@ -206,6 +239,7 @@ const BatchPrediction = () => {
 
         <div className="mt-4 flex justify-end">
           <button
+            type="button"
             onClick={analyze}
             disabled={!file || loading}
             className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"

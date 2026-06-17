@@ -1,15 +1,12 @@
 import axios from 'axios';
 
+console.log('Dang dung file src/services/api.js ban moi - CSV batch + feedback');
+
 const api = axios.create({
   baseURL: 'http://localhost:8000',
   timeout: 180000,
   headers: { 'Content-Type': 'application/json' },
 });
-
-api.interceptors.request.use(
-  (config) => config,
-  (error) => Promise.reject(error)
-);
 
 api.interceptors.response.use(
   (response) => response,
@@ -47,15 +44,26 @@ const normalizeResult = (item) => ({
   confidence: normalizeConfidence(item.confidence),
 });
 
+const extractResults = (data) => {
+  console.log('Raw backend response:', data);
+
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.predictions)) return data.predictions;
+  if (Array.isArray(data?.items)) return data.items;
+
+  throw new Error('Backend trả thành công nhưng không có mảng results/data/predictions/items để hiển thị.');
+};
+
 export const predictBatch = async (payload) => {
   const { data } = await api.post('/predict/batch', payload);
-  const results = Array.isArray(data) ? data : data.results;
-  return (results || []).map(normalizeResult);
+  return extractResults(data).map(normalizeResult);
 };
 
 export const analyzeUrl = async (payload) => {
   const { data } = await api.post('/predict/url', payload);
-  return data;
+  return extractResults(data).map(normalizeResult);
 };
 
 export const submitFeedback = async (payload) => {
