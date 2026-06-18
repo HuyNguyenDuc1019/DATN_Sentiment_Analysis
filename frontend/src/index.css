@@ -17,15 +17,25 @@
 
   html {
     @apply scroll-smooth;
+    text-size-adjust: 100%;
   }
 
   body {
     @apply bg-surface dark:bg-slate-950 text-ink dark:text-white antialiased;
     font-feature-settings: 'cv11', 'ss01';
+    min-width: 320px;
+    overflow-x: hidden;
   }
 
   * {
     @apply box-border;
+  }
+
+  img,
+  svg,
+  canvas,
+  video {
+    max-width: 100%;
   }
 
   /* Custom scrollbar */
@@ -40,6 +50,17 @@
   }
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-300 dark:bg-slate-600;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

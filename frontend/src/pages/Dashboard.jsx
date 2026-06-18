@@ -6,7 +6,7 @@ import {
   HiFaceFrown,
   HiOutlineSparkles,
 } from 'react-icons/hi2';
-import { supabase } from "@/services/supabaseClient";
+import { supabase } from '@/services/supabaseClient';
 import StatCard from '@/components/ui/StatCard';
 import SentimentPieChart from '@/components/charts/SentimentPieChart';
 import ConfidenceBarChart from '@/components/charts/ConfidenceBarChart';
@@ -48,9 +48,7 @@ const fetchAllScrapedReviews = async (userId) => {
     if (error) throw error;
 
     allRows = [...allRows, ...(data || [])];
-
     if (!data || data.length < pageSize) break;
-
     from += pageSize;
   }
 
@@ -101,7 +99,7 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[360px] flex items-center justify-center">
+      <div className="flex min-h-[360px] items-center justify-center">
         <div className="flex items-center gap-3 text-slate-500 dark:text-slate-300">
           <Spinner />
           Đang tải dữ liệu Dashboard...
@@ -111,28 +109,30 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 lg:space-y-7">
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs font-semibold rounded-full border border-primary-100 dark:border-primary-800">
-            <HiOutlineSparkles className="w-3.5 h-3.5" />
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-600 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-400">
+            <HiOutlineSparkles className="h-3.5 w-3.5" />
             Supabase Live
           </span>
         </div>
-        <h1 className="font-display font-bold text-2xl text-ink dark:text-white">Dashboard Tổng quan</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Thống kê từ bảng scraped_reviews theo tài khoản đang đăng nhập</p>
+        <h1 className="font-display text-2xl font-bold text-ink dark:text-white">Dashboard Tổng quan</h1>
+        <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+          Thống kê từ bảng scraped_reviews theo tài khoản đang đăng nhập.
+        </p>
       </motion.div>
 
       {error && <ErrorState message={error} onRetry={() => window.location.reload()} />}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Tổng bình luận" value={stats.total} icon={<HiOutlineChartBar className="w-5 h-5 text-white" />} gradient="bg-gradient-to-br from-primary-600 to-blue-400" iconBg="bg-white/20" delay={0} />
-        <StatCard label="Tích cực" value={stats.positive} icon={<HiFaceSmile className="w-5 h-5 text-white" />} gradient="bg-gradient-to-br from-green-500 to-emerald-400" iconBg="bg-white/20" delay={0.1} />
-        <StatCard label="Tiêu cực" value={stats.negative} icon={<HiFaceFrown className="w-5 h-5 text-white" />} gradient="bg-gradient-to-br from-red-500 to-rose-400" iconBg="bg-white/20" delay={0.2} />
-        <StatCard label="Avg Confidence" value={stats.avgConfidence * 100} suffix="%" icon={<HiOutlineSparkles className="w-5 h-5 text-white" />} gradient="bg-gradient-to-br from-violet-600 to-purple-400" iconBg="bg-white/20" delay={0.3} isFloat />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Tổng bình luận" value={stats.total} icon={<HiOutlineChartBar className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-primary-600 to-blue-400" iconBg="bg-white/20" delay={0} />
+        <StatCard label="Tích cực" value={stats.positive} icon={<HiFaceSmile className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-green-500 to-emerald-400" iconBg="bg-white/20" delay={0.08} />
+        <StatCard label="Tiêu cực" value={stats.negative} icon={<HiFaceFrown className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-red-500 to-rose-400" iconBg="bg-white/20" delay={0.16} />
+        <StatCard label="Avg Confidence" value={stats.avgConfidence * 100} suffix="%" icon={<HiOutlineSparkles className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-violet-600 to-purple-400" iconBg="bg-white/20" delay={0.24} isFloat />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <SentimentPieChart positive={stats.positive} negative={stats.negative} />
         <ConfidenceBarChart results={rows} />
       </div>
@@ -140,16 +140,18 @@ const Dashboard = () => {
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="bg-gradient-to-br from-primary-600 to-blue-500 rounded-2xl p-6 text-white"
+        transition={{ delay: 0.35 }}
+        className="rounded-xl bg-gradient-to-br from-primary-600 to-blue-500 p-5 text-white shadow-card sm:p-6"
       >
-        <h3 className="font-display font-bold text-lg mb-1">Dữ liệu thật từ Supabase</h3>
-        <p className="text-blue-100 text-sm mb-4">Dashboard chỉ lấy các dòng trong scraped_reviews có user_id trùng với tài khoản hiện tại.</p>
+        <h3 className="mb-1 font-display text-lg font-bold">Dữ liệu thật từ Supabase</h3>
+        <p className="mb-4 max-w-3xl text-sm text-blue-100">
+          Dashboard chỉ lấy các dòng trong scraped_reviews có user_id trùng với tài khoản hiện tại.
+        </p>
         <div className="flex flex-wrap gap-3">
-          <a href="/batch" className="inline-flex items-center gap-2 px-4 py-2 bg-white text-primary-600 font-semibold text-sm rounded-xl hover:bg-blue-50 transition-colors">
+          <a href="/batch" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-primary-600 transition-colors hover:bg-blue-50">
             Upload CSV
           </a>
-          <a href="/url" className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 text-white font-semibold text-sm rounded-xl hover:bg-white/30 transition-colors border border-white/30">
+          <a href="/url" className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/20 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/30">
             Phân tích URL
           </a>
         </div>

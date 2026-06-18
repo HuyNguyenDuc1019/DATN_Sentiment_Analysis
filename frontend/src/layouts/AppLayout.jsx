@@ -6,26 +6,24 @@ import Topbar from '@/components/layout/Topbar';
 
 const AppLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const sidebarWidth = collapsed ? 72 : 240;
+  const sidebarWidth = collapsed ? 76 : 236;
 
   return (
-    <div className="min-h-screen bg-surface dark:bg-slate-950 font-sans">
+    <div className="min-h-screen bg-surface text-ink antialiased dark:bg-slate-950 dark:text-white">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       <Topbar sidebarWidth={sidebarWidth} />
-      
-      {/* Desktop main (with sidebar offset animation) */}
+
       <motion.main
         animate={{ paddingLeft: sidebarWidth }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="pt-16 min-h-screen hidden lg:block"
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        className="hidden min-h-screen pt-16 lg:block"
       >
-        <div className="p-6 lg:p-8">
+        <div className="mx-auto w-full max-w-[1680px] px-5 py-6 xl:px-7 xl:py-7 2xl:px-8">
           <Outlet />
         </div>
       </motion.main>
-      
-      {/* Mobile main (no sidebar offset) */}
-      <main className="lg:hidden pt-16 p-4">
+
+      <main className="min-h-screen px-3 pb-5 pt-[76px] sm:px-4 lg:hidden">
         <Outlet />
       </main>
     </div>
