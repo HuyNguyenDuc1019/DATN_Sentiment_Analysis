@@ -1,51 +1,39 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../services/supabaseClient';
 
-// Khởi tạo Context với giá trị mặc định ban đầu
-const AuthContext = createContext({
-  user: null,
-  isAuthenticated: false,
-  login: async () => {},
-  logout: () => {},
-});
+const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
-  // Khởi tạo state user từ localStorage nếu có
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('auth_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Hàm xử lý đăng nhập giả lập
-  const login = useCallback(async (email, password) => {
-    // Giả lập gọi API qua setTimeout
-    await new Promise((res) => setTimeout(res, 900));
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+    });
 
-    if (password.length < 6) {
-      throw new Error('Mật khẩu không đúng. Vui lòng thử lại.');
-    }
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
-    // Tạo thông tin user giả lập từ Email
-    const mockUser = {
-      name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    loading,
+    signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
+    signUp: (email, password, fullName) => supabase.auth.signUp({
       email,
-    };
+      password,
+      options: { data: { full_name: fullName } },
+    }),
+    signOut: () => supabase.auth.signOut(),
+  }), [user, loading]);
 
-    setUser(mockUser);
-    localStorage.setItem('auth_user', JSON.stringify(mockUser));
-  }, []);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
 
-  // Hàm xử lý đăng xuất
-  const logout = useCallback(() => {
-    setUser(null);
-    localStorage.removeItem('auth_user');
-  }, []);
-
-  return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-// Custom hook để sử dụng AuthContext nhanh hơn ở các component con
 export const useAuth = () => useContext(AuthContext);

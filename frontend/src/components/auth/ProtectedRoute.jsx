@@ -1,18 +1,13 @@
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+export default function ProtectedRoute() {
+  const { user, loading } = useAuth();
   const location = useLocation();
 
-  if (!isAuthenticated) {
-    // Điều hướng về trang login nếu chưa xác thực, 
-    // kèm theo trạng thái location hiện tại để có thể quay lại sau khi đăng nhập thành công.
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  if (loading) {
+    return <div className="grid min-h-screen place-items-center bg-slate-950 text-slate-300">Đang kiểm tra phiên đăng nhập...</div>;
   }
 
-  return <>{children}</>;
-};
-
-export default ProtectedRoute;
+  return user ? <Outlet /> : <Navigate to="/" replace state={{ from: location.pathname }} />;
+}

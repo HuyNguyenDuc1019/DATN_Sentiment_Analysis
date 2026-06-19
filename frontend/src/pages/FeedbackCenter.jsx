@@ -1,149 +1,58 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
-import { HiOutlineChatBubbleLeftRight, HiOutlineSparkles, HiCheck } from 'react-icons/hi2';
-import { submitFeedback } from '@/services/api';
-import Badge from '@/components/ui/Badge';
-import Spinner from '@/components/ui/Spinner';
+import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { submitFeedback } from '../services/api';
+import { supabase } from '../services/supabaseClient';
+import { confidenceRatio } from '../services/reviews';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export default function FeedbackCenter() {
+  const { user } = useAuth();
+  const [queue, setQueue] = useState([]);
+  const [index, setIndex] = useState(0);
+  const [corrected, setCorrected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
 
-const FeedbackCenter = () => {
-  const [text, setText] = useState('');
-  const [oldPred, setOldPred] = useState(0);
-  const [newPred, setNewPred] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-
-  const handleSubmit = async () => {
-    const userId = localStorage.getItem('user_id');
-
-    if (!text.trim()) {
-      toast.error('Vui lòng nhập bình luận.');
-      return;
-    }
-
-    if (!userId || !UUID_PATTERN.test(userId)) {
-      toast.error('Thiếu user_id hợp lệ. Hãy đăng nhập hoặc lưu UUID user vào localStorage.user_id.');
-      return;
-    }
-
+  const load = useCallback(async () => {
+    if (!user?.id) return;
     setLoading(true);
-    try {
-      await submitFeedback({
-        original_content: text.trim(),
-        old_ai_label: oldPred,
-        corrected_label: newPred,
-        user_id: userId,
-      });
+    const { data, error } = await supabase.from('scraped_reviews').select('id,content,ai_label,confidence,source_url').eq('user_id', user.id).order('confidence', { ascending: true }).limit(100);
+    if (!error) { setQueue(data || []); setIndex(0); }
+    else setMessage(error.message);
+    setLoading(false);
+  }, [user?.id]);
 
-      toast.success('Đã lưu đóng góp thành công!');
-      setSent(true);
-      setTimeout(() => {
-        setSent(false);
-        setText('');
-        setOldPred(0);
-        setNewPred(1);
-      }, 2500);
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => { load(); }, [load]);
+  const item = queue[index];
+
+  const save = async () => {
+    if (!item || corrected === null) return;
+    setSaving(true); setMessage('');
+    try {
+      await submitFeedback({ original_content: item.content, old_ai_label: Number(item.ai_label), corrected_label: corrected, user_id: user.id });
+      setMessage('Đã lưu đính chính thành công!'); setCorrected(null);
+      setQueue((current) => current.filter((_, position) => position !== index));
+      setIndex((current) => Math.max(0, Math.min(current, queue.length - 2)));
+    } catch (error) { setMessage(error.message); }
+    finally { setSaving(false); }
   };
 
   return (
-    <div className="space-y-8 max-w-2xl">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display font-bold text-2xl text-ink dark:text-white">Feedback Center</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Gửi nhãn đúng để cải thiện mô hình AI</p>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-card border border-border dark:border-slate-700 space-y-5"
-      >
-        <div className="flex items-center gap-3 pb-4 border-b border-border dark:border-slate-700">
-          <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
-            <HiOutlineChatBubbleLeftRight className="w-5 h-5 text-primary-600" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-ink dark:text-white">Đóng góp dữ liệu</h2>
-            <p className="text-slate-400 text-sm">Nhập bình luận, nhãn AI dự đoán và nhãn đúng của bạn</p>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Bình luận gốc</label>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={4}
-            placeholder="Nhập nội dung bình luận cần chỉnh nhãn..."
-            className="w-full px-4 py-3 text-sm bg-slate-50 dark:bg-slate-900/50 border border-border dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-ink dark:text-white placeholder-slate-400 resize-none"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Nhãn cũ AI dự đoán</label>
-            <div className="space-y-2">
-              {[1, 0].map((v) => (
-                <button
-                  type="button"
-                  key={v}
-                  onClick={() => setOldPred(v)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border-2 text-sm transition-all ${oldPred === v ? (v === 1 ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-red-500 bg-red-50 dark:bg-red-900/20') : 'border-border dark:border-slate-600 hover:border-slate-300'}`}
-                >
-                  <Badge prediction={v} />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Nhãn đúng của bạn</label>
-            <div className="space-y-2">
-              {[1, 0].map((v) => (
-                <button
-                  type="button"
-                  key={v}
-                  onClick={() => setNewPred(v)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border-2 text-sm transition-all ${newPred === v ? (v === 1 ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-red-500 bg-red-50 dark:bg-red-900/20') : 'border-border dark:border-slate-600 hover:border-slate-300'}`}
-                >
-                  <Badge prediction={v} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={loading || !text.trim()}
-          className="w-full py-3 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
-        >
-          {loading ? <Spinner size="sm" className="text-white" /> : sent ? <HiCheck className="w-4 h-4" /> : <HiOutlineSparkles className="w-4 h-4" />}
-          {loading ? 'Đang gửi...' : sent ? 'Đã gửi!' : 'Gửi đóng góp'}
-        </button>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl p-5"
-      >
-        <h3 className="font-semibold text-blue-700 dark:text-blue-400 text-sm mb-2">Dữ liệu này được lưu như thế nào?</h3>
-        <p className="text-blue-600 dark:text-blue-300 text-sm leading-relaxed">
-          Hệ thống gửi bình luận gốc, nhãn AI đã dự đoán, nhãn đúng do bạn chọn và user_id lên backend để lưu vào bảng feedback_data.
-        </p>
-      </motion.div>
+    <div className="space-y-6 p-2 text-slate-200 sm:p-4 lg:p-8">
+      <header><h1 className="text-2xl font-semibold text-white">Trung tâm phản hồi</h1><p className="mt-1 max-w-3xl text-sm text-slate-400">Các dự đoán có confidence thấp được đưa lên trước để bạn kiểm tra và sửa nhãn.</p></header>
+      {message && <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-300"><CheckCircle2 className="h-5 w-5" />{message}</div>}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 sm:p-7 lg:col-span-2">
+          {loading ? <p className="py-20 text-center text-slate-400">Đang tải dữ liệu...</p> : !item ? <p className="py-20 text-center text-slate-400">Không còn bình luận cần kiểm tra.</p> : <>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700 pb-5"><span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-300">Độ tin cậy: {(confidenceRatio(item.confidence) * 100).toFixed(1)}%</span><span className="text-sm text-slate-500">{index + 1}/{queue.length}</span></div>
+            <div className="my-7"><p className="mb-3 text-xs uppercase text-slate-500">Văn bản đã phân tích</p><p className="rounded-xl border border-slate-700 bg-slate-900/50 p-6 text-lg leading-relaxed">{item.content}</p></div>
+            <div className="grid gap-5 md:grid-cols-2"><div className="rounded-xl border border-slate-700 bg-slate-900/50 p-5"><p className="text-xs text-slate-400">Nhãn AI hiện tại</p><p className={`mt-2 text-xl font-bold ${Number(item.ai_label) === 1 ? 'text-emerald-400' : 'text-rose-400'}`}>{Number(item.ai_label) === 1 ? 'Tích cực' : 'Tiêu cực'}</p></div><div className="grid grid-cols-2 gap-3"><button onClick={() => setCorrected(1)} className={`rounded-xl border py-3 ${corrected === 1 ? 'border-emerald-400 bg-emerald-500/20 text-emerald-300' : 'border-slate-700 text-slate-300'}`}><ThumbsUp className="mx-auto mb-2 h-5 w-5" />Tích cực</button><button onClick={() => setCorrected(0)} className={`rounded-xl border py-3 ${corrected === 0 ? 'border-rose-400 bg-rose-500/20 text-rose-300' : 'border-slate-700 text-slate-300'}`}><ThumbsDown className="mx-auto mb-2 h-5 w-5" />Tiêu cực</button></div></div>
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-slate-700 pt-5"><div className="flex gap-2"><button onClick={() => { setIndex((i) => Math.max(0, i - 1)); setCorrected(null); }} disabled={index === 0} className="rounded-lg border border-slate-700 p-2 disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button><button onClick={() => { setIndex((i) => Math.min(queue.length - 1, i + 1)); setCorrected(null); }} disabled={index >= queue.length - 1} className="rounded-lg border border-slate-700 p-2 disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button></div><button onClick={save} disabled={corrected === null || saving} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 font-medium text-white disabled:opacity-50"><Send className="h-4 w-4" />{saving ? 'Đang lưu...' : 'Gửi chỉnh sửa'}</button></div>
+          </>}
+        </section>
+        <aside className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5"><h2 className="font-medium text-white">Hàng đợi xử lý</h2><p className="mt-1 text-sm text-slate-400">{queue.length} mục</p><div className="mt-4 max-h-[560px] space-y-2 overflow-y-auto">{queue.map((review, position) => <button key={review.id} onClick={() => { setIndex(position); setCorrected(null); }} className={`w-full rounded-xl border p-3 text-left ${position === index ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-700 hover:bg-slate-700/30'}`}><p className="line-clamp-2 text-sm">{review.content}</p><p className="mt-2 text-xs text-slate-500">Confidence {(confidenceRatio(review.confidence) * 100).toFixed(1)}%</p></button>)}</div></aside>
+      </div>
     </div>
   );
-};
-
-export default FeedbackCenter;
+}
