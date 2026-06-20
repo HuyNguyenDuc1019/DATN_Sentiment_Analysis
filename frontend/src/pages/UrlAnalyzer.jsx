@@ -1,46 +1,64 @@
-import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Link as LinkIcon, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link as LinkIcon, Search, BarChart2, MessageSquare, ShieldCheck, ThumbsUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { analyzeUrl } from '../services/api';
 
-export default function UrlAnalyzer() {
+export default function UrlAnalyzerContent() {
   const { user } = useAuth();
   const [url, setUrl] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
-  const valid = /^https?:\/\//i.test(url.trim());
+  const [filter, setFilter] = useState('all');
 
   const analyze = async () => {
-    if (!valid || !user?.id) return;
-    setLoading(true); setResults([]); setMessage({ type: '', text: '' });
+    if (!/^https?:\/\//i.test(url.trim()) || !user?.id) {
+      window.alert('Vui lòng nhập URL hợp lệ.');
+      return;
+    }
+    setLoading(true);
     try {
-      const data = await analyzeUrl({ url: url.trim(), user_id: user.id });
-      if (!data.length) throw new Error('Máy cào không trả về bình luận hợp lệ.');
-      setResults(data); setMessage({ type: 'success', text: `Đã cào, phân tích và lưu ${data.length} bình luận.` });
+      setResults(await analyzeUrl({ url: url.trim(), user_id: user.id }));
     } catch (error) {
-      const text = error.message === 'Failed to fetch' ? 'Không kết nối được scraper Node.js tại cổng 3000.' : error.message;
-      setMessage({ type: 'error', text });
-    } finally { setLoading(false); }
+      window.alert(error.message === 'Failed to fetch' ? 'Không kết nối được scraper Node.js tại cổng 3000.' : error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const positive = results.filter((item) => item.prediction === 1).length;
+  const avgConfidence = results.length ? results.reduce((sum, item) => sum + item.confidence, 0) / results.length : 0;
+  const visible = results.filter((item) => filter === 'all' || (filter === 'positive' ? item.prediction === 1 : item.prediction === 0));
 
   return (
-    <div className="space-y-6 p-2 text-slate-200 sm:p-4 lg:p-8">
-      <header><h1 className="text-2xl font-semibold text-white">URL Analyzer</h1><p className="mt-1 text-sm text-slate-400">Gửi link và user_id sang máy cào Node.js</p></header>
-      <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 sm:p-7">
-        <label className="mb-3 block text-sm font-medium">Đường dẫn cần phân tích</label>
-        <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><LinkIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" /><input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyze()} placeholder="https://www.foody.vn/..." className="w-full rounded-xl border border-slate-700 bg-slate-900/60 py-3 pl-12 pr-4 text-sm outline-none focus:border-indigo-500" /></div><button onClick={analyze} disabled={!valid || loading} className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-7 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"><Sparkles className="h-4 w-4" />{loading ? 'Đang cào dữ liệu...' : 'Analyze'}</button></div>
-        {loading && <div className="mt-5"><div className="mb-2 flex justify-between text-sm text-slate-400"><span>Puppeteer đang tải bình luận, vui lòng không bấm lại...</span><span>Đang xử lý</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-700"><div className="h-full w-2/3 animate-pulse rounded-full bg-indigo-500" /></div></div>}
-      </section>
-      {message.text && <div className={`flex items-center gap-3 rounded-xl border p-4 ${message.type === 'error' ? 'border-rose-500/30 bg-rose-500/10 text-rose-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{message.type === 'error' ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}{message.text}</div>}
-      {results.length > 0 && <>
-        <div className="grid gap-4 sm:grid-cols-3"><Stat label="Tổng" value={results.length} /><Stat label="Tích cực" value={positive} color="text-emerald-400" /><Stat label="Tiêu cực" value={results.length - positive} color="text-rose-400" /></div>
-        <section className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/50"><div className="border-b border-slate-700 p-5 font-medium">Kết quả phân tích</div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-900/40 text-xs uppercase text-slate-400"><tr><th className="p-4">Bình luận</th><th className="p-4">Nhãn</th><th className="p-4">Confidence</th></tr></thead><tbody className="divide-y divide-slate-700">{results.map((item, index) => <tr key={`${item.text}-${index}`}><td className="max-w-2xl p-4">{item.text}</td><td className={`p-4 ${item.prediction === 1 ? 'text-emerald-400' : 'text-rose-400'}`}>{item.prediction === 1 ? 'Tích cực' : 'Tiêu cực'}</td><td className="p-4 font-mono">{(item.confidence * 100).toFixed(1)}%</td></tr>)}</tbody></table></div></section>
-      </>}
+    <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
+      <div><h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Trình phân tích URL</h1><p className="text-slate-400 text-sm">Phân tích cảm xúc hàng loạt từ các nền tảng thương mại điện tử.</p></div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col justify-center">
+          <div className="flex items-center gap-2 mb-4 text-slate-200 font-medium"><LinkIcon className="w-5 h-5 text-indigo-400" /><h2>Nguồn dữ liệu</h2></div>
+          <div className="flex flex-col sm:flex-row gap-4"><div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyze()} placeholder="Dán link Shopee/Foody vào đây..." className="w-full bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all" /></div><button onClick={analyze} disabled={loading} className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-8 rounded-xl transition-colors shadow-lg shadow-indigo-600/20 whitespace-nowrap"><BarChart2 className="w-5 h-5" />{loading ? 'ĐANG CÀO...' : 'PHÂN TÍCH'}</button></div>
+        </div>
+        <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col items-center justify-center">
+          <h3 className="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-4">Mức sử dụng API</h3>
+          <div className="relative w-32 h-32 flex items-center justify-center"><svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform"><circle cx="50" cy="50" r="40" fill="transparent" stroke="#1e293b" strokeWidth="8" /><circle cx="50" cy="50" r="40" fill="transparent" stroke="#6366f1" strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - Math.min(results.length / 500, 1) * 251.2} strokeLinecap="round" className="drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" /></svg><div className="absolute flex flex-col items-center justify-center"><span className="text-3xl font-bold text-white">{results.length}</span></div></div>
+          <div className="text-sm text-slate-400 mt-2">/ 500 yêu cầu</div>
+        </div>
+      </div>
+
+      <div><h2 className="text-lg font-medium text-white mb-4">Thông tin trích xuất</h2><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><StatCard icon={<MessageSquare className="w-5 h-5 text-indigo-400" />} title="TỔNG SỐ BÌNH LUẬN" value={results.length.toLocaleString('vi-VN')} /><StatCard icon={<ShieldCheck className="w-5 h-5 text-indigo-400" />} title="ĐỘ TIN CẬY TRUNG BÌNH" value={`${(avgConfidence * 100).toFixed(1)}%`} /><StatCard icon={<ThumbsUp className="w-5 h-5 text-emerald-400" />} title="TỶ LỆ TÍCH CỰC" value={`${results.length ? (positive / results.length * 100).toFixed(1) : '0.0'}%`} /></div></div>
+
+      <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6">
+        <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700"><h3 className="text-lg font-medium text-white">Dữ liệu thô</h3><div className="flex gap-2 text-sm"><button onClick={() => setFilter('all')} className="px-4 py-1.5 rounded-lg bg-slate-700 text-white font-medium border border-slate-600">Tất cả</button><button onClick={() => setFilter('positive')} className="px-4 py-1.5 rounded-lg bg-transparent text-emerald-400 hover:bg-emerald-500/10 border border-transparent transition-colors">Tích cực</button><button onClick={() => setFilter('negative')} className="px-4 py-1.5 rounded-lg bg-transparent text-rose-400 hover:bg-rose-500/10 border border-transparent transition-colors">Tiêu cực</button></div></div>
+        <div className="space-y-4">{visible.map((item, index) => <ReviewItem key={`${item.text}-${index}`} content={item.text} date="Vừa phân tích" sentiment={item.prediction === 1 ? 'positive' : 'negative'} confidence={Math.round(item.confidence * 100)} />)}{!visible.length && <p className="py-8 text-center text-slate-500">Chưa có dữ liệu phân tích.</p>}</div>
+      </div>
     </div>
   );
 }
 
-function Stat({ label, value, color = 'text-white' }) { return <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5"><p className="text-xs uppercase text-slate-400">{label}</p><p className={`mt-2 text-3xl font-bold ${color}`}>{value}</p></div>; }
+function StatCard({ icon, title, value }) {
+  return <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-xl p-5 flex items-center gap-4 hover:bg-slate-800 transition-colors"><div className="w-12 h-12 rounded-lg bg-slate-900/50 border border-slate-700 flex items-center justify-center flex-shrink-0">{icon}</div><div><h3 className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase mb-1">{title}</h3><div className="text-2xl font-bold text-white leading-none">{value}</div></div></div>;
+}
+
+function ReviewItem({ content, date, sentiment, confidence }) {
+  const isPositive = sentiment === 'positive';
+  return <div className={`flex justify-between items-start gap-6 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 border-l-4 ${isPositive ? 'border-l-emerald-500' : 'border-l-rose-500'}`}><div className="flex-1"><p className="text-slate-300 text-sm leading-relaxed mb-2">{content}</p><span className="text-xs text-slate-500">{date}</span></div><div className="w-32 flex flex-col items-end flex-shrink-0"><span className={`px-3 py-1 text-xs font-semibold rounded-md uppercase tracking-wider mb-3 ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>{isPositive ? 'Tích cực' : 'Tiêu cực'}</span><div className="w-full flex flex-col gap-1.5"><div className="flex justify-between text-[10px] text-slate-400 font-medium"><span>Tin cậy</span><span>{confidence}%</span></div><div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full ${isPositive ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${confidence}%` }} /></div></div></div></div>;
+}

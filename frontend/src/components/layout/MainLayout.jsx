@@ -13,7 +13,7 @@ export default function MainLayout() {
         <TopHeader />
         
         {/* Ruột của từng trang sẽ được nhét vào đây (Dashboard, Cài đặt, Phản hồi...) */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6">
+        <main className="flex-1 p-6 overflow-y-auto">
           <Outlet />
         </main>
       </div>
