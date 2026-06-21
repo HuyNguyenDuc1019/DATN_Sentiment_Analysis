@@ -12,7 +12,17 @@ function getFallbackProfile(user) {
 
 function formatRole(user) {
   const role = user?.app_metadata?.role || user?.user_metadata?.role || 'Người dùng';
-  return role === 'admin' ? 'Quản trị viên' : role;
+  const normalizedRole = String(role).trim().toLowerCase();
+
+  if (normalizedRole === 'admin' || normalizedRole === 'administrator') {
+    return 'Quản trị viên';
+  }
+
+  if (normalizedRole === 'user' || normalizedRole === 'member') {
+    return 'Người dùng';
+  }
+
+  return role;
 }
 
 export function useUserProfile() {

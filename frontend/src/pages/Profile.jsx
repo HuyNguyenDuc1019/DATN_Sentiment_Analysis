@@ -40,7 +40,13 @@ export default function ProfileContent() {
     return source.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   }, [profile]);
 
-  const role = user?.app_metadata?.role || user?.user_metadata?.role || 'Người dùng';
+  const rawRole = user?.app_metadata?.role || user?.user_metadata?.role || 'user';
+  const normalizedRole = String(rawRole).trim().toLowerCase();
+  const role = normalizedRole === 'admin' || normalizedRole === 'administrator'
+    ? 'Quản trị viên'
+    : normalizedRole === 'user' || normalizedRole === 'member'
+      ? 'Người dùng'
+      : rawRole;
 
   const saveProfile = async () => {
     if (!user?.id || !profile.fullName.trim() || !profile.email.includes('@')) {
