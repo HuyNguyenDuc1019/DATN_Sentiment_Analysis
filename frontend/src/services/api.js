@@ -1,73 +1,53 @@
-import axios from 'axios';
+const PYTHON_API = 'http://localhost:8000';
+const SCRAPER_API = 'http://localhost:3000';
 
-console.log('Dang dung file src/services/api.js ban moi - CSV batch + feedback');
-
-const api = axios.create({
-  baseURL: 'http://localhost:8000',
-  timeout: 180000,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const message =
-      error.response?.data?.detail ||
-      error.response?.data?.message ||
-      (error.code === 'ECONNABORTED'
-        ? 'Request timeout. Backend quá lâu phản hồi.'
-        : 'Không thể kết nối tới Backend. Kiểm tra uvicorn đã chạy chưa.');
-
-    return Promise.reject(new Error(message));
-  }
-);
-
-const normalizePrediction = (value) => {
+const normalizeLabel = (value) => {
   if (value === 1 || value === '1') return 1;
   if (value === 0 || value === '0') return 0;
-
-  const text = String(value || '').trim().toLowerCase();
-  if (['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(text)) return 1;
-  if (['negative', 'neg', 'label_0', 'tiêu cực', 'tieu cuc'].includes(text)) return 0;
-
-  return 0;
-};
-
-const normalizeConfidence = (value) => {
-  const num = Number(value) || 0;
-  return num > 1 ? num / 100 : num;
+  return ['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(
+    String(value ?? '').trim().toLowerCase()
+  ) ? 1 : 0;
 };
 
 const normalizeResult = (item) => ({
-  text: item.text ?? item.content ?? item.comment ?? '',
-  prediction: normalizePrediction(item.prediction ?? item.label ?? item.ai_label),
-  confidence: normalizeConfidence(item.confidence),
+  text: item?.text ?? item?.content ?? item?.comment ?? item?.review ?? '',
+  prediction: normalizeLabel(item?.prediction ?? item?.label ?? item?.ai_label),
+  confidence: Number(item?.confidence || 0) > 1
+    ? Number(item.confidence) / 100
+    : Number(item?.confidence || 0),
 });
 
-const extractResults = (data) => {
-  console.log('Raw backend response:', data);
+const extractResults = (payload, depth = 0) => {
+  if (!payload || depth > 5) return [];
+  if (Array.isArray(payload)) return payload;
+  for (const key of ['results', 'data', 'predictions', 'items', 'reviews', 'comments']) {
+    const found = extractResults(payload[key], depth + 1);
+    if (found.length) return found;
+  }
+  return [];
+};
 
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.results)) return data.results;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.predictions)) return data.predictions;
-  if (Array.isArray(data?.items)) return data.items;
-
-  throw new Error('Backend trả thành công nhưng không có mảng results/data/predictions/items để hiển thị.');
+const post = async (url, body) => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.success === false) {
+    throw new Error(data?.detail || data?.error || data?.message || 'Máy chủ trả về lỗi.');
+  }
+  return data;
 };
 
 export const predictBatch = async (payload) => {
-  const { data } = await api.post('/predict/batch', payload);
-  return extractResults(data).map(normalizeResult);
+  const data = await post(`${PYTHON_API}/predict/batch`, payload);
+  return extractResults(data).map(normalizeResult).filter((item) => item.text);
 };
 
 export const analyzeUrl = async (payload) => {
-  const { data } = await api.post('/predict/url', payload);
-  return extractResults(data).map(normalizeResult);
+  const data = await post(`${SCRAPER_API}/api/scrape`, payload);
+  return extractResults(data).map(normalizeResult).filter((item) => item.text);
 };
 
-export const submitFeedback = async (payload) => {
-  await api.post('/feedback', payload);
-};
-
-export default api;
+export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);
