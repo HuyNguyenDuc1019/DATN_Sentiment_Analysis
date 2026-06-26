@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const puppeteer = require('puppeteer');
 const axios = require('axios');
-
+// Khai báo thư viện tàng hình
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 const app = express();
 
 // Cho phép Frontend (React) gọi API mà không bị chặn lỗi CORS
@@ -11,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 // ==========================================
-// HÀM LỌC RÁC (TIỀN XỬ LÝ DỮ LIỆU)
+// 1. HÀM LỌC RÁC (TIỀN XỬ LÝ VĂN BẢN)
 // ==========================================
 function isValidComment(text) {
     if (!text) return false;
@@ -27,14 +29,53 @@ function isValidComment(text) {
 }
 
 // ==========================================
-// CỖ MÁY CÀO DỮ LIỆU (Đã được chuyển thành hàm trả về)
+// 2. HÀM CHUYỂN ĐỔI NGÀY THÁNG (MỚI THÊM 🎯)
+// Xử lý các định dạng ngày hiển thị trên trang web thành chuẩn Datetime
 // ==========================================
-async function scrapeFoody(url, userId) {
+function parseFoodyDate(dateStr) {
+    if (!dateStr) return new Date(); // Nếu không có ngày, mặc định là hiện tại
+    
+    let str = dateStr.toLowerCase().trim();
+    let now = new Date();
+
+    if (str.includes('hôm nay') || str.includes('vừa xong')) {
+        return now;
+    }
+    if (str.includes('hôm qua')) {
+        now.setDate(now.getDate() - 1);
+        return now;
+    }
+    if (str.includes('ngày trước')) {
+        let days = parseInt(str) || 0;
+        now.setDate(now.getDate() - days);
+        return now;
+    }
+    if (str.includes('tháng trước')) {
+        let months = parseInt(str) || 0;
+        now.setMonth(now.getMonth() - months);
+        return now;
+    }
+    
+    // Xử lý định dạng chuẩn DD/MM/YYYY
+    let parts = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (parts) {
+        // Cú pháp: new Date(year, monthIndex, day)
+        return new Date(parts[3], parts[2] - 1, parts[1]); 
+    }
+    
+    return now; // Fallback nếu không khớp bất kỳ mẫu nào
+}
+
+// ==========================================
+// 3. CỖ MÁY CÀO DỮ LIỆU FOODY (ĐÃ NÂNG CẤP)
+// ==========================================
+async function scrapeFoody(url, userId, lastScrapedDate) {
     console.log(`🤖 Nhận lệnh cào từ User ID: ${userId}`);
+    console.log(`⏱️ Mốc thời gian dừng cào (Last Scraped): ${lastScrapedDate || 'Chưa từng cào (Cào từ đầu)'}`);
     console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
     
     const browser = await puppeteer.launch({ 
-        headless: false, // Vẫn để false để bạn nhìn nó tự click, lúc nào up production thì đổi thành true
+        headless: false, // Để false để quan sát, khi up server chuyển thành true
         defaultViewport: null 
     });
     
@@ -46,12 +87,15 @@ async function scrapeFoody(url, userId) {
     console.log('⏳ Đang đợi Foody khởi tạo giao diện...');
     await new Promise(resolve => setTimeout(resolve, 3000));
 
+    // LƯU Ý LỚN: Nếu hệ thống có lastScrapedDate, việc bấm nút "Xem thêm" nhiều lần
+    // có thể không cần thiết nếu dữ liệu mới chỉ nằm ở vài trang đầu. 
+    // Tuy nhiên, ta vẫn giữ vòng lặp này để cào đủ số lượng, nó sẽ tự động ngắt ở phần bóc tách.
     console.log('⏳ Đang tìm và tự động click nút "Xem thêm bình luận"...');
     
     let hasMoreComments = true;
     let clickCount = 0;
 
-    while (hasMoreComments) {
+    while (hasMoreComments && clickCount < 50) { // Giới hạn số lần click để chống treo vô hạn
         try {
             await page.waitForSelector('a.fd-btn-more', { timeout: 2000 });
             const clicked = await page.evaluate(() => {
@@ -66,83 +110,145 @@ async function scrapeFoody(url, userId) {
             });
 
             if (!clicked) {
-                console.log('✅ Đã hết nút "Xem thêm bình luận". Đã mở khóa toàn bộ!');
+                console.log('✅ Đã hết nút "Xem thêm bình luận" hoặc đã mở đủ.');
                 hasMoreComments = false;
                 break;
             }
             
             clickCount++;
             console.log(`👉 Đã click trúng đích "Xem thêm" lần ${clickCount}...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
         } catch (error) {
             console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
             hasMoreComments = false;
         }
     }
     
-    console.log('🔍 Bắt đầu bóc tách và lọc dữ liệu...');
+    console.log('🔍 Bắt đầu bóc tách song song Nội dung và Ngày đăng...');
+    
+    // Bóc tách text và chuỗi ngày hiển thị
     const rawReviews = await page.evaluate(() => {
-        const commentSelector = '.rd-des'; 
-        const nodes = document.querySelectorAll(commentSelector);
+        // Tìm toàn bộ các khối bình luận
+        const commentItems = document.querySelectorAll('.item-comment, .review-item'); 
         const results = [];
-        nodes.forEach(node => {
-            const text = node.innerText || node.textContent;
-            if (text) results.push(text);
+        
+        commentItems.forEach(item => {
+            const textNode = item.querySelector('.rd-des');
+            const timeNode = item.querySelector('.ru-time, .time, span[datetime], .date'); 
+            
+            if (textNode) {
+                results.push({
+                    text: textNode.innerText || textNode.textContent,
+                    date_str: timeNode ? (timeNode.innerText || timeNode.textContent) : null
+                });
+            }
         });
+        
+        // Fallback: Nếu giao diện đổi class, lấy nội dung không lấy được ngày
+        if (results.length === 0) {
+            document.querySelectorAll('.rd-des').forEach(node => {
+                results.push({ text: node.innerText, date_str: null });
+            });
+        }
+        
         return results;
     });
 
     const cleanReviews = [];
-    rawReviews.forEach(text => {
-        let formattedText = text.replace(/[\r\n]+/g, ' ').trim();
+    
+    // Vòng lặp xử lý, làm sạch và chặn ngày (Incremental Scraping)
+    for (let item of rawReviews) {
+        let formattedText = item.text.replace(/[\r\n]+/g, ' ').trim();
         formattedText = formattedText.replace(/Xem thêm$/g, '').trim();
-        // Dọn dẹp emoji
-        formattedText = formattedText.replace(/[^\p{L}\p{N}\p{P}\s]/gu, '');
+        formattedText = formattedText.replace(/[^\p{L}\p{N}\p{P}\s]/gu, ''); // Dọn dẹp emoji
 
         if (isValidComment(formattedText)) {
-            cleanReviews.push(formattedText);
-        }
-    });
+            // Chuyển chuỗi trên web thành Object Date
+            let reviewDate = parseFoodyDate(item.date_str);
 
-    console.log(`💎 Thành phẩm: Giữ lại được ${cleanReviews.length} bình luận chất lượng!`);
+            // 🎯 CHỐT CHẶN CỦA THẦY: KIỂM TRA MỐC THỜI GIAN
+            if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
+                console.log(`🛑 Đã chạm bình luận cũ (Ngày: ${reviewDate.toISOString()}). Ngắt thu thập dữ liệu!`);
+                break; // THOÁT VÒNG LẶP, KHÔNG CÀO CÁC CÂU CŨ PHÍA SAU
+            }
+
+            cleanReviews.push({
+                content: formattedText,
+                review_date: reviewDate.toISOString() // Gửi chuẩn ISO sang Python
+            });
+        }
+    }
+
+    console.log(`💎 Thành phẩm: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`);
     await browser.close(); 
     
-    // Gửi mảng dữ liệu kèm user_id sang FastAPI
+    // Gửi mảng Object (content + review_date) sang FastAPI
     if (cleanReviews.length > 0) {
-        console.log(`🚀 Đang gửi ${cleanReviews.length} bình luận sang FastAPI...`);
+        console.log(`🚀 Đang gửi dữ liệu sang FastAPI để AI phân tích...`);
         try {
             const response = await axios.post('http://localhost:8000/predict/batch', {
-                texts: cleanReviews,
-                user_id: userId ,
-                source_url: url// 👈 ĐIỂM MẤU CHỐT: Truyền UUID sang cho AI
+                reviews: cleanReviews, // 👈 Truyền mảng reviews thay vì texts
+                user_id: userId,
+                source_url: url
             });
-            console.log('🎉 AI ĐÃ XỬ LÝ XONG!');
-            return response.data; // Trả cục kết quả này về cho Frontend
+            console.log('🎉 AI VÀ DATABASE ĐÃ XỬ LÝ XONG!');
+            return response.data;
         } catch (error) {
             console.error('❌ Lỗi khi kết nối với Backend Python:', error.message);
             throw new Error('Không thể kết nối tới AI Backend');
         }
     } else {
-        return { message: "Không cào được bình luận hợp lệ nào." };
+        return { message: "Quán này không có bình luận nào mới kể từ lần cào trước." };
     }
 }
 
 // ==========================================
-// API ENDPOINT NHẬN LỆNH TỪ FRONTEND
+// 4. API ENDPOINT NHẬN LỆNH TỪ FRONTEND
 // ==========================================
 app.post('/api/scrape', async (req, res) => {
-    // Rút trích url và user_id do React gửi lên
     const { url, user_id } = req.body;
 
     if (!url || !user_id) {
-        return res.status(400).json({ error: 'Thiếu url hoặc user_id' });
+        return res.status(400).json({ success: false, error: 'Thiếu url hoặc user_id' });
     }
 
     try {
-        // Gọi hàm cào và đợi kết quả
-        const result = await scrapeFoody(url, user_id);
+        let result;
+        let lastScrapedDate = null;
+        
+        // 🎯 LẤY MỐC THỜI GIAN CŨ TỪ FASTAPI TRƯỚC KHI CÀO
+        try {
+            console.log('⏳ Đang hỏi FastAPI mốc thời gian cào lần cuối...');
+            const dateCheck = await axios.get(`http://localhost:8000/api/last-scraped`, {
+                params: { source_url: url, user_id: user_id }
+            });
+            lastScrapedDate = dateCheck.data.last_scraped_date; 
+        } catch (err) {
+            console.log('⚠️ Trạm Database báo: Quán này chưa cào lần nào hoặc API lỗi. Cào từ đầu.');
+        }
+        
+        // 🚦 TRẠM CHUYỂN MẠCH: KIỂM TRA URL ĐỂ GỌI ĐÚNG BOT
+        if (url.includes('foody.vn')) {
+            console.log('👉 Phát hiện link Foody. Đang gọi Bot Foody...');
+            result = await scrapeFoody(url, user_id, lastScrapedDate); 
+            
+        } else if (url.includes('google.com') || url.includes('maps.app.goo.gl')) {
+            // Nếu bạn có hàm scrapeGoogleMaps, bạn cũng cần cập nhật nó tương tự như Foody nhé
+            console.log('👉 Phát hiện link Google Maps. Bot Google Maps hiện chưa cập nhật logic ngày tháng.');
+            return res.status(400).json({ success: false, error: 'Bot Google Maps đang bảo trì cập nhật thuật toán thời gian.' });
+            
+        } else {
+            console.log('❌ URL không hợp lệ:', url);
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Hệ thống hiện chỉ hỗ trợ link từ Foody và Google Maps.' 
+            });
+        }
+
         res.json({ success: true, data: result });
+        
     } catch (error) {
+        console.error('🔥 Lỗi server cào dữ liệu:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
