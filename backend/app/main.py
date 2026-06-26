@@ -214,9 +214,9 @@ async def save_feedback(request: FeedbackRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi lưu dữ liệu vào cơ sở dữ liệu: {str(e)}")
 
-# =====================================================================
+# ====================================================================
 # API 5: BÁO ĐỘNG ĐỎ (ACTION REQUIRED)
-# =====================================================================
+# ====================================================================
 @app.get("/api/dashboard/alerts")
 async def get_dashboard_alerts(source_url: str, user_id: str):
     try:
@@ -234,9 +234,9 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# =====================================================================
+# =======================================================================
 # API 6: BẢNG XẾP HẠNG TỪ KHÓA (LEADERBOARD)
-# =====================================================================
+# =======================================================================
 @app.get("/api/dashboard/leaderboard")
 async def get_dashboard_leaderboard(source_url: str, user_id: str):
     try:
