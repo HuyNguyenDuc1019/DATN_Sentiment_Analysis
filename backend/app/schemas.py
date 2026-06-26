@@ -9,13 +9,23 @@ class PredictResponse(BaseModel):
     sentiment: str = Field(..., title="Ý nghĩa nhãn")
     confidence: float = Field(..., title="Độ tự tin của mô hình (%)")
 
+# ==========================================
+# THÊM MỚI: Định nghĩa cấu trúc của 1 bình luận
+# ==========================================
+class ReviewItem(BaseModel):
+    content: str
+    review_date: str # Nhận chuỗi ngày tháng từ Node.js
+
+# ==========================================
+# CẬP NHẬT LẠI: BatchPredictRequest
+# ==========================================
 class BatchPredictRequest(BaseModel):
-    texts: List[str]
-    user_id: str  # Cổng nhận user_id từ Node.js gửi sang
-    source_url: str  # Cổng nhận URL nguồn của bình luận để lưu vào database cùng với feedback
+    reviews: List[ReviewItem]  # 👈 Đổi từ 'texts: List[str]' thành 'reviews: List[ReviewItem]'
+    user_id: str  
+    source_url: str  
 
 class FeedbackRequest(BaseModel):
     original_content: str
     old_ai_label: int
     corrected_label: int
-    user_id: str  # Nhận thêm user_id để biết ai là người đóng góp feedback
+    user_id: str
