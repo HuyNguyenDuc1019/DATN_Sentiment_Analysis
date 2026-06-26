@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import time
+from collections import Counter  # Thêm thư viện để đếm từ khóa cho Leaderboard
 
 # Import cấu trúc dữ liệu từ file schemas.py
 from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, FeedbackRequest 
@@ -212,3 +213,59 @@ async def save_feedback(request: FeedbackRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi lưu dữ liệu vào cơ sở dữ liệu: {str(e)}")
+
+# =====================================================================
+# API 5: BÁO ĐỘNG ĐỎ (ACTION REQUIRED)
+# =====================================================================
+@app.get("/api/dashboard/alerts")
+async def get_dashboard_alerts(source_url: str, user_id: str):
+    try:
+        # Chỉ lấy những bình luận có cờ is_action_required = True, xếp mới nhất lên đầu
+        response = supabase.table('scraped_reviews') \
+            .select('id, content, review_date, keywords, ai_label') \
+            .eq('source_url', source_url) \
+            .eq('user_id', user_id) \
+            .eq('is_action_required', True) \
+            .order('review_date', desc=True) \
+            .limit(20) \
+            .execute()
+            
+        return {"alerts": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================================
+# API 6: BẢNG XẾP HẠNG TỪ KHÓA (LEADERBOARD)
+# =====================================================================
+@app.get("/api/dashboard/leaderboard")
+async def get_dashboard_leaderboard(source_url: str, user_id: str):
+    try:
+        # Lấy nhãn và mảng từ khóa
+        response = supabase.table('scraped_reviews') \
+            .select('ai_label, keywords') \
+            .eq('source_url', source_url) \
+            .eq('user_id', user_id) \
+            .execute()
+            
+        data = response.data
+        pos_keywords = []
+        neg_keywords = []
+        
+        # Phân loại từ khóa vào 2 rổ: Khen và Chê
+        for item in data:
+            kws = item.get('keywords') or []
+            if item['ai_label'] == 1:
+                pos_keywords.extend(kws)
+            else:
+                neg_keywords.extend(kws)
+                
+        # Dùng Counter để đếm tần suất xuất hiện và lấy Top 5
+        top_positive = [{"keyword": k, "count": v} for k, v in Counter(pos_keywords).most_common(5)]
+        top_negative = [{"keyword": k, "count": v} for k, v in Counter(neg_keywords).most_common(5)]
+        
+        return {
+            "top_positive": top_positive,
+            "top_negative": top_negative
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
