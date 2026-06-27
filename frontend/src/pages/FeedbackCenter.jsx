@@ -20,15 +20,21 @@ export default function FeedbackCenterContent() {
       .order('confidence', { ascending: true })
       .limit(100);
     if (error) window.alert(error.message);
-    else setQueue(data || []);
+    else {
+      const ignoredIds = getIgnoredReviewIds(user.id);
+      setQueue((data || []).filter((review) => !ignoredIds.has(review.id)));
+      setSelected(0);
+    }
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
   const item = queue[selected];
 
   const skip = () => {
-    if (!queue.length) return;
-    setSelected((current) => (current + 1) % queue.length);
+    if (!item || !user?.id) return;
+    rememberIgnoredReview(user.id, item.id);
+    setQueue((current) => current.filter((review) => review.id !== item.id));
+    setSelected((current) => Math.max(0, Math.min(current, queue.length - 2)));
     setCorrected(null);
   };
 
@@ -100,8 +106,8 @@ function ReviewTaskPanel({ item, corrected, setCorrected, onSave, onSkip }) {
             <div className={`text-xl font-bold mb-2 ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>{positive ? 'Tích cực' : 'Tiêu cực'}</div>
           </div>
           <div className="flex flex-col gap-3">
-            <button onClick={() => setCorrected(1)} className={`flex-1 flex items-center justify-center gap-2 border border-emerald-500/30 ${corrected === 1 ? 'bg-emerald-500/20' : 'bg-emerald-500/5'} hover:bg-emerald-500/10 text-emerald-400 rounded-xl py-3 font-medium transition-colors`}><ThumbsUp className="w-5 h-5" />Tích cực</button>
-            <button onClick={() => setCorrected(0)} className={`flex-1 flex items-center justify-center gap-2 border border-rose-500/30 ${corrected === 0 ? 'bg-rose-500/20' : 'bg-rose-500/5'} hover:bg-rose-500/10 text-rose-400 rounded-xl py-3 font-medium transition-colors`}><ThumbsDown className="w-5 h-5" />Tiêu cực</button>
+            <button onClick={() => setCorrected(1)} className={`flex-1 flex items-center justify-center gap-2 border rounded-xl py-3 font-semibold transition-all ${corrected === 1 ? 'border-emerald-400 bg-emerald-500/30 text-emerald-200 ring-2 ring-emerald-400/25 shadow-lg shadow-emerald-500/10' : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/12 hover:border-emerald-400/60'}`}><ThumbsUp className={`w-5 h-5 ${corrected === 1 ? 'fill-emerald-300' : ''}`} />Tích cực</button>
+            <button onClick={() => setCorrected(0)} className={`flex-1 flex items-center justify-center gap-2 border rounded-xl py-3 font-semibold transition-all ${corrected === 0 ? 'border-rose-400 bg-rose-500/30 text-rose-200 ring-2 ring-rose-400/25 shadow-lg shadow-rose-500/10' : 'border-rose-500/30 bg-rose-500/5 text-rose-400 hover:bg-rose-500/12 hover:border-rose-400/60'}`}><ThumbsDown className={`w-5 h-5 ${corrected === 0 ? 'fill-rose-300' : ''}`} />Tiêu cực</button>
           </div>
         </div>
       </div>
@@ -158,4 +164,23 @@ function formatRelativeTime(createdAt) {
   if (diffDays < 7) return `${diffDays} ngày trước`;
 
   return new Date(createdAt).toLocaleDateString('vi-VN');
+}
+
+function ignoredStorageKey(userId) {
+  return `ignored-feedback-reviews:${userId}`;
+}
+
+function getIgnoredReviewIds(userId) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ignoredStorageKey(userId)) || '[]');
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function rememberIgnoredReview(userId, reviewId) {
+  const ignoredIds = getIgnoredReviewIds(userId);
+  ignoredIds.add(reviewId);
+  localStorage.setItem(ignoredStorageKey(userId), JSON.stringify([...ignoredIds]));
 }
