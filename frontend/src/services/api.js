@@ -6,23 +6,49 @@ const normalizeLabel = (value) => {
   if (value === 0 || value === '0') return 0;
 
   const text = String(value ?? '').trim().toLowerCase();
-  return ['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(text) ? 1 : 0;
+
+  if (
+    [
+      'positive',
+      'pos',
+      'label_1',
+      'tích cực',
+      'tich cuc',
+      'khách hài lòng',
+      'khach hai long',
+    ].includes(text)
+  ) {
+    return 1;
+  }
+
+  return 0;
+};
+
+const normalizeConfidence = (value) => {
+  const number = Number(value || 0);
+  return number > 1 ? number / 100 : number;
 };
 
 const normalizeResult = (item) => ({
-  text: item?.text ?? item?.content ?? item?.comment ?? item?.review ?? '',
-  prediction: normalizeLabel(item?.prediction ?? item?.label ?? item?.ai_label),
-  confidence:
-    Number(item?.confidence || 0) > 1
-      ? Number(item.confidence) / 100
-      : Number(item?.confidence || 0),
+  text: item?.text ?? item?.content ?? item?.comment ?? item?.review ?? item?.original_content ?? '',
+  prediction: normalizeLabel(item?.prediction ?? item?.label ?? item?.ai_label ?? item?.sentiment),
+  confidence: normalizeConfidence(item?.confidence ?? item?.score ?? item?.probability),
 });
 
 const extractResults = (payload, depth = 0) => {
-  if (!payload || depth > 5) return [];
+  if (!payload || depth > 6) return [];
+
   if (Array.isArray(payload)) return payload;
 
-  for (const key of ['results', 'data', 'predictions', 'items', 'reviews', 'comments']) {
+  for (const key of [
+    'results',
+    'data',
+    'predictions',
+    'items',
+    'reviews',
+    'comments',
+    'outputs',
+  ]) {
     const found = extractResults(payload[key], depth + 1);
     if (found.length) return found;
   }
@@ -30,16 +56,47 @@ const extractResults = (payload, depth = 0) => {
   return [];
 };
 
+const getErrorMessage = (data, fallback) => {
+  const raw = data?.detail ?? data?.error ?? data?.message ?? data;
+
+  if (!raw) return fallback;
+
+  if (typeof raw === 'string') return raw;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.msg || item?.message || JSON.stringify(item);
+      })
+      .join('\n');
+  }
+
+  if (typeof raw === 'object') {
+    return raw.msg || raw.message || JSON.stringify(raw);
+  }
+
+  return String(raw);
+};
+
 const post = async (url, body) => {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => null);
+  let response;
+  let data;
+
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    data = await response.json().catch(() => null);
+  } catch {
+    throw new Error('Không kết nối được server. Kiểm tra backend Python đã chạy ở cổng 8000 chưa.');
+  }
 
   if (!response.ok || data?.success === false) {
-    throw new Error(data?.detail || data?.error || data?.message || 'Máy chủ trả về lỗi.');
+    throw new Error(getErrorMessage(data, 'Máy chủ trả về lỗi.'));
   }
 
   return data;
@@ -54,11 +111,18 @@ const get = async (url, params = {}) => {
     }
   });
 
-  const response = await fetch(`${url}?${query.toString()}`);
-  const data = await response.json().catch(() => null);
+  let response;
+  let data;
+
+  try {
+    response = await fetch(`${url}?${query.toString()}`);
+    data = await response.json().catch(() => null);
+  } catch {
+    throw new Error('Không kết nối được server. Vui lòng kiểm tra backend đã chạy chưa.');
+  }
 
   if (!response.ok || data?.success === false) {
-    throw new Error(data?.detail || data?.error || data?.message || 'Không tải được dữ liệu.');
+    throw new Error(getErrorMessage(data, 'Không tải được dữ liệu.'));
   }
 
   return data;
@@ -66,7 +130,13 @@ const get = async (url, params = {}) => {
 
 export const predictBatch = async (payload) => {
   const data = await post(`${PYTHON_API}/predict/batch`, payload);
-  return extractResults(data).map(normalizeResult).filter((item) => item.text);
+  const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
+
+  if (!results.length) {
+    throw new Error('Backend đã phản hồi nhưng không có danh sách kết quả để hiển thị.');
+  }
+
+  return results;
 };
 
 export const analyzeUrl = async (payload) => {
