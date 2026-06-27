@@ -10,6 +10,17 @@ import {
   Smile,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import cloud from 'd3-cloud';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchKeywordAnalytics } from '../services/api';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
@@ -35,9 +46,11 @@ export default function ReportContent() {
     setLoading(true);
     try {
       const source = filters.source === 'Tất cả' ? '' : filters.source;
+      const sourceUrl = toAnalyticsSource(filters.source);
+
       const [reviewRows, keywordPayload] = await Promise.allSettled([
         fetchUserReviews(user.id, { ...filters, source }),
-        fetchKeywordAnalytics({ userId: user.id, sourceUrl: 'all' }),
+        fetchKeywordAnalytics({ userId: user.id, sourceUrl }),
       ]);
 
       if (reviewRows.status === 'fulfilled') setReviews(reviewRows.value);
@@ -64,7 +77,7 @@ export default function ReportContent() {
 
     reviews.forEach((item) => {
       const key = getSourceName(item.source_url);
-      groups[key] ||= { positive: 0, negative: 0 };
+      groups[key] ||= { source: key, positive: 0, negative: 0 };
       groups[key][Number(item.ai_label) === 1 ? 'positive' : 'negative'] += 1;
     });
 
@@ -72,7 +85,7 @@ export default function ReportContent() {
       positive,
       negative: reviews.length - positive,
       confidence,
-      groups: Object.entries(groups),
+      groups: Object.values(groups),
       words: extractWordCloud(analytics) || buildWordCloudData(reviews),
     };
   }, [analytics, reviews]);
@@ -84,6 +97,7 @@ export default function ReportContent() {
       await new Promise((resolve) => requestAnimationFrame(resolve));
       const html2pdf = (await import('html2pdf.js')).default;
       const date = new Date().toISOString().slice(0, 10);
+
       await html2pdf()
         .set({
           margin: 8,
@@ -127,11 +141,18 @@ export default function ReportContent() {
           <h2 className="text-2xl font-bold">Báo cáo phản hồi khách hàng</h2>
           <p className="mt-1 text-sm text-slate-400">Ngày xuất: {new Date().toLocaleDateString('vi-VN')}</p>
         </div>
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <ComparisonChartCard groups={report.groups} />
           <WordCloudCard words={report.words} />
         </div>
-        <PerformanceSummaryCard total={reviews.length} positive={report.positive} negative={report.negative} confidence={report.confidence} />
+
+        <PerformanceSummaryCard
+          total={reviews.length}
+          positive={report.positive}
+          negative={report.negative}
+          confidence={report.confidence}
+        />
       </div>
     </div>
   );
@@ -150,14 +171,25 @@ function FilterBar({ filters, setFilters, loading, onRefresh }) {
         </div>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs text-slate-500">Nguồn</span>
-          <select value={filters.source} onChange={update('source')} className="min-w-[150px] rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-2 text-slate-200 transition-colors hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+          <select
+            value={filters.source}
+            onChange={update('source')}
+            className="min-w-[150px] rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-2 text-slate-200 transition-colors hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
             {SOURCE_OPTIONS.map((source) => (
-              <option key={source} value={source}>{source === 'Tất cả' ? 'Tất cả nguồn' : source}</option>
+              <option key={source} value={source}>
+                {source === 'Tất cả' ? 'Tất cả nguồn' : source}
+              </option>
             ))}
           </select>
         </label>
       </div>
-      <button type="button" onClick={onRefresh} disabled={loading} className="flex items-center gap-2 self-start text-slate-400 transition-colors hover:text-white disabled:opacity-60 xl:self-center">
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={loading}
+        className="flex items-center gap-2 self-start text-slate-400 transition-colors hover:text-white disabled:opacity-60 xl:self-center"
+      >
         <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         {loading ? 'Đang cập nhật...' : 'Làm mới dữ liệu'}
       </button>
@@ -171,72 +203,123 @@ function DateField({ label, value, onChange }) {
       <span className="text-xs text-slate-500">{label}</span>
       <span className="relative">
         <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input type="date" value={value} onChange={onChange} className="rounded-lg border border-slate-700 bg-slate-900/50 py-2 pl-10 pr-3 text-slate-200 transition-colors [color-scheme:dark] hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+        <input
+          type="date"
+          value={value}
+          onChange={onChange}
+          className="rounded-lg border border-slate-700 bg-slate-900/50 py-2 pl-10 pr-3 text-slate-200 transition-colors [color-scheme:dark] hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
       </span>
     </label>
   );
 }
 
 function ComparisonChartCard({ groups }) {
-  const max = Math.max(1, ...groups.flatMap(([, values]) => [values.positive, values.negative]));
-
   return (
     <div className="break-inside-avoid flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md lg:col-span-2">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-medium text-white">So sánh theo nguồn dữ liệu</h3>
-        <div className="flex items-center gap-4 text-sm text-slate-300">
-          <Legend color="bg-emerald-500" label="Khách hài lòng" />
-          <Legend color="bg-rose-500" label="Khách chưa hài lòng" />
-        </div>
       </div>
-      {groups.length ? (
-        <div className="relative flex min-h-[220px] flex-1 items-end justify-around gap-5 border-b border-slate-700/50 pb-4 pt-4">
-          {groups.map(([name, values]) => (
-            <div key={name} className="flex flex-col items-center gap-3">
-              <div className="flex h-48 items-end gap-2">
-                <ChartBar value={values.positive} max={max} color="bg-emerald-500" />
-                <ChartBar value={values.negative} max={max} color="bg-rose-500" />
-              </div>
-              <span className="text-sm font-medium text-slate-300">{name}</span>
-            </div>
-          ))}
-        </div>
-      ) : <EmptyData text="Không có dữ liệu trong khoảng đã chọn." />}
-    </div>
-  );
-}
 
-function ChartBar({ value, max, color }) {
-  return (
-    <div title={`${value} phản hồi`} className={`relative w-8 rounded-t-sm transition-all hover:opacity-80 md:w-12 ${color}`} style={{ height: `${Math.max(value ? 3 : 0, (value / max) * 100)}%` }}>
-      {value > 0 && <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-slate-300">{value}</span>}
+      {groups.length ? (
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={groups} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+              <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
+              <XAxis dataKey="source" stroke="#94a3b8" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#94a3b8" tick={{ fontSize: 12 }} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
+                contentStyle={{
+                  background: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: 12,
+                  color: '#e2e8f0',
+                }}
+                labelStyle={{ color: '#f8fafc' }}
+              />
+              <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 12 }} />
+              <Bar dataKey="positive" name="Khách hài lòng" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="negative" name="Khách chưa hài lòng" fill="#fb7185" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <EmptyData text="Không có dữ liệu trong khoảng đã chọn." />
+      )}
     </div>
   );
 }
 
 function WordCloudCard({ words }) {
-  const max = Math.max(1, ...words.map((word) => word.value));
-  const min = Math.min(...words.map((word) => word.value), max);
+  const [layoutWords, setLayoutWords] = useState([]);
+  const cloudWords = useMemo(() => {
+    const normalized = words.map((word) => ({
+      text: word.text,
+      value: Number(word.value || 1),
+      sentiment: word.sentiment || 'neutral',
+    }));
+    const max = Math.max(1, ...normalized.map((word) => word.value));
+    const min = Math.min(...normalized.map((word) => word.value), max);
+
+    return normalized.slice(0, 40).map((word) => ({
+      ...word,
+      size: scaleWord(word.value, min, max),
+    }));
+  }, [words]);
+
+  useEffect(() => {
+    if (!cloudWords.length) {
+      setLayoutWords([]);
+      return undefined;
+    }
+
+    const layout = cloud()
+      .size([440, 300])
+      .words(cloudWords)
+      .padding(5)
+      .rotate((_, index) => (index % 7 === 0 ? -10 : index % 5 === 0 ? 10 : 0))
+      .font('Inter, Arial, sans-serif')
+      .fontWeight(700)
+      .fontSize((word) => word.size)
+      .on('end', (items) => setLayoutWords(items));
+
+    layout.start();
+    return () => layout.stop();
+  }, [cloudWords]);
 
   return (
     <div className="break-inside-avoid flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md lg:col-span-1">
       <h3 className="mb-1 text-lg font-medium text-white">Bản đồ từ khóa</h3>
       <p className="mb-4 text-xs text-slate-500">Từ càng lớn nghĩa là khách nhắc càng nhiều.</p>
-      <div className="flex min-h-[220px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50 p-5">
-        {words.length ? (
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 leading-none">
-            {words.map((word) => (
-              <span key={word.text} title={`${word.text}: ${word.value} lần`} className={`${wordColor(word.sentiment)} cursor-default font-semibold transition-transform hover:scale-110`} style={{ fontSize: `${scaleWord(word.value, min, max)}px` }}>
+
+      <div className="flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50 p-5">
+        {layoutWords.length ? (
+          <div className="relative h-[300px] w-full max-w-[440px]">
+            {layoutWords.map((word) => (
+              <span
+                key={`${word.text}-${word.value}`}
+                title={`${word.text}: ${word.value} lần`}
+                className="absolute left-1/2 top-1/2 cursor-default whitespace-nowrap font-bold leading-none transition-transform hover:scale-110"
+                style={{
+                  color: wordColor(word.sentiment),
+                  fontSize: `${word.size}px`,
+                  transform: `translate(${word.x}px, ${word.y}px) translate(-50%, -50%) rotate(${word.rotate}deg)`,
+                }}
+              >
                 {word.text}
               </span>
             ))}
           </div>
-        ) : <EmptyData text="Chưa đủ dữ liệu từ khóa." />}
+        ) : (
+          <EmptyData text="Chưa đủ dữ liệu từ khóa." />
+        )}
       </div>
+
       <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
-        <Legend color="bg-emerald-500" label="Khách hài lòng" />
-        <Legend color="bg-rose-500" label="Khách chưa hài lòng" />
-        <Legend color="bg-slate-400" label="Trung tính" />
+        <LegendItem color="bg-emerald-500" label="Khách hài lòng" />
+        <LegendItem color="bg-rose-500" label="Khách chưa hài lòng" />
+        <LegendItem color="bg-slate-400" label="Trung tính" />
       </div>
     </div>
   );
@@ -266,15 +349,27 @@ function Metric({ icon: Icon, label, value, color = 'text-white', barColor, prog
   const width = Math.min(100, Math.max(0, Number(progress) || 0));
   return (
     <div className="flex flex-col justify-between rounded-xl border border-slate-700 bg-slate-900/50 p-5">
-      <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-400"><Icon className="h-4 w-4" />{label}</div>
-      <div className={`text-3xl font-bold tracking-tight ${color}`}>{typeof value === 'number' ? value.toLocaleString('vi-VN') : value}</div>
-      <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${barColor} ${glow} transition-[width] duration-700 ease-out`} style={{ width: `${width}%` }} /></div>
+      <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-400">
+        <Icon className="h-4 w-4" />
+        {label}
+      </div>
+      <div className={`text-3xl font-bold tracking-tight ${color}`}>
+        {typeof value === 'number' ? value.toLocaleString('vi-VN') : value}
+      </div>
+      <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-slate-800">
+        <div className={`h-full rounded-full ${barColor} ${glow} transition-[width] duration-700 ease-out`} style={{ width: `${width}%` }} />
+      </div>
     </div>
   );
 }
 
-function Legend({ color, label }) {
-  return <div className="flex items-center gap-1.5"><div className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</div>;
+function LegendItem({ color, label }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className={`h-2.5 w-2.5 rounded-full ${color}`} />
+      {label}
+    </div>
+  );
 }
 
 function EmptyData({ text }) {
@@ -288,15 +383,22 @@ function getSourceName(sourceUrl = '') {
   return 'Khác';
 }
 
+function toAnalyticsSource(source) {
+  if (source === 'CSV') return 'CSV_Upload';
+  if (source === 'Foody') return 'Foody';
+  if (source === 'Shopee') return 'Shopee';
+  return 'all';
+}
+
 function wordColor(sentiment) {
-  if (sentiment === 'positive') return 'text-emerald-400';
-  if (sentiment === 'negative') return 'text-rose-400';
-  return 'text-slate-300';
+  if (sentiment === 'positive') return '#34d399';
+  if (sentiment === 'negative') return '#fb7185';
+  return '#cbd5e1';
 }
 
 function scaleWord(value, min, max) {
-  if (max === min) return 18;
-  return Math.round(12 + ((value - min) / (max - min)) * 18);
+  if (max === min) return 22;
+  return Math.round(14 + ((value - min) / (max - min)) * 28);
 }
 
 function extractWordCloud(payload) {
@@ -305,7 +407,11 @@ function extractWordCloud(payload) {
 }
 
 function buildWordCloudData(reviews) {
-  const stopWords = new Set(['và', 'là', 'có', 'cho', 'của', 'mình', 'tôi', 'bạn', 'này', 'đó', 'thì', 'mà', 'nhưng', 'rất', 'được', 'không', 'với', 'một', 'những', 'cũng', 'đã', 'khi', 'lại', 'ở', 'để', 'nên']);
+  const stopWords = new Set([
+    'và', 'là', 'có', 'cho', 'của', 'mình', 'tôi', 'bạn', 'này', 'đó', 'thì', 'mà',
+    'nhưng', 'rất', 'được', 'không', 'với', 'một', 'những', 'cũng', 'đã', 'khi',
+    'lại', 'ở', 'để', 'nên',
+  ]);
   const counts = new Map();
 
   reviews.forEach((review) => {

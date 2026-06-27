@@ -11,6 +11,16 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchDashboardAlerts, fetchKeywordAnalytics } from '../services/api';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
@@ -71,7 +81,7 @@ export default function DashboardContent() {
     };
   }, [reviews]);
 
-  const trend = useMemo(() => buildTrend(reviews), [reviews]);
+  const trendData = useMemo(() => buildTrendData(reviews), [reviews]);
   const leaderboard = useMemo(() => {
     const value = analytics?.leaderboard || analytics?.data?.leaderboard;
     if (value?.top_positive || value?.top_negative) return value;
@@ -81,7 +91,7 @@ export default function DashboardContent() {
   const visibleAlerts = useMemo(() => {
     if (alerts.length) return alerts.slice(0, 4);
     return reviews
-      .filter((item) => Number(item.ai_label) === 0 || confidenceRatio(item.confidence) < 0.55)
+      .filter((item) => Number(item.ai_label) === 0 || confidenceRatio(item.confidence) < 0.55 || item.is_action_required)
       .slice(0, 4)
       .map((item) => ({
         id: item.id,
@@ -120,7 +130,7 @@ export default function DashboardContent() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <TrendCard trend={trend} />
+        <TrendCard data={trendData} />
         <SentimentDonut positive={stats.positive} negative={stats.negative} rate={stats.positiveRate} />
       </div>
 
@@ -193,32 +203,49 @@ function PositiveRateCard({ rate }) {
   );
 }
 
-function TrendCard({ trend }) {
+function TrendCard({ data }) {
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md lg:col-span-2">
       <h3 className="mb-2 text-sm font-medium text-slate-200">Xu hướng phản hồi 7 ngày</h3>
       <p className="mb-6 text-xs text-slate-500">
         Đường xanh là phản hồi hài lòng, đường đỏ là phản hồi chưa hài lòng.
       </p>
-      <div className="relative h-52 w-full">
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 44" preserveAspectRatio="none">
-          <path d={trend.positivePath} fill="none" stroke="#10b981" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-          <path d={trend.negativePath} fill="none" stroke="#fb7185" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-          {trend.positivePoints.map((point, index) => (
-            <circle key={`p-${trend.labels[index].date}`} cx={point.x} cy={point.y} r="0.65" fill="#34d399" />
-          ))}
-          {trend.negativePoints.map((point, index) => (
-            <circle key={`n-${trend.labels[index].date}`} cx={point.x} cy={point.y} r="0.65" fill="#fb7185" />
-          ))}
-        </svg>
-        <div className="absolute bottom-0 left-0 right-0 z-10 flex justify-between border-t border-slate-700/50 pt-4 text-xs text-slate-500">
-          {trend.labels.map((label) => (
-            <span key={label.date} className="flex flex-col items-center gap-0.5">
-              <span>{label.weekday}</span>
-              <span className="text-[10px] text-slate-600">{label.date}</span>
-            </span>
-          ))}
-        </div>
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+            <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
+            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 12 }} />
+            <YAxis stroke="#94a3b8" tick={{ fontSize: 12 }} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{
+                background: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: 12,
+                color: '#e2e8f0',
+              }}
+              labelStyle={{ color: '#f8fafc' }}
+            />
+            <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 12 }} />
+            <Line
+              type="monotone"
+              dataKey="positive"
+              name="Hài lòng"
+              stroke="#10b981"
+              strokeWidth={3}
+              dot={{ r: 4, fill: '#10b981' }}
+              activeDot={{ r: 6 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="negative"
+              name="Chưa hài lòng"
+              stroke="#fb7185"
+              strokeWidth={3}
+              dot={{ r: 4, fill: '#fb7185' }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -361,46 +388,24 @@ function formatWeekday(date) {
   return ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
 }
 
-function buildTrend(reviews) {
-  const days = Array.from({ length: 7 }, (_, index) => {
+function buildTrendData(reviews) {
+  return Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - (6 - index));
-    return date;
-  });
-  const counts = days.map((date) => {
+
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
+
     const items = reviews.filter((item) => isInRange(item.created_at, date.getTime(), nextDay.getTime()));
+
     return {
+      label: formatWeekday(date),
+      date: `${date.getDate()}/${date.getMonth() + 1}`,
       positive: items.filter((item) => Number(item.ai_label) === 1).length,
       negative: items.filter((item) => Number(item.ai_label) === 0).length,
     };
   });
-  const maxCount = Math.max(...counts.flatMap((item) => [item.positive, item.negative]), 1);
-  const toPoints = (key) => counts.map((count, index) => ({ x: (index / 6) * 100, y: 36 - (count[key] / maxCount) * 28 }));
-  const positivePoints = toPoints('positive');
-  const negativePoints = toPoints('negative');
-
-  return {
-    positivePoints,
-    negativePoints,
-    positivePath: buildSmoothPath(positivePoints),
-    negativePath: buildSmoothPath(negativePoints),
-    labels: days.map((date) => ({ weekday: formatWeekday(date), date: `${date.getDate()}/${date.getMonth() + 1}` })),
-  };
-}
-
-function buildSmoothPath(points) {
-  if (!points.length) return '';
-  let path = `M ${points[0].x},${points[0].y}`;
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    path += ` Q ${previous.x},${previous.y} ${(previous.x + current.x) / 2},${(previous.y + current.y) / 2}`;
-  }
-  const last = points[points.length - 1];
-  return `${path} T ${last.x},${last.y}`;
 }
 
 function buildFallbackLeaderboard(reviews) {

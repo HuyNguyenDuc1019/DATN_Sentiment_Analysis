@@ -27,7 +27,7 @@ export default function UrlAnalyzerContent() {
       <div>
         <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Thu thập phản hồi từ đường dẫn</h1>
         <p className="text-slate-400 text-sm">
-          Dán link quán hoặc gian hàng để hệ thống thu thập phản hồi và cập nhật Dashboard.
+          Dán link quán hoặc gian hàng để hệ thống thu thập phản hồi và cập nhật trang Tổng quan.
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export default function UrlAnalyzerContent() {
                 }`}
               >
                 <BarChart2 className="w-5 h-5" />
-                {loading ? 'ĐANG CHẠY NỀN...' : 'THU THẬP'}
+                {loading ? 'ĐANG THU THẬP...' : 'THU THẬP'}
               </button>
             </div>
 

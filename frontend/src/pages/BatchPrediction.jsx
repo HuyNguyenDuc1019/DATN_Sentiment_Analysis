@@ -33,7 +33,7 @@ export default function BatchPredictionContent() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Nhập phản hồi từ file</h1>
         <p className="text-slate-400 text-sm">
-          Tải file CSV để hệ thống ghi nhận phản hồi khách hàng và cập nhật kết quả tại Dashboard.
+          Tải file CSV để hệ thống ghi nhận phản hồi khách hàng và cập nhật kết quả tại trang Tổng quan.
         </p>
       </div>
 
@@ -149,7 +149,7 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
           }`}
         >
           <Play className="w-4 h-4" />
-          {loading ? 'Đang xử lý nền...' : 'Bắt đầu xử lý'}
+          {loading ? 'Đang xử lý ngầm...' : 'Bắt đầu xử lý'}
         </button>
 
         {loading && (

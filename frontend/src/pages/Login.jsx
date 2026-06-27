@@ -54,14 +54,12 @@ export default function LoginScreen() {
 
               <div className="mb-8">
                 <h1 className="text-xl font-semibold text-white mb-2">Chào mừng trở lại</h1>
-                <p className="text-sm text-slate-400">Đăng nhập vào tài khoản của bạn để tiếp tục</p>
+                <p className="text-sm text-slate-400">Đăng nhập để theo dõi phản hồi khách hàng của bạn.</p>
               </div>
 
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Email doanh nghiệp
-                  </label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Email doanh nghiệp</label>
                   <input
                     type="email"
                     value={email}
@@ -73,9 +71,7 @@ export default function LoginScreen() {
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-slate-300">
-                      Mật khẩu
-                    </label>
+                    <label className="block text-sm font-medium text-slate-300">Mật khẩu</label>
                     <Link to="/forgot-password" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
                       Quên mật khẩu?
                     </Link>
@@ -94,9 +90,7 @@ export default function LoginScreen() {
                     id="remember"
                     className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-800"
                   />
-                  <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">
-                    Ghi nhớ đăng nhập
-                  </label>
+                  <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">Ghi nhớ đăng nhập</label>
                 </div>
 
                 <button
@@ -128,44 +122,46 @@ export default function LoginScreen() {
 
           <div className="relative z-10 max-w-lg mb-16">
             <h2 className="text-4xl font-bold text-white leading-tight mb-4 drop-shadow-md">
-              Khai phá sức mạnh dữ liệu cảm xúc
+              Hiểu khách hàng từ từng phản hồi
             </h2>
             <p className="text-indigo-200/80 text-sm leading-relaxed">
-              Thấu hiểu khách hàng qua từng điểm chạm với công nghệ AI phân tích ngữ nghĩa độc quyền.
+              Theo dõi khen chê, phát hiện vấn đề nổi bật và ra quyết định nhanh hơn từ dữ liệu thực tế.
             </p>
           </div>
 
           <div className="relative z-10 w-full max-w-sm mx-auto">
             <div className="bg-slate-800/40 backdrop-blur-xl border border-slate-600/50 rounded-2xl p-6 shadow-2xl relative z-10" style={{ animation: 'float 6s ease-in-out infinite' }}>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-xs font-medium text-slate-300">Tổng quan cảm xúc</span>
+                <span className="text-xs font-medium text-slate-300">Tổng quan phản hồi</span>
                 <BarChart2 className="w-4 h-4 text-slate-400" />
               </div>
 
               <div className="flex items-end justify-between gap-3 h-24 mt-4">
-                <div className="w-full bg-indigo-600/80 rounded-t-sm h-[40%]" />
-                <div className="w-full bg-indigo-500 rounded-t-sm h-[60%]" />
-                <div className="w-full bg-indigo-600/80 rounded-t-sm h-[30%]" />
-                <div className="w-full bg-indigo-500 rounded-t-sm h-[80%]" />
-                <div className="w-full bg-indigo-400 rounded-t-sm h-[100%] shadow-[0_0_15px_rgba(129,140,248,0.5)]" />
-                <div className="w-full bg-indigo-600/80 rounded-t-sm h-[50%]" />
+                {[40, 60, 30, 80, 100, 50].map((height, index) => (
+                  <div key={index} className="w-full bg-indigo-500 rounded-t-sm" style={{ height: `${height}%` }} />
+                ))}
               </div>
             </div>
 
-            <div className="absolute -right-12 bottom-6 bg-slate-800/70 backdrop-blur-md border border-slate-600/50 rounded-full px-5 py-2.5 shadow-xl flex items-center gap-2 z-20" style={{ animation: 'float-delayed 5s ease-in-out infinite 1s' }}>
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-              <span className="text-sm font-semibold text-emerald-400">Tích cực</span>
-              <span className="text-sm font-medium text-slate-300 ml-1">78%</span>
-            </div>
-
-            <div className="absolute left-8 -bottom-10 bg-slate-800/70 backdrop-blur-md border border-slate-600/50 rounded-full px-5 py-2.5 shadow-xl flex items-center gap-2 z-20" style={{ animation: 'float-reverse 7s ease-in-out infinite' }}>
-              <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
-              <span className="text-sm font-semibold text-rose-400">Tiêu cực</span>
-              <span className="text-sm font-medium text-slate-300 ml-1">12%</span>
-            </div>
+            <FloatingBadge className="-right-12 bottom-6" color="emerald" text="Hài lòng" value="78%" />
+            <FloatingBadge className="left-8 -bottom-10" color="rose" text="Chưa hài lòng" value="12%" reverse />
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+function FloatingBadge({ className, color, text, value, reverse = false }) {
+  const colorClass = color === 'emerald' ? 'bg-emerald-400 text-emerald-400' : 'bg-rose-500 text-rose-400';
+  return (
+    <div
+      className={`absolute ${className} bg-slate-800/70 backdrop-blur-md border border-slate-600/50 rounded-full px-5 py-2.5 shadow-xl flex items-center gap-2 z-20`}
+      style={{ animation: reverse ? 'float-reverse 7s ease-in-out infinite' : 'float-delayed 5s ease-in-out infinite 1s' }}
+    >
+      <div className={`w-2.5 h-2.5 rounded-full ${colorClass.split(' ')[0]} shadow-[0_0_8px_rgba(129,140,248,0.5)]`} />
+      <span className={`text-sm font-semibold ${colorClass.split(' ')[1]}`}>{text}</span>
+      <span className="text-sm font-medium text-slate-300 ml-1">{value}</span>
+    </div>
   );
 }
