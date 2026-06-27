@@ -1,69 +1,23 @@
-import React, { useRef, useState } from 'react';
-import Papa from 'papaparse';
+import React, { useRef } from 'react';
 import {
-  CloudUpload,
-  Settings,
-  ChevronDown,
-  Play,
-  Loader2,
-  TableProperties,
-  Filter,
-  Download,
   CheckCircle2,
-  XCircle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CloudUpload,
+  Download,
+  Filter,
+  Play,
+  Settings,
+  TableProperties,
+  XCircle,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { predictBatch } from '../services/api';
+import { useTasks } from '../contexts/TaskContext';
 
 export default function BatchPredictionContent() {
-  const { user } = useAuth();
   const inputRef = useRef(null);
-  const [file, setFile] = useState(null);
-  const [texts, setTexts] = useState([]);
-  const [column, setColumn] = useState('');
-  const [columns, setColumns] = useState([]);
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const selectFile = (selected) => {
-    if (!selected) return;
-
-    Papa.parse(selected, {
-      header: true,
-      skipEmptyLines: true,
-      complete: ({ data, meta }) => {
-        const fields = meta.fields || [];
-        const preferred =
-          fields.find((name) =>
-            ['text', 'content', 'comment', 'review', 'bình luận', 'binh_luan'].includes(
-              name.toLowerCase()
-            )
-          ) || fields[0];
-
-        setFile(selected);
-        setColumns(fields);
-        setColumn(preferred || '');
-        setTexts(data.map((row) => String(row[preferred] || '').trim()).filter(Boolean));
-        setResults([]);
-      },
-      error: (error) => window.alert(error.message),
-    });
-  };
-
-  const analyze = async () => {
-    if (!user?.id || !texts.length) return;
-
-    setLoading(true);
-    try {
-      setResults(await predictBatch({ texts, user_id: user.id, source_url: 'CSV_Upload' }));
-    } catch (error) {
-      window.alert(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { batch } = useTasks();
+  const { file, texts, column, columns, results, loading, selectFile, setColumn, analyze } = batch;
 
   const tableData = (results.length ? results : texts.map((text) => ({ text, prediction: null, confidence: 0 })))
     .slice(0, 5)
@@ -71,15 +25,15 @@ export default function BatchPredictionContent() {
       id: `#${String(index + 1).padStart(4, '0')}`,
       content: item.text,
       sentiment: item.prediction === null ? null : item.prediction === 1 ? 'positive' : 'negative',
-      confidence: item.prediction === null ? null : Math.round(item.confidence * 100),
+      confidence: item.prediction === null ? null : Math.round((Number(item.confidence) > 1 ? item.confidence : item.confidence * 100) || 0),
     }));
 
   return (
     <div className="p-8 animate-in fade-in duration-500 font-sans h-full flex flex-col">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Dự đoán hàng loạt</h1>
+        <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Nhập phản hồi từ file</h1>
         <p className="text-slate-400 text-sm">
-          Tải lên tệp dữ liệu lớn để phân tích cảm xúc đa luồng.
+          Tải file CSV để hệ thống ghi nhận phản hồi khách hàng và cập nhật kết quả tại Dashboard.
         </p>
       </div>
 
@@ -107,10 +61,10 @@ export default function BatchPredictionContent() {
 function UploadCard({ file, count, inputRef, onFile }) {
   return (
     <div
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        onFile(e.dataTransfer.files?.[0]);
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        onFile(event.dataTransfer.files?.[0]);
       }}
       className="bg-slate-800/30 backdrop-blur-md border border-dashed border-slate-600 hover:border-indigo-500 transition-colors rounded-2xl p-8 flex flex-col items-center justify-center text-center"
     >
@@ -119,16 +73,16 @@ function UploadCard({ file, count, inputRef, onFile }) {
         type="file"
         accept=".csv,text/csv"
         hidden
-        onChange={(e) => onFile(e.target.files?.[0])}
+        onChange={(event) => onFile(event.target.files?.[0])}
       />
 
       <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4 shadow-lg">
         <CloudUpload className="w-6 h-6 text-indigo-400" />
       </div>
 
-      <h3 className="text-lg font-medium text-white mb-2">{file ? file.name : 'Tải lên tệp CSV'}</h3>
-      <p className="text-slate-400 text-sm mb-6 max-w-[200px]">
-        {file ? `${count} dòng bình luận đã đọc` : 'Kéo thả tệp của bạn vào đây hoặc nhấp để duyệt.'}
+      <h3 className="text-lg font-medium text-white mb-2">{file ? file.name : 'Tải lên file CSV'}</h3>
+      <p className="text-slate-400 text-sm mb-6 max-w-[220px]">
+        {file ? `${count} phản hồi đã đọc` : 'Kéo thả file vào đây hoặc bấm chọn tệp.'}
       </p>
 
       <button
@@ -148,12 +102,12 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
     <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col flex-1">
       <div className="flex items-center gap-2 mb-6">
         <Settings className="w-5 h-5 text-indigo-400" />
-        <h3 className="text-base font-medium text-white">Cấu hình mô hình</h3>
+        <h3 className="text-base font-medium text-white">Thiết lập dữ liệu</h3>
       </div>
 
       <div className="space-y-4 flex-1">
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-2">Nguồn dữ liệu</label>
+          <label className="block text-xs font-medium text-slate-400 mb-2">Nguồn phản hồi</label>
           <div className="relative">
             <select className="w-full bg-slate-900 border border-slate-700 text-slate-300 rounded-lg py-2.5 pl-4 pr-10 appearance-none focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
               <option>CSV Upload</option>
@@ -163,13 +117,13 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-2">Cột chứa văn bản</label>
+          <label className="block text-xs font-medium text-slate-400 mb-2">Cột chứa nội dung phản hồi</label>
           <div className="relative">
             <select
               value={column}
-              onChange={(e) => setColumn(e.target.value)}
+              onChange={(event) => setColumn(event.target.value)}
               disabled={!columns.length}
-              className="w-full bg-slate-900/50 border border-slate-800 text-slate-500 rounded-lg py-2.5 pl-4 pr-10 appearance-none cursor-not-allowed text-sm"
+              className="w-full bg-slate-900/50 border border-slate-800 text-slate-400 rounded-lg py-2.5 pl-4 pr-10 appearance-none disabled:cursor-not-allowed text-sm"
             >
               {columns.length ? (
                 columns.map((name) => <option key={name}>{name}</option>)
@@ -188,19 +142,24 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
           disabled={disabled}
           className={`w-full flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition-all ${
             loading
-              ? 'cursor-wait border border-indigo-400/50 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+              ? 'cursor-wait border border-indigo-400/60 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
               : ready
                 ? 'border border-indigo-500 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 hover:shadow-indigo-500/30'
                 : 'cursor-not-allowed border border-slate-700 bg-slate-800/70 text-slate-500'
           }`}
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {loading ? 'Đang phân tích...' : 'Bắt đầu phân tích'}
+          <Play className="w-4 h-4" />
+          {loading ? 'Đang xử lý nền...' : 'Bắt đầu xử lý'}
         </button>
 
         {loading && (
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-900 border border-indigo-500/20">
-            <div className="h-full w-full origin-left animate-pulse rounded-full bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-300" />
+          <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-3 py-2">
+            <p className="mb-2 text-xs text-indigo-100">
+              Hệ thống đang xử lý ngầm. Bạn có thể chuyển sang trang khác và quay lại xem kết quả.
+            </p>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-900">
+              <div className="h-full w-full origin-left animate-pulse rounded-full bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-300" />
+            </div>
           </div>
         )}
       </div>
@@ -215,7 +174,7 @@ function PreviewTable({ tableData, total }) {
         <div className="flex items-center gap-3">
           <TableProperties className="w-5 h-5 text-slate-300" />
           <h3 className="text-base font-medium text-white flex items-center gap-2">
-            Xem trước mẫu phân tích
+            Xem trước phản hồi
             <span className="text-sm font-normal text-slate-500">({tableData.length}/{total} dòng)</span>
           </h3>
         </div>
@@ -235,9 +194,9 @@ function PreviewTable({ tableData, total }) {
           <thead>
             <tr className="border-b border-slate-700 text-slate-400 text-xs font-medium">
               <th className="pb-3 font-medium w-20">ID</th>
-              <th className="pb-3 font-medium">Nội dung đánh giá</th>
-              <th className="pb-3 font-medium text-center w-32">Dự đoán</th>
-              <th className="pb-3 font-medium text-right w-24">Độ tin cậy</th>
+              <th className="pb-3 font-medium">Nội dung phản hồi</th>
+              <th className="pb-3 font-medium text-center w-40">Kết quả ghi nhận</th>
+              <th className="pb-3 font-medium text-right w-28">Độ chắc chắn</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700/50">
@@ -247,7 +206,7 @@ function PreviewTable({ tableData, total }) {
       </div>
 
       <div className="pt-4 border-t border-slate-700 mt-4 flex items-center justify-between text-sm text-slate-400">
-        <div>Hiển thị {tableData.length} trên tổng {total} kết quả</div>
+        <div>Hiển thị {tableData.length} trên tổng {total} phản hồi</div>
         <div className="flex items-center gap-1">
           <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 transition-colors">
             <ChevronLeft className="w-4 h-4" />
@@ -283,10 +242,10 @@ function TableRow({ data }) {
                 : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
             }`}>
               {isPositive ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-              {isPositive ? 'Tích cực' : 'Tiêu cực'}
+              {isPositive ? 'Khách hài lòng' : 'Khách chưa hài lòng'}
             </span>
           ) : (
-            <span className="text-slate-500">Chưa phân tích</span>
+            <span className="text-slate-500">Chưa xử lý</span>
           )}
         </div>
       </td>
