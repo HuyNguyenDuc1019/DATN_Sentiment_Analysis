@@ -11,7 +11,8 @@ import { useTasks } from '../contexts/TaskContext';
 
 export default function UrlAnalyzerContent() {
   const { urlAnalyzer } = useTasks();
-  const { url, setUrl, results, loading, filter, setFilter, analyze } = urlAnalyzer;
+  const { url, setUrl, results, count, loading, filter, setFilter, analyze } = urlAnalyzer;
+  const receivedCount = Number(count || results.length || 0);
 
   const positive = results.filter((item) => item.prediction === 1).length;
   const avgConfidence = results.length
@@ -95,13 +96,13 @@ export default function UrlAnalyzerContent() {
                 stroke="#6366f1"
                 strokeWidth="8"
                 strokeDasharray="251.2"
-                strokeDashoffset={251.2 - Math.min(results.length / 500, 1) * 251.2}
+                strokeDashoffset={251.2 - Math.min(receivedCount / 500, 1) * 251.2}
                 strokeLinecap="round"
                 className="drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
               />
             </svg>
             <div className="absolute flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold text-white">{results.length}</span>
+              <span className="text-3xl font-bold text-white">{receivedCount}</span>
             </div>
           </div>
           <div className="text-sm text-slate-400 mt-2">/ 500 phản hồi</div>
@@ -114,7 +115,7 @@ export default function UrlAnalyzerContent() {
           <StatCard
             icon={<MessageSquare className="w-5 h-5 text-indigo-400" />}
             title="Tổng phản hồi"
-            value={results.length.toLocaleString('vi-VN')}
+            value={receivedCount.toLocaleString('vi-VN')}
           />
           <StatCard
             icon={<ShieldCheck className="w-5 h-5 text-indigo-400" />}
@@ -124,7 +125,7 @@ export default function UrlAnalyzerContent() {
           <StatCard
             icon={<ThumbsUp className="w-5 h-5 text-emerald-400" />}
             title="Tỷ lệ khách hài lòng"
-            value={`${results.length ? ((positive / results.length) * 100).toFixed(1) : '0.0'}%`}
+            value={`${receivedCount ? ((positive / receivedCount) * 100).toFixed(1) : '0.0'}%`}
           />
         </div>
       </div>

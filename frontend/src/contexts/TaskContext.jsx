@@ -21,6 +21,7 @@ export function TaskProvider({ children }) {
 
   const [url, setUrl] = useState('');
   const [urlResults, setUrlResults] = useState([]);
+  const [urlCount, setUrlCount] = useState(0);
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlFilter, setUrlFilter] = useState('all');
 
@@ -33,6 +34,7 @@ export function TaskProvider({ children }) {
     setBatchLoading(false);
     setUrl('');
     setUrlResults([]);
+    setUrlCount(0);
     setUrlLoading(false);
     setUrlFilter('all');
   }, [user?.id]);
@@ -133,9 +135,11 @@ export function TaskProvider({ children }) {
         user_id: user.id,
       });
 
-      setUrlResults(data);
+      const receivedCount = Number(data.count || data.results?.length || 0);
+      setUrlResults(data.results || []);
+      setUrlCount(receivedCount);
       toast.success(
-        `Đã tiếp nhận ${data.length} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`,
+        `Đã tiếp nhận ${receivedCount} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`,
         { id: loadingToast }
       );
     } catch (error) {
@@ -167,6 +171,7 @@ export function TaskProvider({ children }) {
         url,
         setUrl,
         results: urlResults,
+        count: urlCount,
         loading: urlLoading,
         filter: urlFilter,
         setFilter: setUrlFilter,
@@ -182,6 +187,7 @@ export function TaskProvider({ children }) {
       batchLoading,
       url,
       urlResults,
+      urlCount,
       urlLoading,
       urlFilter,
       user?.id,

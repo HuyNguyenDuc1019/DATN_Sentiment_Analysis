@@ -42,6 +42,23 @@ const extractResults = (payload, depth = 0) => {
   return [];
 };
 
+const extractCount = (payload, depth = 0) => {
+  if (!payload || depth > 6) return 0;
+  if (Array.isArray(payload)) return payload.length;
+
+  for (const key of ['count', 'total', 'saved_count', 'savedCount', 'inserted', 'inserted_count', 'review_count']) {
+    const value = Number(payload[key]);
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+
+  for (const key of ['data', 'result', 'payload', 'summary']) {
+    const value = extractCount(payload[key], depth + 1);
+    if (value > 0) return value;
+  }
+
+  return 0;
+};
+
 const getErrorMessage = (data, fallback) => {
   const raw = data?.detail ?? data?.error ?? data?.message ?? data;
   if (!raw) return fallback;
@@ -118,7 +135,14 @@ export const predictBatch = async (payload) => {
 
 export const analyzeUrl = async (payload) => {
   const data = await post(`${SCRAPER_API}/api/scrape`, payload);
-  return extractResults(data).map(normalizeResult).filter((item) => item.text);
+  const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
+  const count = results.length || extractCount(data);
+
+  return {
+    results,
+    count,
+    raw: data,
+  };
 };
 
 export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);

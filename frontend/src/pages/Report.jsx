@@ -31,7 +31,7 @@ export default function ReportContent() {
   const { user } = useAuth();
   const reportRef = useRef(null);
   const [reviews, setReviews] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
+  const [keywordAnalytics, setKeywordAnalytics] = useState(null);
   const [filters, setFilters] = useState({ startDate: '', endDate: '', source: 'Tất cả' });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -47,7 +47,6 @@ export default function ReportContent() {
     try {
       const source = filters.source === 'Tất cả' ? '' : filters.source;
       const sourceUrl = toAnalyticsSource(filters.source);
-
       const [reviewRows, keywordPayload] = await Promise.allSettled([
         fetchUserReviews(user.id, { ...filters, source }),
         fetchKeywordAnalytics({ userId: user.id, sourceUrl }),
@@ -56,7 +55,7 @@ export default function ReportContent() {
       if (reviewRows.status === 'fulfilled') setReviews(reviewRows.value);
       else throw reviewRows.reason;
 
-      setAnalytics(keywordPayload.status === 'fulfilled' ? keywordPayload.value : null);
+      setKeywordAnalytics(keywordPayload.status === 'fulfilled' ? keywordPayload.value : null);
     } catch (error) {
       toast.error(error.message || 'Không tải được báo cáo.');
     } finally {
@@ -86,9 +85,9 @@ export default function ReportContent() {
       negative: reviews.length - positive,
       confidence,
       groups: Object.values(groups),
-      words: extractWordCloud(analytics) || buildWordCloudData(reviews),
+      words: extractWordCloud(keywordAnalytics) || buildWordCloudFromReviews(reviews),
     };
-  }, [analytics, reviews]);
+  }, [keywordAnalytics, reviews]);
 
   const exportPdf = async () => {
     if (!reportRef.current || exporting) return;
@@ -406,36 +405,52 @@ function extractWordCloud(payload) {
   return Array.isArray(words) ? words : null;
 }
 
-function buildWordCloudData(reviews) {
-  const stopWords = new Set([
-    'và', 'là', 'có', 'cho', 'của', 'mình', 'tôi', 'bạn', 'này', 'đó', 'thì', 'mà',
-    'nhưng', 'rất', 'được', 'không', 'với', 'một', 'những', 'cũng', 'đã', 'khi',
-    'lại', 'ở', 'để', 'nên',
-  ]);
+function buildWordCloudFromReviews(reviews) {
   const counts = new Map();
 
-  reviews.forEach((review) => {
-    const label = Number(review.ai_label);
-    const words = String(review.content || '').toLocaleLowerCase('vi-VN').normalize('NFC').match(/[\p{L}\p{N}]+/gu) || [];
-    const usefulWords = words.filter((word) => word.length >= 3 && !stopWords.has(word) && !/^\d+$/.test(word));
-    const terms = [...new Set(usefulWords)];
+  reviews.forEach((item) => {
+    const label = Number(item.ai_label);
+    extractReportKeywords(item).forEach((keyword) => {
+      const text = String(keyword || '').trim();
+      if (!text) return;
 
-    terms.forEach((text) => {
       const current = counts.get(text) || { text, value: 0, positive: 0, negative: 0 };
       current.value += 1;
       if (label === 1) current.positive += 1;
-      if (label === 0) current.negative += 1;
+      else current.negative += 1;
       counts.set(text, current);
     });
   });
 
   return [...counts.values()]
-    .filter((word) => word.value >= (reviews.length > 30 ? 2 : 1))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 30)
-    .map((word) => ({
-      text: word.text,
-      value: word.value,
-      sentiment: word.positive === word.negative ? 'neutral' : word.positive > word.negative ? 'positive' : 'negative',
+    .slice(0, 36)
+    .map((item) => ({
+      text: item.text,
+      value: item.value,
+      sentiment: item.positive === item.negative ? 'neutral' : item.positive > item.negative ? 'positive' : 'negative',
     }));
+}
+
+function extractReportKeywords(item) {
+  if (Array.isArray(item.keywords)) return item.keywords;
+  if (typeof item.keywords === 'string') return item.keywords.split(',').map((word) => word.trim()).filter(Boolean);
+  if (Array.isArray(item.aspects)) return item.aspects;
+  if (typeof item.aspects === 'string') return item.aspects.split(',').map((word) => word.trim()).filter(Boolean);
+  return buildKeywordsFromText(item.content || item.comment || item.text || item.review || '');
+}
+
+function buildKeywordsFromText(text) {
+  const stopWords = new Set([
+    'khÃ´ng', 'nhÆ°ng', 'mÃ¬nh', 'Ä‘Æ°á»£c', 'nÃ y', 'quÃ¡n', 'mÃ³n', 'tháº¥y', 'ráº¥t',
+    'nhiá»u', 'cÅ©ng', 'cho', 'vá»›i', 'cá»§a', 'thÃ¬', 'mÃ ', 'lÃ ', 'cÃ³',
+  ]);
+
+  return [...new Set(
+    String(text)
+      .toLocaleLowerCase('vi-VN')
+      .match(/[\p{L}\p{N}]+/gu) || []
+  )]
+    .filter((word) => word.length >= 4 && !stopWords.has(word))
+    .slice(0, 6);
 }
