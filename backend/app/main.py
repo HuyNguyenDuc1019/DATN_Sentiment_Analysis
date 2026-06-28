@@ -8,6 +8,11 @@ from typing import Optional
 from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, FeedbackRequest 
 from .database import supabase
 from .predictor import SentimentPredictor
+from fastapi.responses import StreamingResponse
+import io
+import csv
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 app = FastAPI(
     title="Foody Sentiment Analysis API",
@@ -289,5 +294,116 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
             "wordcloud": wordcloud_data
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # =====================================================================
+# HÀM BẢO VỆ (TRẠM GÁC): KIỂM TRA QUYỀN ADMIN
+# =====================================================================
+def check_is_admin(user_id: str):
+    try:
+        response = supabase.table('users').select('role').eq('id', user_id).execute()
+        if not response.data or response.data[0]['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Cảnh báo: Lĩnh vực tuyệt mật! Bạn không có quyền Admin.")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail="Lỗi kiểm tra quyền truy cập.")
+
+# =====================================================================
+# API ADMIN 1: THỐNG KÊ TỔNG QUAN (SYSTEM METRICS)
+# =====================================================================
+@app.get("/api/admin/metrics")
+async def get_admin_metrics(admin_id: str):
+    check_is_admin(admin_id) # Bắt buộc phải qua trạm gác
+    
+    try:
+        reviews_res = supabase.table('scraped_reviews').select('ai_label', count='exact').execute()
+        users_res = supabase.table('users').select('id', count='exact').execute()
+        feedback_res = supabase.table('feedback_data').select('id', count='exact').eq('status', 'pending').execute()
+
+        data = reviews_res.data
+        total_reviews = len(data)
+        positive_count = sum(1 for item in data if item['ai_label'] == 1)
+        
+        return {
+            "total_api_calls": total_reviews,
+            "total_users": users_res.count if hasattr(users_res, 'count') else 0,
+            "pending_feedbacks": feedback_res.count if hasattr(feedback_res, 'count') else 0,
+            "global_positive_ratio": round((positive_count / total_reviews) * 100, 1) if total_reviews > 0 else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================================
+# API ADMIN 2: QUẢN LÝ NGƯỜI DÙNG (USER MANAGEMENT)
+# =====================================================================
+@app.put("/api/admin/users/action")
+async def manage_user_action(request: AdminActionRequest):
+    check_is_admin(request.admin_id)
+    
+    try:
+        update_data = {}
+        if request.action == "ban":
+            update_data = {"status": "banned"}
+        elif request.action == "unban":
+            update_data = {"status": "active"}
+        elif request.action == "upgrade_vip":
+            update_data = {"tier": "vip"}
+            
+        supabase.table('users').update(update_data).eq('id', request.target_user_id).execute()
+        return {"status": "success", "message": f"Đã thực hiện thao tác {request.action} thành công."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================================
+# API ADMIN 3: DUYỆT DATA FEEDBACK & XUẤT CSV (MLOps)
+# =====================================================================
+@app.put("/api/admin/feedback/review")
+async def review_feedback(request: AdminFeedbackReview):
+    check_is_admin(request.admin_id)
+    try:
+        status = "approved" if request.action == "approve" else "rejected"
+        supabase.table('feedback_data').update({"status": status}).eq('id', request.feedback_id).execute()
+        return {"status": "success", "message": f"Đã {status} mẫu dữ liệu này."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/dataset/export")
+async def export_retrain_dataset(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        response = supabase.table('feedback_data').select('original_content, corrected_label').eq('status', 'approved').execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Chưa có dữ liệu nào được duyệt để xuất.")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['text', 'label'])
+        for item in response.data:
+            writer.writerow([item['original_content'], item['corrected_label']])
+        output.seek(0)
+        
+        return StreamingResponse(
+            iter([output.getvalue()]), 
+            media_type="text/csv", 
+            headers={"Content-Disposition": "attachment; filename=phobert_retrain_dataset.csv"}
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================================
+# API ADMIN 4: CÀI ĐẶT LÕI (SYSTEM SETTINGS)
+# =====================================================================
+@app.put("/api/admin/settings")
+async def update_system_settings(request: AdminSettingUpdate):
+    check_is_admin(request.admin_id)
+    try:
+        supabase.table('system_settings').update({
+            "ai_threshold": request.ai_threshold,
+            "max_upload_size_free": request.max_upload_size_free
+        }).eq('id', 1).execute()
+        return {"status": "success", "message": "Đã cập nhật cấu hình hệ thống!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
