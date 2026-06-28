@@ -4,39 +4,127 @@ const SCRAPER_API = 'http://localhost:3000';
 const normalizeLabel = (value) => {
   if (value === 1 || value === '1') return 1;
   if (value === 0 || value === '0') return 0;
-  return ['positive', 'pos', 'label_1', 'tích cực', 'tich cuc'].includes(
-    String(value ?? '').trim().toLowerCase()
-  ) ? 1 : 0;
+
+  const text = String(value ?? '').trim().toLowerCase();
+  return [
+    'positive',
+    'pos',
+    'label_1',
+    'tích cực',
+    'tich cuc',
+    'khách hài lòng',
+    'khach hai long',
+  ].includes(text)
+    ? 1
+    : 0;
+};
+
+const normalizeConfidence = (value) => {
+  const number = Number(value || 0);
+  return number > 1 ? number / 100 : number;
 };
 
 const normalizeResult = (item) => ({
-  text: item?.text ?? item?.content ?? item?.comment ?? item?.review ?? '',
-  prediction: normalizeLabel(item?.prediction ?? item?.label ?? item?.ai_label),
-  confidence: Number(item?.confidence || 0) > 1
-    ? Number(item.confidence) / 100
-    : Number(item?.confidence || 0),
+  text: item?.text ?? item?.content ?? item?.comment ?? item?.review ?? item?.original_content ?? '',
+  prediction: normalizeLabel(item?.prediction ?? item?.label ?? item?.ai_label ?? item?.sentiment),
+  confidence: normalizeConfidence(item?.confidence ?? item?.score ?? item?.probability),
 });
 
 const extractResults = (payload, depth = 0) => {
-  if (!payload || depth > 5) return [];
+  if (!payload || depth > 6) return [];
   if (Array.isArray(payload)) return payload;
-  for (const key of ['results', 'data', 'predictions', 'items', 'reviews', 'comments']) {
+
+  for (const key of ['results', 'data', 'predictions', 'items', 'reviews', 'comments', 'outputs']) {
     const found = extractResults(payload[key], depth + 1);
     if (found.length) return found;
   }
+
   return [];
 };
 
-const post = async (url, body) => {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok || data?.success === false) {
-    throw new Error(data?.detail || data?.error || data?.message || 'Máy chủ trả về lỗi.');
+const extractCount = (payload, depth = 0) => {
+  if (!payload || depth > 6) return 0;
+  if (Array.isArray(payload)) return payload.length;
+
+  for (const key of ['count', 'total', 'saved_count', 'savedCount', 'inserted', 'inserted_count', 'review_count']) {
+    const value = Number(payload[key]);
+    if (Number.isFinite(value) && value >= 0) return value;
   }
+
+  for (const key of ['data', 'result', 'payload', 'summary']) {
+    const value = extractCount(payload[key], depth + 1);
+    if (value > 0) return value;
+  }
+
+  return 0;
+};
+
+const getErrorMessage = (data, fallback) => {
+  const raw = data?.detail ?? data?.error ?? data?.message ?? data;
+  if (!raw) return fallback;
+  if (typeof raw === 'string') return raw;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.msg || item?.message || JSON.stringify(item);
+      })
+      .join('\n');
+  }
+
+  if (typeof raw === 'object') {
+    return raw.msg || raw.message || JSON.stringify(raw);
+  }
+
+  return String(raw);
+};
+
+const post = async (url, body) => {
+  let response;
+  let data;
+
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    data = await response.json().catch(() => null);
+  } catch {
+    throw new Error('Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.');
+  }
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(getErrorMessage(data, 'Máy chủ trả về lỗi.'));
+  }
+
+  return data;
+};
+
+const get = async (url, params = {}) => {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, value);
+    }
+  });
+
+  let response;
+  let data;
+
+  try {
+    response = await fetch(`${url}?${query.toString()}`);
+    data = await response.json().catch(() => null);
+  } catch {
+    throw new Error('Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.');
+  }
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(getErrorMessage(data, 'Không tải được dữ liệu.'));
+  }
+
   return data;
 };
 
@@ -47,7 +135,26 @@ export const predictBatch = async (payload) => {
 
 export const analyzeUrl = async (payload) => {
   const data = await post(`${SCRAPER_API}/api/scrape`, payload);
-  return extractResults(data).map(normalizeResult).filter((item) => item.text);
+  const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
+  const count = results.length || extractCount(data);
+
+  return {
+    results,
+    count,
+    raw: data,
+  };
 };
 
 export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);
+
+export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) =>
+  get(`${PYTHON_API}/api/dashboard/alerts`, {
+    user_id: userId,
+    source_url: sourceUrl || 'all',
+  });
+
+export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) =>
+  get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
+    user_id: userId,
+    source_url: sourceUrl || 'all',
+  });

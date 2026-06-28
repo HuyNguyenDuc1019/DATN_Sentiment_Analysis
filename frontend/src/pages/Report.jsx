@@ -1,31 +1,456 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Calendar, ChevronDown, RefreshCcw, CheckCircle2, Database, Smile, Frown, ShieldCheck } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Calendar,
+  CheckCircle2,
+  Database,
+  Download,
+  Frown,
+  RefreshCcw,
+  ShieldCheck,
+  Smile,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import cloud from 'd3-cloud';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchKeywordAnalytics } from '../services/api';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
+
+const SOURCE_OPTIONS = ['Tất cả', 'CSV', 'Foody', 'Shopee'];
 
 export default function ReportContent() {
   const { user } = useAuth();
+  const reportRef = useRef(null);
   const [reviews, setReviews] = useState([]);
-  const load = useCallback(async () => { if (user?.id) { try { setReviews(await fetchUserReviews(user.id)); } catch (error) { window.alert(error.message); } } }, [user?.id]);
-  useEffect(() => { load(); }, [load]);
+  const [keywordAnalytics, setKeywordAnalytics] = useState(null);
+  const [filters, setFilters] = useState({ startDate: '', endDate: '', source: 'Tất cả' });
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+      toast.error('Ngày bắt đầu không được lớn hơn ngày kết thúc.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const source = filters.source === 'Tất cả' ? '' : filters.source;
+      const sourceUrl = toAnalyticsSource(filters.source);
+      const [reviewRows, keywordPayload] = await Promise.allSettled([
+        fetchUserReviews(user.id, { ...filters, source }),
+        fetchKeywordAnalytics({ userId: user.id, sourceUrl }),
+      ]);
+
+      if (reviewRows.status === 'fulfilled') setReviews(reviewRows.value);
+      else throw reviewRows.reason;
+
+      setKeywordAnalytics(keywordPayload.status === 'fulfilled' ? keywordPayload.value : null);
+    } catch (error) {
+      toast.error(error.message || 'Không tải được báo cáo.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, user?.id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
   const report = useMemo(() => {
     const positive = reviews.filter((item) => Number(item.ai_label) === 1).length;
-    const confidence = reviews.length ? reviews.reduce((sum, item) => sum + confidenceRatio(item.confidence), 0) / reviews.length : 0;
+    const confidence = reviews.length
+      ? reviews.reduce((sum, item) => sum + confidenceRatio(item.confidence), 0) / reviews.length
+      : 0;
     const groups = {};
-    reviews.forEach((item) => { const key = item.source_url === 'CSV_Upload' ? 'CSV' : item.source_url?.includes('foody') ? 'Foody' : item.source_url?.includes('shopee') ? 'Shopee' : 'Khác'; groups[key] ||= { positive: 0, negative: 0 }; groups[key][Number(item.ai_label) === 1 ? 'positive' : 'negative'] += 1; });
-    return { positive, negative: reviews.length - positive, confidence, groups: Object.entries(groups) };
-  }, [reviews]);
-  return <div className="p-8 h-full flex flex-col space-y-6 animate-in fade-in duration-500 font-sans overflow-y-auto"><div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2"><div><h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Báo cáo</h1><p className="text-slate-400 text-sm">Báo cáo tổng hợp theo thời gian</p></div><button className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-6 rounded-xl transition-colors shadow-lg shadow-indigo-600/20"><Download className="w-4 h-4" />Xuất PDF</button></div><FilterBar onRefresh={load} /><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><ComparisonChartCard groups={report.groups} /><WordCloudCard /></div><PerformanceSummaryCard total={reviews.length} positive={report.positive} negative={report.negative} confidence={report.confidence} /></div>;
+
+    reviews.forEach((item) => {
+      const key = getSourceName(item.source_url);
+      groups[key] ||= { source: key, positive: 0, negative: 0 };
+      groups[key][Number(item.ai_label) === 1 ? 'positive' : 'negative'] += 1;
+    });
+
+    return {
+      positive,
+      negative: reviews.length - positive,
+      confidence,
+      groups: Object.values(groups),
+      words: extractWordCloud(keywordAnalytics) || buildWordCloudFromReviews(reviews),
+    };
+  }, [keywordAnalytics, reviews]);
+
+  const exportPdf = async () => {
+    if (!reportRef.current || exporting) return;
+    setExporting(true);
+    try {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const html2pdf = (await import('html2pdf.js')).default;
+      const date = new Date().toISOString().slice(0, 10);
+
+      await html2pdf()
+        .set({
+          margin: 8,
+          filename: `bao-cao-phan-hoi-${date}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#0f172a', logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(reportRef.current)
+        .save();
+    } catch (error) {
+      toast.error(`Không thể xuất PDF: ${error.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col space-y-6 overflow-y-auto p-8 font-sans animate-in fade-in duration-500">
+      <div className="mb-2 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <h1 className="mb-1 text-2xl font-semibold tracking-wide text-white">Báo cáo phản hồi</h1>
+          <p className="text-sm text-slate-400">Tổng hợp tình hình khách hàng theo thời gian và nguồn dữ liệu.</p>
+        </div>
+        <button
+          type="button"
+          onClick={exportPdf}
+          disabled={exporting || loading}
+          className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 font-medium text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-60"
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? 'Đang tạo PDF...' : 'Xuất PDF'}
+        </button>
+      </div>
+
+      <FilterBar filters={filters} setFilters={setFilters} loading={loading} onRefresh={load} />
+
+      <div ref={reportRef} className="print-report space-y-6 bg-[#0f172a] p-1">
+        <div className={`${exporting ? 'block' : 'hidden'} pdf-heading text-white`}>
+          <h2 className="text-2xl font-bold">Báo cáo phản hồi khách hàng</h2>
+          <p className="mt-1 text-sm text-slate-400">Ngày xuất: {new Date().toLocaleDateString('vi-VN')}</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <ComparisonChartCard groups={report.groups} />
+          <WordCloudCard words={report.words} />
+        </div>
+
+        <PerformanceSummaryCard
+          total={reviews.length}
+          positive={report.positive}
+          negative={report.negative}
+          confidence={report.confidence}
+        />
+      </div>
+    </div>
+  );
 }
 
-function FilterBar({ onRefresh }) { return <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 text-sm"><div className="flex flex-col sm:flex-row sm:items-center gap-4 text-slate-300"><div className="flex items-center gap-3"><span className="text-slate-400">Khoảng thời gian:</span><button className="flex items-center gap-2 bg-slate-900/50 border border-slate-700 hover:border-slate-500 transition-colors rounded-lg px-4 py-2"><Calendar className="w-4 h-4 text-slate-400" /><span>Toàn bộ dữ liệu</span></button></div><div className="flex items-center gap-3"><span className="text-slate-400">Nguồn:</span><button className="flex items-center gap-2 bg-slate-900/50 border border-slate-700 hover:border-slate-500 transition-colors rounded-lg px-4 py-2 min-w-[140px] justify-between"><span>Tất cả nguồn</span><ChevronDown className="w-4 h-4 text-slate-400" /></button></div></div><button onClick={onRefresh} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors self-start xl:self-center"><RefreshCcw className="w-4 h-4" />Làm mới dữ liệu</button></div>; }
+function FilterBar({ filters, setFilters, loading, onRefresh }) {
+  const update = (field) => (event) => setFilters((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-700 bg-slate-800/50 p-4 text-sm backdrop-blur-md xl:flex-row xl:items-center">
+      <div className="flex flex-col gap-4 text-slate-300 lg:flex-row lg:items-end">
+        <div className="flex flex-wrap items-end gap-3">
+          <span className="pb-2 text-slate-400">Khoảng thời gian:</span>
+          <DateField label="Từ ngày" value={filters.startDate} onChange={update('startDate')} />
+          <DateField label="Đến ngày" value={filters.endDate} onChange={update('endDate')} />
+        </div>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs text-slate-500">Nguồn</span>
+          <select
+            value={filters.source}
+            onChange={update('source')}
+            className="min-w-[150px] rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-2 text-slate-200 transition-colors hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            {SOURCE_OPTIONS.map((source) => (
+              <option key={source} value={source}>
+                {source === 'Tất cả' ? 'Tất cả nguồn' : source}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={loading}
+        className="flex items-center gap-2 self-start text-slate-400 transition-colors hover:text-white disabled:opacity-60 xl:self-center"
+      >
+        <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        {loading ? 'Đang cập nhật...' : 'Làm mới dữ liệu'}
+      </button>
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="relative">
+        <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          type="date"
+          value={value}
+          onChange={onChange}
+          className="rounded-lg border border-slate-700 bg-slate-900/50 py-2 pl-10 pr-3 text-slate-200 transition-colors [color-scheme:dark] hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+      </span>
+    </label>
+  );
+}
 
 function ComparisonChartCard({ groups }) {
-  const max = Math.max(1, ...groups.flatMap(([, values]) => [values.positive, values.negative]));
-  return <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col"><div className="flex justify-between items-center mb-8"><h3 className="text-lg font-medium text-white">So sánh nền tảng</h3><div className="flex items-center gap-4 text-sm text-slate-300"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Tích cực</div><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-rose-500" />Tiêu cực</div></div></div><div className="flex-1 min-h-[220px] flex items-end justify-around pb-4 pt-4 border-b border-slate-700/50 relative">{groups.map(([name, values]) => <div key={name} className="flex flex-col items-center gap-3"><div className="flex items-end gap-2 h-48"><div className="w-8 md:w-12 bg-emerald-500 rounded-t-sm transition-all hover:opacity-80" style={{ height: `${Math.max(3, values.positive / max * 100)}%` }} /><div className="w-8 md:w-12 bg-rose-500 rounded-t-sm transition-all hover:opacity-80" style={{ height: `${Math.max(3, values.negative / max * 100)}%` }} /></div><span className="text-sm font-medium text-slate-300">{name}</span></div>)}</div></div>;
+  return (
+    <div className="break-inside-avoid flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md lg:col-span-2">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-lg font-medium text-white">So sánh theo nguồn dữ liệu</h3>
+      </div>
+
+      {groups.length ? (
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={groups} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+              <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
+              <XAxis dataKey="source" stroke="#94a3b8" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#94a3b8" tick={{ fontSize: 12 }} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
+                contentStyle={{
+                  background: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: 12,
+                  color: '#e2e8f0',
+                }}
+                labelStyle={{ color: '#f8fafc' }}
+              />
+              <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 12 }} />
+              <Bar dataKey="positive" name="Khách hài lòng" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="negative" name="Khách chưa hài lòng" fill="#fb7185" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <EmptyData text="Không có dữ liệu trong khoảng đã chọn." />
+      )}
+    </div>
+  );
 }
 
-function WordCloudCard() { return <div className="lg:col-span-1 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col"><h3 className="text-lg font-medium text-white mb-4">Bản đồ từ khóa</h3><div className="flex-1 bg-slate-900/50 rounded-xl border border-slate-700/50 flex flex-col items-center justify-center p-6 relative overflow-hidden min-h-[220px]"><div className="text-center space-y-3 relative z-10"><div className="text-rose-400 text-xl font-bold tracking-wide">Giao hàng chậm</div><div className="text-indigo-300 text-sm font-medium">Chất lượng tốt</div><div className="flex items-baseline justify-center gap-3"><span className="text-emerald-400 text-2xl font-bold">Đóng gói kỹ</span><span className="text-slate-200 text-base font-medium">Giá rẻ</span></div><div className="flex items-center justify-center gap-4"><span className="text-rose-500 text-lg font-bold">Tẩy chay</span><span className="text-slate-400 text-xs">Thái độ</span></div></div></div><div className="flex justify-center items-center gap-4 mt-5 text-[11px] text-slate-400"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" />Khen ngợi</div><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500" />Phàn nàn</div></div></div>; }
+function WordCloudCard({ words }) {
+  const [layoutWords, setLayoutWords] = useState([]);
+  const cloudWords = useMemo(() => {
+    const normalized = words.map((word) => ({
+      text: word.text,
+      value: Number(word.value || 1),
+      sentiment: word.sentiment || 'neutral',
+    }));
+    const max = Math.max(1, ...normalized.map((word) => word.value));
+    const min = Math.min(...normalized.map((word) => word.value), max);
 
-function PerformanceSummaryCard({ total, positive, negative, confidence }) { return <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6"><div className="flex justify-between items-center mb-6"><h2 className="text-lg font-medium text-white">Tóm tắt hiệu suất mô hình</h2><div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-400 text-xs font-semibold tracking-wider"><CheckCircle2 className="w-3.5 h-3.5" />HOẠT ĐỘNG TỐT</div></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"><Metric icon={Database} label="Tổng số dữ liệu" value={total} barColor="bg-indigo-400" progress={100} /><Metric icon={Smile} label="Tổng tích cực" value={positive} color="text-emerald-400" barColor="bg-emerald-500" progress={total ? positive / total * 100 : 0} glow="shadow-[0_0_8px_rgba(16,185,129,0.5)]" /><Metric icon={Frown} label="Tổng tiêu cực" value={negative} color="text-rose-400" barColor="bg-rose-500" progress={total ? negative / total * 100 : 0} glow="shadow-[0_0_8px_rgba(244,63,94,0.5)]" /><Metric icon={ShieldCheck} label="Độ tin cậy trung bình" value={`${(confidence * 100).toFixed(1)}%`} barColor="bg-indigo-400" progress={confidence * 100} /></div></div>; }
-function Metric({ icon: Icon, label, value, color = 'text-white', barColor, progress, glow = '' }) { const width = Math.min(100, Math.max(0, Number(progress) || 0)); return <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-5 flex flex-col justify-between"><div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-3"><Icon className="w-4 h-4" />{label}</div><div className={`text-3xl font-bold tracking-tight ${color}`}>{typeof value === 'number' ? value.toLocaleString('vi-VN') : value}</div><div className="h-1 w-full bg-slate-800 rounded-full mt-4 overflow-hidden"><div className={`h-full ${barColor} ${glow} rounded-full transition-[width] duration-700 ease-out`} style={{ width: `${width}%` }} /></div></div>; }
+    return normalized.slice(0, 40).map((word) => ({
+      ...word,
+      size: scaleWord(word.value, min, max),
+    }));
+  }, [words]);
+
+  useEffect(() => {
+    if (!cloudWords.length) {
+      setLayoutWords([]);
+      return undefined;
+    }
+
+    const layout = cloud()
+      .size([440, 300])
+      .words(cloudWords)
+      .padding(5)
+      .rotate((_, index) => (index % 7 === 0 ? -10 : index % 5 === 0 ? 10 : 0))
+      .font('Inter, Arial, sans-serif')
+      .fontWeight(700)
+      .fontSize((word) => word.size)
+      .on('end', (items) => setLayoutWords(items));
+
+    layout.start();
+    return () => layout.stop();
+  }, [cloudWords]);
+
+  return (
+    <div className="break-inside-avoid flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md lg:col-span-1">
+      <h3 className="mb-1 text-lg font-medium text-white">Bản đồ từ khóa</h3>
+      <p className="mb-4 text-xs text-slate-500">Từ càng lớn nghĩa là khách nhắc càng nhiều.</p>
+
+      <div className="flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50 p-5">
+        {layoutWords.length ? (
+          <div className="relative h-[300px] w-full max-w-[440px]">
+            {layoutWords.map((word) => (
+              <span
+                key={`${word.text}-${word.value}`}
+                title={`${word.text}: ${word.value} lần`}
+                className="absolute left-1/2 top-1/2 cursor-default whitespace-nowrap font-bold leading-none transition-transform hover:scale-110"
+                style={{
+                  color: wordColor(word.sentiment),
+                  fontSize: `${word.size}px`,
+                  transform: `translate(${word.x}px, ${word.y}px) translate(-50%, -50%) rotate(${word.rotate}deg)`,
+                }}
+              >
+                {word.text}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <EmptyData text="Chưa đủ dữ liệu từ khóa." />
+        )}
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
+        <LegendItem color="bg-emerald-500" label="Khách hài lòng" />
+        <LegendItem color="bg-rose-500" label="Khách chưa hài lòng" />
+        <LegendItem color="bg-slate-400" label="Trung tính" />
+      </div>
+    </div>
+  );
+}
+
+function PerformanceSummaryCard({ total, positive, negative, confidence }) {
+  return (
+    <div className="break-inside-avoid rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-lg font-medium text-white">Tóm tắt tình hình</h2>
+        <div className="flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold tracking-wider text-emerald-400">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          ĐANG THEO DÕI
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric icon={Database} label="Tổng phản hồi" value={total} barColor="bg-indigo-400" progress={100} />
+        <Metric icon={Smile} label="Khách hài lòng" value={positive} color="text-emerald-400" barColor="bg-emerald-500" progress={total ? (positive / total) * 100 : 0} glow="shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+        <Metric icon={Frown} label="Khách chưa hài lòng" value={negative} color="text-rose-400" barColor="bg-rose-500" progress={total ? (negative / total) * 100 : 0} glow="shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+        <Metric icon={ShieldCheck} label="Độ chắc chắn trung bình" value={`${(confidence * 100).toFixed(1)}%`} barColor="bg-indigo-400" progress={confidence * 100} />
+      </div>
+    </div>
+  );
+}
+
+function Metric({ icon: Icon, label, value, color = 'text-white', barColor, progress, glow = '' }) {
+  const width = Math.min(100, Math.max(0, Number(progress) || 0));
+  return (
+    <div className="flex flex-col justify-between rounded-xl border border-slate-700 bg-slate-900/50 p-5">
+      <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-400">
+        <Icon className="h-4 w-4" />
+        {label}
+      </div>
+      <div className={`text-3xl font-bold tracking-tight ${color}`}>
+        {typeof value === 'number' ? value.toLocaleString('vi-VN') : value}
+      </div>
+      <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-slate-800">
+        <div className={`h-full rounded-full ${barColor} ${glow} transition-[width] duration-700 ease-out`} style={{ width: `${width}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function LegendItem({ color, label }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className={`h-2.5 w-2.5 rounded-full ${color}`} />
+      {label}
+    </div>
+  );
+}
+
+function EmptyData({ text }) {
+  return <div className="flex min-h-[180px] items-center justify-center text-center text-sm text-slate-500">{text}</div>;
+}
+
+function getSourceName(sourceUrl = '') {
+  if (sourceUrl === 'CSV_Upload') return 'CSV';
+  if (sourceUrl.toLowerCase().includes('foody')) return 'Foody';
+  if (sourceUrl.toLowerCase().includes('shopee')) return 'Shopee';
+  return 'Khác';
+}
+
+function toAnalyticsSource(source) {
+  if (source === 'CSV') return 'CSV_Upload';
+  if (source === 'Foody') return 'Foody';
+  if (source === 'Shopee') return 'Shopee';
+  return 'all';
+}
+
+function wordColor(sentiment) {
+  if (sentiment === 'positive') return '#34d399';
+  if (sentiment === 'negative') return '#fb7185';
+  return '#cbd5e1';
+}
+
+function scaleWord(value, min, max) {
+  if (max === min) return 22;
+  return Math.round(14 + ((value - min) / (max - min)) * 28);
+}
+
+function extractWordCloud(payload) {
+  const words = payload?.wordcloud || payload?.data?.wordcloud;
+  return Array.isArray(words) ? words : null;
+}
+
+function buildWordCloudFromReviews(reviews) {
+  const counts = new Map();
+
+  reviews.forEach((item) => {
+    const label = Number(item.ai_label);
+    extractReportKeywords(item).forEach((keyword) => {
+      const text = String(keyword || '').trim();
+      if (!text) return;
+
+      const current = counts.get(text) || { text, value: 0, positive: 0, negative: 0 };
+      current.value += 1;
+      if (label === 1) current.positive += 1;
+      else current.negative += 1;
+      counts.set(text, current);
+    });
+  });
+
+  return [...counts.values()]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 36)
+    .map((item) => ({
+      text: item.text,
+      value: item.value,
+      sentiment: item.positive === item.negative ? 'neutral' : item.positive > item.negative ? 'positive' : 'negative',
+    }));
+}
+
+function extractReportKeywords(item) {
+  if (Array.isArray(item.keywords)) return item.keywords;
+  if (typeof item.keywords === 'string') return item.keywords.split(',').map((word) => word.trim()).filter(Boolean);
+  if (Array.isArray(item.aspects)) return item.aspects;
+  if (typeof item.aspects === 'string') return item.aspects.split(',').map((word) => word.trim()).filter(Boolean);
+  return buildKeywordsFromText(item.content || item.comment || item.text || item.review || '');
+}
+
+function buildKeywordsFromText(text) {
+  const stopWords = new Set([
+    'khÃ´ng', 'nhÆ°ng', 'mÃ¬nh', 'Ä‘Æ°á»£c', 'nÃ y', 'quÃ¡n', 'mÃ³n', 'tháº¥y', 'ráº¥t',
+    'nhiá»u', 'cÅ©ng', 'cho', 'vá»›i', 'cá»§a', 'thÃ¬', 'mÃ ', 'lÃ ', 'cÃ³',
+  ]);
+
+  return [...new Set(
+    String(text)
+      .toLocaleLowerCase('vi-VN')
+      .match(/[\p{L}\p{N}]+/gu) || []
+  )]
+    .filter((word) => word.length >= 4 && !stopWords.has(word))
+    .slice(0, 6);
+}
