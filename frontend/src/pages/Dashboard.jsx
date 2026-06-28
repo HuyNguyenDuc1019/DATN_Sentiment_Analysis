@@ -291,7 +291,7 @@ function LeaderboardCard({ leaderboard }) {
 
 function KeywordList({ title, icon, items, positive = false }) {
   const displayItems = normalizeLeaderboardItems(items)
-    .filter((item) => (positive ? !isNegativeKeyword(item.text) : !isPositiveKeyword(item.text)))
+    .filter((item) => (positive ? isPositiveKeyword(item.text) : isNegativeKeyword(item.text)))
     .slice(0, 5);
 
   return (
@@ -416,7 +416,7 @@ function isCriticalAlert(item) {
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase('vi-VN');
-  const text = normalizeKeywordText(rawText);
+  const text = normalizeKeywordTextSafe(rawText);
 
   const riskWords = [
     'ngộ độc',
@@ -457,7 +457,7 @@ function isCriticalAlert(item) {
 }
 
 function isClearlyPositiveFeedback(text) {
-  const normalizedText = normalizeKeywordText(text);
+  const normalizedText = normalizeKeywordTextSafe(text);
   const positiveWords = [
     'ngon',
     'qua ngon',
@@ -515,7 +515,7 @@ function isClearlyPositiveFeedback(text) {
   const chinesePositiveWords = ['不错', '好吃', '推荐', '弹性', '赞', '很好', '特别推荐'];
   const extraPositiveWords = ['thom', 'dep', 'gioi thieu', 'se ung ho', 'recommend'];
   const hasPositiveSignal = [...positiveWords, ...extraPositiveWords]
-    .some((word) => normalizedText.includes(normalizeKeywordText(word)))
+    .some((word) => normalizedText.includes(normalizeKeywordTextSafe(word)))
     || chinesePositiveWords.some((word) => String(text || '').includes(word));
   const hasNegativeSignal = hasNegativeFeedbackSignal(text)
     || negativeCues.some((word) => keywordMatches(normalizedText, word));
@@ -524,7 +524,7 @@ function isClearlyPositiveFeedback(text) {
 }
 
 function hasNegativeFeedbackSignal(text) {
-  const normalizedText = normalizeKeywordText(text);
+  const normalizedText = normalizeKeywordTextSafe(text);
   const negativeCues = [
     'khong',
     'ko',
@@ -556,7 +556,7 @@ function hasNegativeFeedbackSignal(text) {
 }
 
 function keywordMatches(normalizedText, term) {
-  const keyword = normalizeKeywordText(term);
+  const keyword = normalizeKeywordTextSafe(term);
   if (!keyword) return false;
   if (!keyword.includes(' ') && keyword.length <= 4) {
     return normalizedText.split(/\s+/).includes(keyword);
@@ -580,7 +580,7 @@ function normalizeAlert(item) {
   return {
     id: item.id || item.review_id || item.alert_id || item.created_at || item.content,
     content: item.content || item.comment || item.text || item.review || item.original_content || item.message || '',
-    keywords: extractKeywords(item),
+    keywords: extractStoredKeywords(item),
     source_url: item.source_url || item.source || '',
     ai_label: item.ai_label,
     confidence: item.confidence,
@@ -600,16 +600,23 @@ function extractKeywords(item) {
   return buildKeywordsFromText(item.content || item.comment || item.text || item.review || '');
 }
 
+function extractStoredKeywords(item) {
+  if (Array.isArray(item.keywords)) return item.keywords.map((word) => String(word).trim()).filter(Boolean);
+  if (typeof item.keywords === 'string') return item.keywords.split(',').map((word) => word.trim()).filter(Boolean);
+  return [];
+}
+
 function buildLeaderboardFromReviews(reviews) {
   const positiveMap = new Map();
   const negativeMap = new Map();
 
   reviews.forEach((item) => {
-    const target = Number(item.ai_label) === 1 ? positiveMap : negativeMap;
-    extractKeywords(item).forEach((keyword) => {
-      const text = String(keyword || '').trim();
-      if (!text) return;
-      target.set(text, (target.get(text) || 0) + 1);
+    const isPositive = Number(item.ai_label) === 1;
+    const target = isPositive ? positiveMap : negativeMap;
+    const text = item.content || item.comment || item.text || item.review || '';
+
+    buildSentimentKeywords(text, isPositive).forEach((keyword) => {
+      target.set(keyword, (target.get(keyword) || 0) + 1);
     });
   });
 
@@ -624,6 +631,47 @@ function buildLeaderboardFromReviews(reviews) {
   };
 }
 
+function buildSentimentKeywords(text, isPositive) {
+  const normalizedText = normalizeKeywordTextSafe(text);
+  const terms = isPositive ? POSITIVE_LEADERBOARD_TERMS : NEGATIVE_LEADERBOARD_TERMS;
+
+  return terms
+    .filter((item) => item.matches.some((term) => keywordMatches(normalizedText, term)))
+    .map((item) => item.label);
+}
+
+const POSITIVE_LEADERBOARD_TERMS = [
+  { label: 'Ngon', matches: ['ngon', 'ngon qua', 'rat ngon'] },
+  { label: 'Sạch sẽ', matches: ['sach', 'sach se'] },
+  { label: 'Phục vụ nhanh', matches: ['phuc vu nhanh', 'len mon nhanh', 'giao hang nhanh', 'nhanh'] },
+  { label: 'Nhân viên thân thiện', matches: ['nhan vien than thien', 'than thien', 'nhiet tinh', 'de thuong'] },
+  { label: 'Đáng tiền', matches: ['dang tien', 'gia hop ly', 'gia re', 're'] },
+  { label: 'Vừa miệng', matches: ['vua mieng', 'dam da', 'hop khau vi'] },
+  { label: 'Thơm', matches: ['thom'] },
+  { label: 'Tươi', matches: ['tuoi', 'tuoi ngon'] },
+  { label: 'Không gian thoáng', matches: ['thoang', 'rong rai', 'khong gian rong'] },
+  { label: 'Sẽ quay lại', matches: ['se quay lai', 'ung ho', 'se ung ho'] },
+  { label: 'Tuyệt vời', matches: ['tuyet', 'tuyet voi', 'rat tot'] },
+];
+
+const NEGATIVE_LEADERBOARD_TERMS = [
+  { label: 'Thất vọng', matches: ['that vong'] },
+  { label: 'Không ngon', matches: ['khong ngon', 'ko ngon', 'khong hop khau vi'] },
+  { label: 'Chờ lâu', matches: ['cho lau', 'doi lau', 'lau', 'cham'] },
+  { label: 'Phục vụ kém', matches: ['phuc vu kem', 'thai do', 'nhan vien kho chiu', 'khong ai nghe may'] },
+  { label: 'Giá đắt', matches: ['gia dat', 'dat', 'hoi dat'] },
+  { label: 'Không sạch', matches: ['khong sach', 'ban', 'mat ve sinh'] },
+  { label: 'Đồ ăn nguội', matches: ['nguoi', 'do an nguoi'] },
+  { label: 'Đồ ăn khô', matches: ['kho', 'bi kho'] },
+  { label: 'Không tươi', matches: ['khong tuoi', 'kem tuoi'] },
+  { label: 'Nhạt', matches: ['nhat'] },
+  { label: 'Mặn', matches: ['man'] },
+  { label: 'Chua', matches: ['chua'] },
+  { label: 'Ồn ào', matches: ['on ao'] },
+  { label: 'Khó chịu', matches: ['kho chiu'] },
+  { label: 'Sai món', matches: ['sai mon', 'dat nham', 'nham'] },
+];
+
 function buildBusinessLeaderboard(apiLeaderboard, reviews) {
   const apiPositive = normalizeLeaderboardItems(apiLeaderboard?.top_positive);
   const apiNegative = normalizeLeaderboardItems(apiLeaderboard?.top_negative);
@@ -631,12 +679,12 @@ function buildBusinessLeaderboard(apiLeaderboard, reviews) {
 
   return {
     top_positive: completeKeywordList(
-      apiPositive.filter((item) => !isNegativeKeyword(item.text)),
-      normalizeLeaderboardItems(fallback.top_positive).filter((item) => !isNegativeKeyword(item.text)),
+      apiPositive.filter((item) => isPositiveKeyword(item.text)),
+      normalizeLeaderboardItems(fallback.top_positive).filter((item) => isPositiveKeyword(item.text)),
     ),
     top_negative: completeKeywordList(
-      apiNegative.filter((item) => !isPositiveKeyword(item.text)),
-      normalizeLeaderboardItems(fallback.top_negative).filter((item) => !isPositiveKeyword(item.text)),
+      apiNegative.filter((item) => isNegativeKeyword(item.text)),
+      normalizeLeaderboardItems(fallback.top_negative).filter((item) => isNegativeKeyword(item.text)),
     ),
   };
 }
@@ -646,7 +694,7 @@ function completeKeywordList(primary, fallback) {
   const seen = new Set();
 
   [...primary, ...fallback].forEach((item) => {
-    const key = normalizeKeywordText(item.text);
+    const key = normalizeKeywordTextSafe(item.text);
     if (!key || seen.has(key) || result.length >= 5) return;
     seen.add(key);
     result.push(item);
@@ -689,8 +737,19 @@ function normalizeKeywordText(text) {
     .replace(/đ/g, 'd');
 }
 
+function normalizeKeywordTextSafe(text) {
+  return String(text || '')
+    .trim()
+    .toLocaleLowerCase('vi-VN')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[Ä‘Ä]/g, 'd')
+    .replace(/Ä‘/g, 'd');
+}
+
 function isPositiveKeyword(text) {
-  const word = normalizeKeywordText(text);
+  const word = normalizeKeywordTextSafe(text);
   const positiveTerms = [
     'ngon',
     'ngot',
@@ -698,6 +757,7 @@ function isPositiveKeyword(text) {
     'tuyet',
     'tot',
     'nhanh',
+    'than thien',
     'dang tien',
     'hai long',
     'vua mieng',
@@ -718,7 +778,7 @@ function isPositiveKeyword(text) {
 }
 
 function isNegativeKeyword(text) {
-  const word = normalizeKeywordText(text);
+  const word = normalizeKeywordTextSafe(text);
   const negativeTerms = [
     'te',
     'do',
@@ -744,6 +804,11 @@ function isNegativeKeyword(text) {
     'kho',
     'it',
     'doi',
+    'khong ngon',
+    'khong sach',
+    'sai mon',
+    'dat nham',
+    'nham',
   ];
 
   return negativeTerms.some((term) => word === term || word.includes(term));
