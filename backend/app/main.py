@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import time
 from collections import Counter  # Thêm thư viện để đếm từ khóa cho Leaderboard
-
+from typing import Optional
 # Import cấu trúc dữ liệu từ file schemas.py
 from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, FeedbackRequest 
 from .database import supabase
@@ -47,9 +47,9 @@ async def load_model():
 # HÀM BÓC TÁCH KHÍA CẠNH & CẢNH BÁO ĐỎ (ACTION REQUIRED)
 # =====================================================================
 ASPECT_DICT = {
-    "Món ăn": ["mì cay", "trà sữa", "mặn", "nhạt", "nguội", "ngon", "dở", "sống", "cháy", "chua", "ngọt"],
-    "Dịch vụ": ["nhân viên", "bảo vệ", "quản lý", "thái độ", "chậm", "lâu", "nhiệt tình", "chửi"],
-    "Không gian": ["máy lạnh", "nóng", "bẩn", "dơ", "sạch", "chỗ để xe", "ồn ào"]
+    "Món ăn": ["mì cay", "trà sữa", "mặn", "nhạt", "nguội", "ngon", "dở", "sống", "cháy", "chua", "ngọt", "đậm đà", "vừa miệng", "đồ ăn", "nước lẩu", "thịt bò", "hải sản"],
+    "Dịch vụ": ["nhân viên", "bảo vệ", "quản lý", "thái độ", "chậm", "lâu", "nhiệt tình", "chửi", "phục vụ", "order", "lên món", "giao hàng"],
+    "Không gian": ["máy lạnh", "nóng", "bẩn", "dơ", "sạch", "chỗ để xe", "ồn ào", "rộng rãi", "thoáng mát", "nhà vệ sinh", "decor", "view"]
 }
 
 SENSITIVE_WORDS = ["ngộ độc", "đau bụng", "ruồi", "thái độ", "tẩy chay", "dị vật", "chửi", "tệ"]
@@ -234,24 +234,26 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# =======================================================================
-# API 6: BẢNG XẾP HẠNG TỪ KHÓA (LEADERBOARD)
-# =======================================================================
-@app.get("/api/dashboard/leaderboard")
-async def get_dashboard_leaderboard(source_url: str, user_id: str):
+# =====================================================================
+# API 6 (GỘP): PHÂN TÍCH TỪ KHÓA (NUÔI CẢ LEADERBOARD VÀ WORD CLOUD)
+# =====================================================================
+@app.get("/api/dashboard/keyword-analytics")
+async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
     try:
-        # Lấy nhãn và mảng từ khóa
-        response = supabase.table('scraped_reviews') \
-            .select('ai_label, keywords') \
-            .eq('source_url', source_url) \
-            .eq('user_id', user_id) \
-            .execute()
+        # 1. Query Database CHỈ 1 LẦN
+        query = supabase.table('scraped_reviews').select('ai_label, keywords').eq('user_id', user_id)
+        
+        # Nếu có truyền link thì lọc theo link, nếu không thì lấy toàn bộ dữ liệu của user đó
+        if source_url and source_url != "all":
+            query = query.eq('source_url', source_url)
             
+        response = query.execute()
         data = response.data
+        
         pos_keywords = []
         neg_keywords = []
         
-        # Phân loại từ khóa vào 2 rổ: Khen và Chê
+        # 2. Phân loại từ khóa
         for item in data:
             kws = item.get('keywords') or []
             if item['ai_label'] == 1:
@@ -259,13 +261,33 @@ async def get_dashboard_leaderboard(source_url: str, user_id: str):
             else:
                 neg_keywords.extend(kws)
                 
-        # Dùng Counter để đếm tần suất xuất hiện và lấy Top 5
-        top_positive = [{"keyword": k, "count": v} for k, v in Counter(pos_keywords).most_common(5)]
-        top_negative = [{"keyword": k, "count": v} for k, v in Counter(neg_keywords).most_common(5)]
+        # 3. Đếm tần suất
+        pos_counts = Counter(pos_keywords)
+        neg_counts = Counter(neg_keywords)
         
-        return {
-            "top_positive": top_positive,
-            "top_negative": top_negative
+        # ==========================================
+        # ĐÓNG GÓI DỮ LIỆU CHO LEADERBOARD (Lấy Top 5)
+        # ==========================================
+        leaderboard_data = {
+            "top_positive": [{"keyword": k.capitalize(), "count": v} for k, v in pos_counts.most_common(5)],
+            "top_negative": [{"keyword": k.capitalize(), "count": v} for k, v in neg_counts.most_common(5)]
         }
+        
+        # ==========================================
+        # ĐÓNG GÓI DỮ LIỆU CHO WORD CLOUD (Lấy Top 20)
+        # ==========================================
+        wordcloud_data = []
+        for kw, count in pos_counts.most_common(20):
+            wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "positive"})
+            
+        for kw, count in neg_counts.most_common(20):
+            wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "negative"})
+            
+        # 4. Trả về 1 gói JSON chứa cả 2 cục data
+        return {
+            "leaderboard": leaderboard_data,
+            "wordcloud": wordcloud_data
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
