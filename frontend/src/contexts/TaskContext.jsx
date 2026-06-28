@@ -138,10 +138,10 @@ export function TaskProvider({ children }) {
       const receivedCount = Number(data.count || data.results?.length || 0);
       setUrlResults(data.results || []);
       setUrlCount(receivedCount);
-      toast.success(
-        `Đã tiếp nhận ${receivedCount} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`,
-        { id: loadingToast }
-      );
+      const successMessage = receivedCount > 0
+        ? `Đã tiếp nhận ${receivedCount} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`
+        : 'Đã kiểm tra đường dẫn này. Hiện chưa có phản hồi mới để cập nhật.';
+      toast.success(successMessage, { id: loadingToast });
     } catch (error) {
       toast.error(
         error.message === 'Failed to fetch'
