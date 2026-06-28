@@ -6,6 +6,9 @@ import { analyzeUrl, predictBatch } from '../services/api';
 
 const TaskContext = createContext(null);
 
+const BACKGROUND_MESSAGE =
+  'Đang nạp dữ liệu. Hệ thống sẽ phân tích ngầm, vui lòng xem kết quả tại trang Dashboard sau ít phút.';
+
 export function TaskProvider({ children }) {
   const { user } = useAuth();
 
@@ -18,6 +21,7 @@ export function TaskProvider({ children }) {
 
   const [url, setUrl] = useState('');
   const [urlResults, setUrlResults] = useState([]);
+  const [urlCount, setUrlCount] = useState(0);
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlFilter, setUrlFilter] = useState('all');
 
@@ -28,9 +32,9 @@ export function TaskProvider({ children }) {
     setBatchColumns([]);
     setBatchResults([]);
     setBatchLoading(false);
-
     setUrl('');
     setUrlResults([]);
+    setUrlCount(0);
     setUrlLoading(false);
     setUrlFilter('all');
   }, [user?.id]);
@@ -43,7 +47,6 @@ export function TaskProvider({ children }) {
       skipEmptyLines: true,
       complete: ({ data, meta }) => {
         const fields = meta.fields || [];
-
         const preferred =
           fields.find((name) =>
             [
@@ -67,10 +70,12 @@ export function TaskProvider({ children }) {
         setBatchColumn(preferred || '');
         setBatchTexts(texts);
         setBatchResults([]);
+
+        if (!texts.length) {
+          toast.error('Không tìm thấy nội dung phản hồi trong file CSV.');
+        }
       },
-      error: (error) => {
-        toast.error(error.message || 'Không đọc được file CSV.');
-      },
+      error: (error) => toast.error(error.message || 'Không đọc được file CSV.'),
     });
   };
 
@@ -79,19 +84,14 @@ export function TaskProvider({ children }) {
       toast.error('Vui lòng đăng nhập trước khi phân tích file.');
       return;
     }
-
     if (!batchTexts.length) {
       toast.error('File chưa có phản hồi hợp lệ để phân tích.');
       return;
     }
-
     if (batchLoading) return;
 
     setBatchLoading(true);
-
-    const loadingToast = toast.loading(
-      'Đang nạp dữ liệu. Hệ thống sẽ phân tích ngầm, vui lòng xem kết quả tại trang Dashboard sau ít phút.'
-    );
+    const loadingToast = toast.loading(BACKGROUND_MESSAGE);
 
     try {
       const data = await predictBatch({
@@ -104,15 +104,12 @@ export function TaskProvider({ children }) {
       });
 
       setBatchResults(data);
-
       toast.success(
         `Đã tiếp nhận ${data.length} phản hồi. Kết quả sẽ được cập nhật tại Dashboard.`,
         { id: loadingToast }
       );
     } catch (error) {
-      toast.error(error.message || 'Không thể xử lý file CSV.', {
-        id: loadingToast,
-      });
+      toast.error(error.message || 'Không thể xử lý file CSV.', { id: loadingToast });
     } finally {
       setBatchLoading(false);
     }
@@ -123,19 +120,14 @@ export function TaskProvider({ children }) {
       toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
       return;
     }
-
     if (!/^https?:\/\//i.test(url.trim())) {
       toast.error('Vui lòng nhập đường dẫn hợp lệ.');
       return;
     }
-
     if (urlLoading) return;
 
     setUrlLoading(true);
-
-    const loadingToast = toast.loading(
-      'Đang nạp dữ liệu. Hệ thống sẽ phân tích ngầm, vui lòng xem kết quả tại trang Dashboard sau ít phút.'
-    );
+    const loadingToast = toast.loading(BACKGROUND_MESSAGE);
 
     try {
       const data = await analyzeUrl({
@@ -143,10 +135,11 @@ export function TaskProvider({ children }) {
         user_id: user.id,
       });
 
-      setUrlResults(data);
-
+      const receivedCount = Number(data.count || data.results?.length || 0);
+      setUrlResults(data.results || []);
+      setUrlCount(receivedCount);
       toast.success(
-        `Đã tiếp nhận ${data.length} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`,
+        `Đã tiếp nhận ${receivedCount} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`,
         { id: loadingToast }
       );
     } catch (error) {
@@ -178,6 +171,7 @@ export function TaskProvider({ children }) {
         url,
         setUrl,
         results: urlResults,
+        count: urlCount,
         loading: urlLoading,
         filter: urlFilter,
         setFilter: setUrlFilter,
@@ -193,6 +187,7 @@ export function TaskProvider({ children }) {
       batchLoading,
       url,
       urlResults,
+      urlCount,
       urlLoading,
       urlFilter,
       user?.id,
@@ -204,10 +199,8 @@ export function TaskProvider({ children }) {
 
 export function useTasks() {
   const context = useContext(TaskContext);
-
   if (!context) {
     throw new Error('useTasks must be used inside TaskProvider');
   }
-
   return context;
 }

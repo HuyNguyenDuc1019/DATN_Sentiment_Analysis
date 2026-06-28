@@ -11,17 +11,25 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchDashboardAlerts, fetchKeywordAnalytics } from '../services/api';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
-
-const SOURCE_URL = 'all';
 
 export default function DashboardContent() {
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
+  const [keywordAnalytics, setKeywordAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -29,17 +37,16 @@ export default function DashboardContent() {
 
     setLoading(true);
     try {
-      const [reviewRows, alertPayload, keywordPayload] = await Promise.allSettled([
-        fetchUserReviews(user.id),
-        fetchDashboardAlerts({ userId: user.id, sourceUrl: SOURCE_URL }),
-        fetchKeywordAnalytics({ userId: user.id, sourceUrl: SOURCE_URL }),
+      const reviewRows = await fetchUserReviews(user.id);
+      setReviews(reviewRows);
+
+      const [alertRows, keywordPayload] = await Promise.allSettled([
+        fetchAlertsForSources(user.id, reviewRows),
+        fetchKeywordAnalytics({ userId: user.id, sourceUrl: 'all' }),
       ]);
 
-      if (reviewRows.status === 'fulfilled') setReviews(reviewRows.value);
-      else throw reviewRows.reason;
-
-      setAlerts(alertPayload.status === 'fulfilled' ? extractAlerts(alertPayload.value) : []);
-      setAnalytics(keywordPayload.status === 'fulfilled' ? keywordPayload.value : null);
+      setAlerts(alertRows.status === 'fulfilled' ? alertRows.value : []);
+      setKeywordAnalytics(keywordPayload.status === 'fulfilled' ? keywordPayload.value : null);
     } catch (error) {
       toast.error(error.message || 'Không tải được dữ liệu tổng quan.');
     } finally {
@@ -71,24 +78,26 @@ export default function DashboardContent() {
     };
   }, [reviews]);
 
-  const trend = useMemo(() => buildTrend(reviews), [reviews]);
+  const trendData = useMemo(() => buildTrendData(reviews), [reviews]);
   const leaderboard = useMemo(() => {
-    const value = analytics?.leaderboard || analytics?.data?.leaderboard;
-    if (value?.top_positive || value?.top_negative) return value;
-    return buildFallbackLeaderboard(reviews);
-  }, [analytics, reviews]);
+    const value = keywordAnalytics?.leaderboard || keywordAnalytics?.data?.leaderboard;
+    return buildBusinessLeaderboard(value, reviews);
+  }, [keywordAnalytics, reviews]);
 
   const visibleAlerts = useMemo(() => {
-    if (alerts.length) return alerts.slice(0, 4);
-    return reviews
-      .filter((item) => Number(item.ai_label) === 0 || confidenceRatio(item.confidence) < 0.55)
+    const source = uniqueAlerts([...alerts, ...reviews]);
+
+    return source
+      .filter(isCriticalAlert)
+      .sort((a, b) => {
+        const actionScore = Number(Boolean(b.is_action_required)) - Number(Boolean(a.is_action_required));
+        if (actionScore !== 0) return actionScore;
+        const dateScore = new Date(b.review_date || b.created_at || 0) - new Date(a.review_date || a.created_at || 0);
+        if (dateScore !== 0) return dateScore;
+        return confidenceRatio(b.confidence) - confidenceRatio(a.confidence);
+      })
       .slice(0, 4)
-      .map((item) => ({
-        id: item.id,
-        content: item.content,
-        keywords: extractKeywords(item),
-        source_url: item.source_url,
-      }));
+      .map((item) => normalizeAlert(item));
   }, [alerts, reviews]);
 
   return (
@@ -120,7 +129,7 @@ export default function DashboardContent() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <TrendCard trend={trend} />
+        <TrendCard data={trendData} />
         <SentimentDonut positive={stats.positive} negative={stats.negative} rate={stats.positiveRate} />
       </div>
 
@@ -131,6 +140,8 @@ export default function DashboardContent() {
 }
 
 function AlertsSection({ alerts, loading }) {
+  const isSingleAlert = alerts.length === 1;
+
   return (
     <section className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-5 shadow-lg shadow-rose-950/10">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -151,10 +162,10 @@ function AlertsSection({ alerts, loading }) {
       </div>
 
       {alerts.length ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className={`grid grid-cols-1 gap-3 ${isSingleAlert ? '' : 'lg:grid-cols-2'}`}>
           {alerts.map((alert, index) => (
             <div key={alert.id || index} className="rounded-xl border border-rose-400/20 bg-slate-950/35 p-4">
-              <p className="line-clamp-2 text-sm leading-relaxed text-slate-100">
+              <p className={`${isSingleAlert ? 'line-clamp-3' : 'line-clamp-2'} text-sm leading-relaxed text-slate-100`}>
                 {alert.content || alert.comment || alert.text}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -193,32 +204,49 @@ function PositiveRateCard({ rate }) {
   );
 }
 
-function TrendCard({ trend }) {
+function TrendCard({ data }) {
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md lg:col-span-2">
       <h3 className="mb-2 text-sm font-medium text-slate-200">Xu hướng phản hồi 7 ngày</h3>
       <p className="mb-6 text-xs text-slate-500">
         Đường xanh là phản hồi hài lòng, đường đỏ là phản hồi chưa hài lòng.
       </p>
-      <div className="relative h-52 w-full">
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 44" preserveAspectRatio="none">
-          <path d={trend.positivePath} fill="none" stroke="#10b981" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-          <path d={trend.negativePath} fill="none" stroke="#fb7185" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-          {trend.positivePoints.map((point, index) => (
-            <circle key={`p-${trend.labels[index].date}`} cx={point.x} cy={point.y} r="0.65" fill="#34d399" />
-          ))}
-          {trend.negativePoints.map((point, index) => (
-            <circle key={`n-${trend.labels[index].date}`} cx={point.x} cy={point.y} r="0.65" fill="#fb7185" />
-          ))}
-        </svg>
-        <div className="absolute bottom-0 left-0 right-0 z-10 flex justify-between border-t border-slate-700/50 pt-4 text-xs text-slate-500">
-          {trend.labels.map((label) => (
-            <span key={label.date} className="flex flex-col items-center gap-0.5">
-              <span>{label.weekday}</span>
-              <span className="text-[10px] text-slate-600">{label.date}</span>
-            </span>
-          ))}
-        </div>
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+            <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
+            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 12 }} />
+            <YAxis stroke="#94a3b8" tick={{ fontSize: 12 }} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{
+                background: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: 12,
+                color: '#e2e8f0',
+              }}
+              labelStyle={{ color: '#f8fafc' }}
+            />
+            <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 12 }} />
+            <Line
+              type="monotone"
+              dataKey="positive"
+              name="Hài lòng"
+              stroke="#10b981"
+              strokeWidth={3}
+              dot={{ r: 4, fill: '#10b981' }}
+              activeDot={{ r: 6 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="negative"
+              name="Chưa hài lòng"
+              stroke="#fb7185"
+              strokeWidth={3}
+              dot={{ r: 4, fill: '#fb7185' }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -262,6 +290,10 @@ function LeaderboardCard({ leaderboard }) {
 }
 
 function KeywordList({ title, icon, items, positive = false }) {
+  const displayItems = normalizeLeaderboardItems(items)
+    .filter((item) => (positive ? !isNegativeKeyword(item.text) : !isPositiveKeyword(item.text)))
+    .slice(0, 5);
+
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
       <h3 className={`mb-4 flex items-center gap-2 text-sm font-semibold ${positive ? 'text-emerald-300' : 'text-rose-300'}`}>
@@ -269,9 +301,8 @@ function KeywordList({ title, icon, items, positive = false }) {
         {title}
       </h3>
       <div className="space-y-3">
-        {items.length ? items.slice(0, 5).map((item, index) => {
-          const text = item.text || item.keyword || item.name;
-          const value = Number(item.value || item.count || 0);
+        {displayItems.length ? displayItems.map((item, index) => {
+          const { text, value } = item;
           return (
             <div key={`${text}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-950/35 px-3 py-2">
               <span className="truncate text-sm text-slate-200">{index + 1}. {text}</span>
@@ -342,75 +373,243 @@ function StatCard({ title, value, icon, trend, trendUp, subIcons }) {
 }
 
 function extractAlerts(payload) {
-  const value = payload?.alerts || payload?.data?.alerts || payload?.data || payload;
-  return Array.isArray(value) ? value : [];
+  const value = findArray(payload, ['alerts', 'items', 'results', 'reviews', 'comments', 'data']);
+  return value.map(normalizeAlert).filter((item) => item.content);
+}
+
+async function fetchAlertsForSources(userId, reviews) {
+  const sources = [...new Set(reviews.map((item) => item.source_url).filter(Boolean))];
+  if (!sources.length) return [];
+
+  const responses = await Promise.allSettled(
+    sources.map((sourceUrl) => fetchDashboardAlerts({ userId, sourceUrl }))
+  );
+
+  const alerts = responses
+    .filter((result) => result.status === 'fulfilled')
+    .flatMap((result) => extractAlerts(result.value));
+
+  return uniqueAlerts(alerts)
+    .sort((a, b) => new Date(b.review_date || b.created_at || 0) - new Date(a.review_date || a.created_at || 0));
+}
+
+function uniqueAlerts(alerts) {
+  const seen = new Set();
+
+  return alerts.filter((item) => {
+    const key = item.id || item.content;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isCriticalAlert(item) {
+  const rawText = [
+    item.content,
+    item.comment,
+    item.text,
+    item.review,
+    ...(Array.isArray(item.keywords) ? item.keywords : []),
+    ...(Array.isArray(item.aspects) ? item.aspects : []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase('vi-VN');
+  const text = normalizeKeywordText(rawText);
+
+  const riskWords = [
+    'ngộ độc',
+    'ngo doc',
+    'đau bụng',
+    'dau bung',
+    'ruồi',
+    'ruoi',
+    'dị vật',
+    'di vat',
+    'tẩy chay',
+    'tay chay',
+    'chửi',
+    'chui',
+    'thái độ',
+    'thai do',
+    'tệ',
+    'te',
+    'bẩn',
+    'ban',
+    'dơ',
+    'do',
+    'sống',
+    'song',
+    'hôi',
+    'hoi',
+  ];
+
+  const hasRiskSignal = riskWords.some((word) => keywordMatches(text, word));
+  if (hasRiskSignal) return true;
+  if (isClearlyPositiveFeedback(rawText)) return false;
+
+  const isActionRequired = item.is_action_required === true || String(item.is_action_required).toLowerCase() === 'true';
+  const hasNegativeSignal = hasNegativeFeedbackSignal(rawText);
+  if (isActionRequired && hasNegativeSignal) return true;
+
+  return Number(item.ai_label) === 0 && hasNegativeSignal;
+}
+
+function isClearlyPositiveFeedback(text) {
+  const normalizedText = normalizeKeywordText(text);
+  const positiveWords = [
+    'ngon',
+    'qua ngon',
+    'quá ngon',
+    'dang tien',
+    'đáng tiền',
+    'tuyet',
+    'tuyệt',
+    'hai long',
+    'hài lòng',
+    'on ap',
+    'ổn áp',
+    'sach',
+    'sạch',
+    'nhanh',
+    'vua mieng',
+    'vừa miệng',
+    'de thuong',
+    'dễ thương',
+    'nhiet tinh',
+    'nhiệt tình',
+    'rat tot',
+    'rất tốt',
+    'tot',
+    'tốt',
+  ];
+
+  const negativeCues = [
+    'khong',
+    'không',
+    'chua',
+    'chưa',
+    'that vong',
+    'thất vọng',
+    'te',
+    'tệ',
+    'do',
+    'dở',
+    'lau',
+    'lâu',
+    'ban',
+    'bẩn',
+    'hoi',
+    'hôi',
+    'nhat',
+    'nhạt',
+    'man',
+    'mặn',
+    'dat',
+    'đắt',
+    'kem',
+    'kém',
+  ];
+
+  const chinesePositiveWords = ['不错', '好吃', '推荐', '弹性', '赞', '很好', '特别推荐'];
+  const extraPositiveWords = ['thom', 'dep', 'gioi thieu', 'se ung ho', 'recommend'];
+  const hasPositiveSignal = [...positiveWords, ...extraPositiveWords]
+    .some((word) => normalizedText.includes(normalizeKeywordText(word)))
+    || chinesePositiveWords.some((word) => String(text || '').includes(word));
+  const hasNegativeSignal = hasNegativeFeedbackSignal(text)
+    || negativeCues.some((word) => keywordMatches(normalizedText, word));
+
+  return hasPositiveSignal && !hasNegativeSignal;
+}
+
+function hasNegativeFeedbackSignal(text) {
+  const normalizedText = normalizeKeywordText(text);
+  const negativeCues = [
+    'khong',
+    'ko',
+    'chua',
+    'that vong',
+    'te',
+    'do',
+    'lau',
+    'ban',
+    'hoi',
+    'nhat',
+    'man',
+    'dat',
+    'kem',
+    'it',
+    'doi',
+    'kho chiu',
+    'thai do',
+    'nguoi',
+    'song',
+    'qua te',
+    'khong dung',
+    'khong ngon',
+    'khong sach',
+    'khong hai long',
+  ];
+
+  return negativeCues.some((word) => keywordMatches(normalizedText, word));
+}
+
+function keywordMatches(normalizedText, term) {
+  const keyword = normalizeKeywordText(term);
+  if (!keyword) return false;
+  if (!keyword.includes(' ') && keyword.length <= 4) {
+    return normalizedText.split(/\s+/).includes(keyword);
+  }
+  return normalizedText.includes(keyword);
+}
+
+function findArray(value, keys, depth = 0) {
+  if (!value || depth > 5) return [];
+  if (Array.isArray(value)) return value;
+
+  for (const key of keys) {
+    const found = findArray(value[key], keys, depth + 1);
+    if (found.length) return found;
+  }
+
+  return [];
+}
+
+function normalizeAlert(item) {
+  return {
+    id: item.id || item.review_id || item.alert_id || item.created_at || item.content,
+    content: item.content || item.comment || item.text || item.review || item.original_content || item.message || '',
+    keywords: extractKeywords(item),
+    source_url: item.source_url || item.source || '',
+    ai_label: item.ai_label,
+    confidence: item.confidence,
+    is_action_required: item.is_action_required,
+    review_date: item.review_date,
+    created_at: item.created_at,
+  };
 }
 
 function extractKeywords(item) {
   if (Array.isArray(item.keywords)) return item.keywords;
   if (typeof item.keywords === 'string') return item.keywords.split(',').map((word) => word.trim()).filter(Boolean);
-  return String(item.content || '').split(/\s+/).filter((word) => word.length > 4).slice(0, 3);
+  if (Array.isArray(item.keyword)) return item.keyword;
+  if (typeof item.keyword === 'string') return item.keyword.split(',').map((word) => word.trim()).filter(Boolean);
+  if (Array.isArray(item.aspects)) return item.aspects;
+  if (typeof item.aspects === 'string') return item.aspects.split(',').map((word) => word.trim()).filter(Boolean);
+  return buildKeywordsFromText(item.content || item.comment || item.text || item.review || '');
 }
 
-function isInRange(value, from, to) {
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) && time >= from && time < to;
-}
-
-function formatWeekday(date) {
-  return ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
-}
-
-function buildTrend(reviews) {
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-    return date;
-  });
-  const counts = days.map((date) => {
-    const nextDay = new Date(date);
-    nextDay.setDate(nextDay.getDate() + 1);
-    const items = reviews.filter((item) => isInRange(item.created_at, date.getTime(), nextDay.getTime()));
-    return {
-      positive: items.filter((item) => Number(item.ai_label) === 1).length,
-      negative: items.filter((item) => Number(item.ai_label) === 0).length,
-    };
-  });
-  const maxCount = Math.max(...counts.flatMap((item) => [item.positive, item.negative]), 1);
-  const toPoints = (key) => counts.map((count, index) => ({ x: (index / 6) * 100, y: 36 - (count[key] / maxCount) * 28 }));
-  const positivePoints = toPoints('positive');
-  const negativePoints = toPoints('negative');
-
-  return {
-    positivePoints,
-    negativePoints,
-    positivePath: buildSmoothPath(positivePoints),
-    negativePath: buildSmoothPath(negativePoints),
-    labels: days.map((date) => ({ weekday: formatWeekday(date), date: `${date.getDate()}/${date.getMonth() + 1}` })),
-  };
-}
-
-function buildSmoothPath(points) {
-  if (!points.length) return '';
-  let path = `M ${points[0].x},${points[0].y}`;
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    path += ` Q ${previous.x},${previous.y} ${(previous.x + current.x) / 2},${(previous.y + current.y) / 2}`;
-  }
-  const last = points[points.length - 1];
-  return `${path} T ${last.x},${last.y}`;
-}
-
-function buildFallbackLeaderboard(reviews) {
+function buildLeaderboardFromReviews(reviews) {
   const positiveMap = new Map();
   const negativeMap = new Map();
 
-  reviews.forEach((review) => {
-    const map = Number(review.ai_label) === 1 ? positiveMap : negativeMap;
-    extractKeywords(review).forEach((keyword) => {
-      map.set(keyword, (map.get(keyword) || 0) + 1);
+  reviews.forEach((item) => {
+    const target = Number(item.ai_label) === 1 ? positiveMap : negativeMap;
+    extractKeywords(item).forEach((keyword) => {
+      const text = String(keyword || '').trim();
+      if (!text) return;
+      target.set(text, (target.get(text) || 0) + 1);
     });
   });
 
@@ -423,4 +622,173 @@ function buildFallbackLeaderboard(reviews) {
     top_positive: toList(positiveMap),
     top_negative: toList(negativeMap),
   };
+}
+
+function buildBusinessLeaderboard(apiLeaderboard, reviews) {
+  const apiPositive = normalizeLeaderboardItems(apiLeaderboard?.top_positive);
+  const apiNegative = normalizeLeaderboardItems(apiLeaderboard?.top_negative);
+  const fallback = buildLeaderboardFromReviews(reviews);
+
+  return {
+    top_positive: completeKeywordList(
+      apiPositive.filter((item) => !isNegativeKeyword(item.text)),
+      normalizeLeaderboardItems(fallback.top_positive).filter((item) => !isNegativeKeyword(item.text)),
+    ),
+    top_negative: completeKeywordList(
+      apiNegative.filter((item) => !isPositiveKeyword(item.text)),
+      normalizeLeaderboardItems(fallback.top_negative).filter((item) => !isPositiveKeyword(item.text)),
+    ),
+  };
+}
+
+function completeKeywordList(primary, fallback) {
+  const result = [];
+  const seen = new Set();
+
+  [...primary, ...fallback].forEach((item) => {
+    const key = normalizeKeywordText(item.text);
+    if (!key || seen.has(key) || result.length >= 5) return;
+    seen.add(key);
+    result.push(item);
+  });
+
+  return result;
+}
+
+function sanitizeLeaderboard(leaderboard) {
+  const positiveItems = normalizeLeaderboardItems(leaderboard?.top_positive);
+  const negativeItems = normalizeLeaderboardItems(leaderboard?.top_negative);
+
+  return {
+    top_positive: positiveItems
+      .filter((item) => !isNegativeKeyword(item.text))
+      .slice(0, 5),
+    top_negative: negativeItems
+      .filter((item) => !isPositiveKeyword(item.text))
+      .slice(0, 5),
+  };
+}
+
+function normalizeLeaderboardItems(items = []) {
+  return items
+    .map((item) => ({
+      text: String(item.text || item.keyword || item.name || '').trim(),
+      value: Number(item.value || item.count || 0),
+    }))
+    .filter((item) => item.text && item.value > 0)
+    .sort((a, b) => b.value - a.value);
+}
+
+function normalizeKeywordText(text) {
+  return String(text || '')
+    .trim()
+    .toLocaleLowerCase('vi-VN')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/đ/g, 'd');
+}
+
+function isPositiveKeyword(text) {
+  const word = normalizeKeywordText(text);
+  const positiveTerms = [
+    'ngon',
+    'ngot',
+    'sach',
+    'tuyet',
+    'tot',
+    'nhanh',
+    'dang tien',
+    'hai long',
+    'vua mieng',
+    'de thuong',
+    'nhiet tinh',
+    're',
+    'dep',
+    'thom',
+    'gion',
+    'mem',
+    'dam da',
+    'thoang',
+    'rong rai',
+  ];
+
+  if (isNegativeKeyword(text)) return false;
+  return positiveTerms.some((term) => word === term || word.includes(term));
+}
+
+function isNegativeKeyword(text) {
+  const word = normalizeKeywordText(text);
+  const negativeTerms = [
+    'te',
+    'do',
+    'lau',
+    'cham',
+    'ban',
+    'hoi',
+    'dat',
+    'kem',
+    'nhat',
+    'man',
+    'chua',
+    'nong',
+    'on ao',
+    'that vong',
+    'kho chiu',
+    'thai do',
+    'ngo doc',
+    'dau bung',
+    'ruoi',
+    'di vat',
+    'nguoi',
+    'kho',
+    'it',
+    'doi',
+  ];
+
+  return negativeTerms.some((term) => word === term || word.includes(term));
+}
+
+function buildKeywordsFromText(text) {
+  const stopWords = new Set([
+    'không', 'nhưng', 'mình', 'được', 'này', 'quán', 'món', 'thấy', 'rất',
+    'nhiều', 'cũng', 'cho', 'với', 'của', 'thì', 'mà', 'là', 'có',
+  ]);
+
+  return [...new Set(
+    String(text)
+      .toLocaleLowerCase('vi-VN')
+      .match(/[\p{L}\p{N}]+/gu) || []
+  )]
+    .filter((word) => word.length >= 4 && !stopWords.has(word))
+    .slice(0, 4);
+}
+
+function isInRange(value, from, to) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time >= from && time < to;
+}
+
+function formatWeekday(date) {
+  return ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
+}
+
+function buildTrendData(reviews) {
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+
+    const nextDay = new Date(date);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const items = reviews.filter((item) => isInRange(item.created_at, date.getTime(), nextDay.getTime()));
+
+    return {
+      label: formatWeekday(date),
+      date: `${date.getDate()}/${date.getMonth() + 1}`,
+      positive: items.filter((item) => Number(item.ai_label) === 1).length,
+      negative: items.filter((item) => Number(item.ai_label) === 0).length,
+    };
+  });
 }
