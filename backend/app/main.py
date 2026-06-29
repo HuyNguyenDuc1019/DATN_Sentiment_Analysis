@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import os
 import time
 from collections import Counter  # Thêm thư viện để đếm từ khóa cho Leaderboard
@@ -8,11 +9,11 @@ from typing import Optional
 from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, FeedbackRequest 
 from .database import supabase
 from .predictor import SentimentPredictor
+from datetime import datetime, timedelta
+from collections import defaultdict
 from fastapi.responses import StreamingResponse
 import io
 import csv
-from datetime import datetime, timedelta
-from collections import defaultdict
 
 app = FastAPI(
     title="Foody Sentiment Analysis API",
@@ -296,8 +297,24 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    # =====================================================================
+# =====================================================================
+# DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
+# =====================================================================
+class AdminActionRequest(BaseModel):
+    admin_id: str
+    target_user_id: str
+    action: str
+
+class AdminFeedbackReview(BaseModel):
+    admin_id: str
+    feedback_id: str  # Theo DB của bạn id là kiểu UUID, nên để str ở đây là hoàn toàn chuẩn
+    action: str
+
+class AdminSettingUpdate(BaseModel):
+    admin_id: str
+    ai_threshold: float
+    max_upload_size_free: int  
+# =====================================================================
 # HÀM BẢO VỆ (TRẠM GÁC): KIỂM TRA QUYỀN ADMIN
 # =====================================================================
 def check_is_admin(user_id: str):
@@ -309,7 +326,44 @@ def check_is_admin(user_id: str):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail="Lỗi kiểm tra quyền truy cập.")
+# =====================================================================
+# API ADMIN: LẤY DANH SÁCH FEEDBACK CHỜ DUYỆT
+# =====================================================================
+@app.get("/api/admin/feedbacks")
+async def get_pending_feedbacks(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        # Lấy các feedback đang có status là 'pending'
+        res = supabase.table('feedback_data').select('*').eq('status', 'pending').execute()
+        return res.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+# =====================================================================
+# API ADMIN: LẤY DANH SÁCH NGƯỜI DÙNG
+# =====================================================================
+@app.get("/api/admin/users")
+async def get_admin_users(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        res = supabase.table('users').select('*').execute()
+        return res.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =====================================================================
+# API ADMIN: LẤY CẤU HÌNH HỆ THỐNG HIỆN TẠI
+# =====================================================================
+@app.get("/api/admin/settings")
+async def get_system_settings(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        res = supabase.table('system_settings').select('*').eq('id', 1).execute()
+        if not res.data:
+            return {"ai_threshold": 0.75, "max_upload_size_free": 5} # Trả về mặc định nếu bảng trống
+        return res.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 # =====================================================================
 # API ADMIN 1: THỐNG KÊ TỔNG QUAN (SYSTEM METRICS)
 # =====================================================================
@@ -407,3 +461,58 @@ async def update_system_settings(request: AdminSettingUpdate):
         return {"status": "success", "message": "Đã cập nhật cấu hình hệ thống!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+# =====================================================================
+# API ADMIN 5: BIỂU ĐỒ LƯU LƯỢNG HỆ THỐNG (CHART METRICS)
+# =====================================================================
+@app.get("/api/admin/metrics/chart")
+async def get_admin_metrics_chart(admin_id: str, days: int = 7):
+    check_is_admin(admin_id) # Trạm gác bảo mật
+    
+    try:
+        # 1. Tính toán mốc thời gian (Ví dụ: 7 ngày trước)
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        start_date_iso = start_date.isoformat()
+
+        # 2. Lấy dữ liệu từ Supabase trong khoảng thời gian đó
+        # LƯU Ý: Đảm bảo cột review_date (hoặc created_at) trong DB là kiểu mốc thời gian hợp lệ
+        response = supabase.table('scraped_reviews') \
+            .select('review_date') \
+            .gte('review_date', start_date_iso) \
+            .execute()
+            
+        data = response.data
+        
+        # 3. Gom nhóm và đếm số lượng theo Từng Ngày
+        daily_counts = defaultdict(int)
+        
+        # Khởi tạo sẵn mảng 7 ngày với giá trị 0 (để biểu đồ không bị đứt quãng nếu có ngày ko ai cào)
+        for i in range(days):
+            day_str = (end_date - timedelta(days=i)).strftime('%Y-%m-%d')
+            daily_counts[day_str] = 0
+            
+        # Đếm số dòng dữ liệu thực tế
+        for item in data:
+            if item.get('review_date'):
+                # Cắt lấy phần "YYYY-MM-DD" từ chuỗi thời gian
+                date_str = str(item['review_date'])[:10] 
+                if date_str in daily_counts:
+                    daily_counts[date_str] += 1
+                    
+        # 4. Sắp xếp lại theo thứ tự thời gian tăng dần (Cũ -> Mới) cho Frontend vẽ biểu đồ
+        chart_data = [
+            {"date": date, "api_calls": count} 
+            for date, count in sorted(daily_counts.items())
+        ]
+        
+        return {"chart_data": chart_data}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+
