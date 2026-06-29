@@ -100,6 +100,10 @@ export default function DashboardContent() {
       .map((item) => normalizeAlert(item));
   }, [alerts, reviews]);
 
+  if (loading && !reviews.length) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
       <div className="flex flex-col gap-1">
@@ -108,6 +112,11 @@ export default function DashboardContent() {
           Theo dõi phản hồi khách hàng, điểm nổi bật và vấn đề cần xử lý.
         </p>
       </div>
+
+      {!loading && stats.total === 0 ? (
+        <EmptyDashboardState />
+      ) : (
+        <>
 
       <AlertsSection alerts={visibleAlerts} loading={loading} />
 
@@ -135,7 +144,49 @@ export default function DashboardContent() {
 
       <LeaderboardCard leaderboard={leaderboard} />
       <RecentReviews reviews={reviews} />
+        </>
+      )}
     </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-8 space-y-6 animate-pulse font-sans">
+      <div className="space-y-3">
+        <div className="h-8 w-72 rounded-xl bg-slate-800" />
+        <div className="h-4 w-96 max-w-full rounded-lg bg-slate-800/80" />
+      </div>
+      <div className="h-40 rounded-2xl border border-slate-700 bg-slate-800/40" />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {[0, 1, 2].map((item) => <div key={item} className="h-36 rounded-2xl border border-slate-700 bg-slate-800/40" />)}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="h-80 rounded-2xl border border-slate-700 bg-slate-800/40 lg:col-span-2" />
+        <div className="h-80 rounded-2xl border border-slate-700 bg-slate-800/40" />
+      </div>
+    </div>
+  );
+}
+
+function EmptyDashboardState() {
+  return (
+    <section className="flex min-h-[520px] items-center justify-center rounded-3xl border border-slate-700 bg-slate-800/40 p-8 text-center shadow-lg shadow-slate-950/10">
+      <div className="mx-auto max-w-xl">
+        <div className="mx-auto mb-8 flex h-40 w-40 items-center justify-center rounded-full border border-indigo-400/20 bg-indigo-500/10">
+          <div className="relative h-24 w-24">
+            <div className="absolute bottom-0 left-2 h-12 w-4 rounded-t-lg bg-indigo-400/70" />
+            <div className="absolute bottom-0 left-9 h-20 w-4 rounded-t-lg bg-emerald-400/70" />
+            <div className="absolute bottom-0 right-5 h-16 w-4 rounded-t-lg bg-rose-400/70" />
+            <div className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-slate-600" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-semibold text-white">Chưa có dữ liệu để phân tích</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-400">
+          Hãy dán link quán ăn hoặc tải tệp CSV lên để bắt đầu. Khi có phản hồi mới, hệ thống sẽ tự cập nhật biểu đồ và các chỉ số tại đây.
+        </p>
+      </div>
+    </section>
   );
 }
 

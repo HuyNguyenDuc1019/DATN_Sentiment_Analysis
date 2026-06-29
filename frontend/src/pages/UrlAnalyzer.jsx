@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BarChart2,
   Link as LinkIcon,
@@ -12,6 +12,8 @@ import { useTasks } from '../contexts/TaskContext';
 export default function UrlAnalyzerContent() {
   const { urlAnalyzer } = useTasks();
   const { url, setUrl, results, count, loading, filter, setFilter, analyze } = urlAnalyzer;
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
   const receivedCount = Number(count || results.length || 0);
 
   const positive = results.filter((item) => item.prediction === 1).length;
@@ -22,6 +24,12 @@ export default function UrlAnalyzerContent() {
   const visible = results.filter((item) =>
     filter === 'all' || (filter === 'positive' ? item.prediction === 1 : item.prediction === 0)
   );
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pagedVisible = useMemo(() => visible.slice((page - 1) * pageSize, page * pageSize), [visible, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, results.length]);
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
@@ -147,7 +155,9 @@ export default function UrlAnalyzerContent() {
         </div>
 
         <div className="space-y-4">
-          {visible.map((item, index) => (
+          {loading && <ReviewListSkeleton />}
+
+          {pagedVisible.map((item, index) => (
             <ReviewItem
               key={`${item.text}-${index}`}
               content={item.text}
@@ -157,8 +167,22 @@ export default function UrlAnalyzerContent() {
             />
           ))}
 
-          {!visible.length && (
+          {!loading && !visible.length && (
             <p className="py-8 text-center text-slate-500">Chưa có dữ liệu phản hồi.</p>
+          )}
+          {!loading && visible.length > 0 && (
+            <div className="flex items-center justify-between border-t border-slate-700 pt-4 text-sm text-slate-400">
+              <span>Hiển thị {pagedVisible.length} trên tổng {visible.length} phản hồi</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="rounded-lg border border-slate-700 px-3 py-1.5 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  Trước
+                </button>
+                <span className="rounded-lg bg-slate-700 px-3 py-1.5 text-white">{page}/{totalPages}</span>
+                <button onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-700 px-3 py-1.5 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  Sau
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -201,6 +225,19 @@ function StatCard({ icon, title, value }) {
         </h3>
         <div className="text-2xl font-bold text-white leading-none">{value}</div>
       </div>
+    </div>
+  );
+}
+
+function ReviewListSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {[0, 1, 2, 3].map((item) => (
+        <div key={item} className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-4">
+          <div className="mb-3 h-4 w-3/4 rounded bg-slate-700" />
+          <div className="h-3 w-1/3 rounded bg-slate-700/80" />
+        </div>
+      ))}
     </div>
   );
 }
