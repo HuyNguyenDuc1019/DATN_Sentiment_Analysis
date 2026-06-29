@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
@@ -12,21 +12,29 @@ import {
   TableProperties,
   XCircle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useTasks } from '../contexts/TaskContext';
 
 export default function BatchPredictionContent() {
   const inputRef = useRef(null);
   const { batch } = useTasks();
   const { file, texts, column, columns, results, loading, selectFile, setColumn, analyze } = batch;
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
 
-  const tableData = (results.length ? results : texts.map((text) => ({ text, prediction: null, confidence: 0 })))
-    .slice(0, 5)
-    .map((item, index) => ({
-      id: `#${String(index + 1).padStart(4, '0')}`,
-      content: item.text,
-      sentiment: item.prediction === null ? null : item.prediction === 1 ? 'positive' : 'negative',
-      confidence: item.prediction === null ? null : Math.round((Number(item.confidence) > 1 ? item.confidence : item.confidence * 100) || 0),
-    }));
+  useEffect(() => {
+    setPage(1);
+  }, [file?.name, results.length]);
+
+  const tableData = useMemo(() => results.map((item, index) => ({
+    id: `#${String(index + 1).padStart(4, '0')}`,
+    content: item.text || item.content || '',
+    sentiment: item.prediction === null || item.prediction === undefined ? null : item.prediction === 1 ? 'positive' : 'negative',
+    confidence: item.prediction === null || item.prediction === undefined ? null : Math.round((Number(item.confidence) > 1 ? item.confidence : item.confidence * 100) || 0),
+  })), [results]);
+
+  const totalPages = Math.max(1, Math.ceil(tableData.length / pageSize));
+  const visibleRows = tableData.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="p-8 animate-in fade-in duration-500 font-sans h-full flex flex-col">
@@ -51,7 +59,16 @@ export default function BatchPredictionContent() {
         </div>
 
         <div className="lg:col-span-2 flex flex-col h-full">
-          <PreviewTable tableData={tableData} total={results.length || texts.length} />
+          <PreviewTable
+            tableData={visibleRows}
+            total={tableData.length}
+            loading={loading}
+            hasFile={Boolean(file)}
+            page={page}
+            totalPages={totalPages}
+            onPrev={() => setPage((current) => Math.max(1, current - 1))}
+            onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+          />
         </div>
       </div>
     </div>
@@ -167,7 +184,43 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
   );
 }
 
-function PreviewTable({ tableData, total }) {
+function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, onPrev, onNext }) {
+  if (loading) {
+    return (
+      <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col h-full">
+        <div className="mb-6 flex items-center gap-3">
+          <TableProperties className="w-5 h-5 text-slate-300" />
+          <h3 className="text-base font-medium text-white">Đang chuẩn bị danh sách kết quả</h3>
+        </div>
+        <TableSkeleton />
+      </div>
+    );
+  }
+
+  if (!total) {
+    return (
+      <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col h-full">
+        <div className="mb-6 flex items-center gap-3">
+          <TableProperties className="w-5 h-5 text-slate-300" />
+          <h3 className="text-base font-medium text-white">Danh sách phản hồi sau xử lý</h3>
+        </div>
+        <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
+          <div className="max-w-md">
+            <TableProperties className="mx-auto mb-4 h-10 w-10 text-slate-500" />
+            <h4 className="text-base font-semibold text-white">
+              {hasFile ? 'Chưa có kết quả xử lý' : 'Chưa có tệp phản hồi'}
+            </h4>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              {hasFile
+                ? 'Bấm Bắt đầu xử lý để hệ thống ghi nhận phản hồi. Danh sách kết quả sẽ hiển thị tại đây sau khi xử lý xong.'
+                : 'Tải file CSV lên để bắt đầu. Bảng này chỉ hiển thị danh sách phản hồi sau khi hệ thống xử lý xong.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col h-full">
       <div className="flex justify-between items-center mb-6">
@@ -180,10 +233,20 @@ function PreviewTable({ tableData, total }) {
         </div>
 
         <div className="flex gap-2">
-          <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors">
+          <button
+            type="button"
+            title="Lọc phản hồi"
+            onClick={() => toast('Bảng đang hiển thị danh sách phản hồi sau xử lý. Bạn có thể dùng phân trang để xem thêm.')}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors"
+          >
             <Filter className="w-4 h-4" />
           </button>
-          <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors">
+          <button
+            type="button"
+            title="Tải kết quả"
+            onClick={() => downloadResults(tableData)}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors"
+          >
             <Download className="w-4 h-4" />
           </button>
         </div>
@@ -208,17 +271,32 @@ function PreviewTable({ tableData, total }) {
       <div className="pt-4 border-t border-slate-700 mt-4 flex items-center justify-between text-sm text-slate-400">
         <div>Hiển thị {tableData.length} trên tổng {total} phản hồi</div>
         <div className="flex items-center gap-1">
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 transition-colors">
+          <button onClick={onPrev} disabled={page <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-700 text-white font-medium border border-slate-600">
-            1
+            {page}
           </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 transition-colors">
+          <button onClick={onNext} disabled={page >= totalPages} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {[0, 1, 2, 3, 4].map((item) => (
+        <div key={item} className="grid grid-cols-12 gap-4 rounded-lg border border-slate-700/40 bg-slate-900/40 p-4">
+          <div className="col-span-1 h-4 rounded bg-slate-700" />
+          <div className="col-span-7 h-4 rounded bg-slate-700" />
+          <div className="col-span-2 h-4 rounded bg-slate-700" />
+          <div className="col-span-2 h-4 rounded bg-slate-700" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -256,4 +334,32 @@ function TableRow({ data }) {
       </td>
     </tr>
   );
+}
+
+function downloadResults(rows) {
+  if (!rows.length) {
+    toast('Chưa có dữ liệu để tải xuống.');
+    return;
+  }
+
+  const headers = ['id', 'content', 'sentiment', 'confidence'];
+  const csv = [
+    headers.join(','),
+    ...rows.map((row) =>
+      headers
+        .map((key) => `"${String(row[key] ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    ),
+  ].join('\n');
+
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `ket-qua-phan-hoi-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast.success('Đã tải danh sách phản hồi đang hiển thị.');
 }

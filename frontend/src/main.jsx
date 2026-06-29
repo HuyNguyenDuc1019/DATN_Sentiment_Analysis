@@ -33,40 +33,40 @@ createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <TaskProvider>
         <App />
-
-        <Toaster
-          position="top-center"
-          containerStyle={{
-            top: 28,
-          }}
-          toastOptions={{
-            duration: 3800,
-            style: toastStyle,
-            success: {
-              style: {
-                ...toastStyle,
-                border: '1px solid rgba(16, 185, 129, 0.35)',
-                boxShadow: '0 24px 70px rgba(16, 185, 129, 0.16)',
-              },
-              iconTheme: {
-                primary: '#10b981',
-                secondary: '#ecfdf5',
-              },
-            },
-            error: {
-              style: {
-                ...toastStyle,
-                border: '1px solid rgba(244, 63, 94, 0.38)',
-                boxShadow: '0 24px 70px rgba(244, 63, 94, 0.16)',
-              },
-              iconTheme: {
-                primary: '#f43f5e',
-                secondary: '#fff1f2',
-              },
-            },
-          }}
-        />
       </TaskProvider>
+      <Toaster
+        position="top-center"
+        containerStyle={{
+          top: 28,
+        }}
+        toastOptions={{
+          duration: 3800,
+          style: toastStyle,
+          success: {
+            style: {
+              ...toastStyle,
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              boxShadow: '0 24px 70px rgba(16, 185, 129, 0.16)',
+            },
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#ecfdf5',
+            },
+          },
+          error: {
+            style: {
+              ...toastStyle,
+              border: '1px solid rgba(244, 63, 94, 0.38)',
+              boxShadow: '0 24px 70px rgba(244, 63, 94, 0.16)',
+            },
+            iconTheme: {
+              primary: '#f43f5e',
+              secondary: '#fff1f2',
+            },
+          },
+        }}
+      />
     </AuthProvider>
   </StrictMode>,
 )
+

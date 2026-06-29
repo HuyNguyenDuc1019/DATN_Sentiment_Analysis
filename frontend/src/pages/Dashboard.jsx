@@ -100,6 +100,10 @@ export default function DashboardContent() {
       .map((item) => normalizeAlert(item));
   }, [alerts, reviews]);
 
+  if (loading && !reviews.length) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
       <div className="flex flex-col gap-1">
@@ -108,6 +112,11 @@ export default function DashboardContent() {
           Theo dõi phản hồi khách hàng, điểm nổi bật và vấn đề cần xử lý.
         </p>
       </div>
+
+      {!loading && stats.total === 0 ? (
+        <EmptyDashboardState />
+      ) : (
+        <>
 
       <AlertsSection alerts={visibleAlerts} loading={loading} />
 
@@ -135,7 +144,49 @@ export default function DashboardContent() {
 
       <LeaderboardCard leaderboard={leaderboard} />
       <RecentReviews reviews={reviews} />
+        </>
+      )}
     </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-8 space-y-6 animate-pulse font-sans">
+      <div className="space-y-3">
+        <div className="h-8 w-72 rounded-xl bg-slate-800" />
+        <div className="h-4 w-96 max-w-full rounded-lg bg-slate-800/80" />
+      </div>
+      <div className="h-40 rounded-2xl border border-slate-700 bg-slate-800/40" />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {[0, 1, 2].map((item) => <div key={item} className="h-36 rounded-2xl border border-slate-700 bg-slate-800/40" />)}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="h-80 rounded-2xl border border-slate-700 bg-slate-800/40 lg:col-span-2" />
+        <div className="h-80 rounded-2xl border border-slate-700 bg-slate-800/40" />
+      </div>
+    </div>
+  );
+}
+
+function EmptyDashboardState() {
+  return (
+    <section className="flex min-h-[520px] items-center justify-center rounded-3xl border border-slate-700 bg-slate-800/40 p-8 text-center shadow-lg shadow-slate-950/10">
+      <div className="mx-auto max-w-xl">
+        <div className="mx-auto mb-8 flex h-40 w-40 items-center justify-center rounded-full border border-indigo-400/20 bg-indigo-500/10">
+          <div className="relative h-24 w-24">
+            <div className="absolute bottom-0 left-2 h-12 w-4 rounded-t-lg bg-indigo-400/70" />
+            <div className="absolute bottom-0 left-9 h-20 w-4 rounded-t-lg bg-emerald-400/70" />
+            <div className="absolute bottom-0 right-5 h-16 w-4 rounded-t-lg bg-rose-400/70" />
+            <div className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-slate-600" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-semibold text-white">Chưa có dữ liệu để phân tích</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-400">
+          Hãy dán link quán ăn hoặc tải tệp CSV lên để bắt đầu. Khi có phản hồi mới, hệ thống sẽ tự cập nhật biểu đồ và các chỉ số tại đây.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -291,7 +342,7 @@ function LeaderboardCard({ leaderboard }) {
 
 function KeywordList({ title, icon, items, positive = false }) {
   const displayItems = normalizeLeaderboardItems(items)
-    .filter((item) => (positive ? !isNegativeKeyword(item.text) : !isPositiveKeyword(item.text)))
+    .filter((item) => (positive ? isPositiveKeyword(item.text) : isNegativeKeyword(item.text)))
     .slice(0, 5);
 
   return (
@@ -416,7 +467,7 @@ function isCriticalAlert(item) {
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase('vi-VN');
-  const text = normalizeKeywordText(rawText);
+  const text = normalizeKeywordTextSafe(rawText);
 
   const riskWords = [
     'ngộ độc',
@@ -457,7 +508,7 @@ function isCriticalAlert(item) {
 }
 
 function isClearlyPositiveFeedback(text) {
-  const normalizedText = normalizeKeywordText(text);
+  const normalizedText = normalizeKeywordTextSafe(text);
   const positiveWords = [
     'ngon',
     'qua ngon',
@@ -515,7 +566,7 @@ function isClearlyPositiveFeedback(text) {
   const chinesePositiveWords = ['不错', '好吃', '推荐', '弹性', '赞', '很好', '特别推荐'];
   const extraPositiveWords = ['thom', 'dep', 'gioi thieu', 'se ung ho', 'recommend'];
   const hasPositiveSignal = [...positiveWords, ...extraPositiveWords]
-    .some((word) => normalizedText.includes(normalizeKeywordText(word)))
+    .some((word) => normalizedText.includes(normalizeKeywordTextSafe(word)))
     || chinesePositiveWords.some((word) => String(text || '').includes(word));
   const hasNegativeSignal = hasNegativeFeedbackSignal(text)
     || negativeCues.some((word) => keywordMatches(normalizedText, word));
@@ -524,7 +575,7 @@ function isClearlyPositiveFeedback(text) {
 }
 
 function hasNegativeFeedbackSignal(text) {
-  const normalizedText = normalizeKeywordText(text);
+  const normalizedText = normalizeKeywordTextSafe(text);
   const negativeCues = [
     'khong',
     'ko',
@@ -556,7 +607,7 @@ function hasNegativeFeedbackSignal(text) {
 }
 
 function keywordMatches(normalizedText, term) {
-  const keyword = normalizeKeywordText(term);
+  const keyword = normalizeKeywordTextSafe(term);
   if (!keyword) return false;
   if (!keyword.includes(' ') && keyword.length <= 4) {
     return normalizedText.split(/\s+/).includes(keyword);
@@ -580,7 +631,7 @@ function normalizeAlert(item) {
   return {
     id: item.id || item.review_id || item.alert_id || item.created_at || item.content,
     content: item.content || item.comment || item.text || item.review || item.original_content || item.message || '',
-    keywords: extractKeywords(item),
+    keywords: extractStoredKeywords(item),
     source_url: item.source_url || item.source || '',
     ai_label: item.ai_label,
     confidence: item.confidence,
@@ -600,16 +651,23 @@ function extractKeywords(item) {
   return buildKeywordsFromText(item.content || item.comment || item.text || item.review || '');
 }
 
+function extractStoredKeywords(item) {
+  if (Array.isArray(item.keywords)) return item.keywords.map((word) => String(word).trim()).filter(Boolean);
+  if (typeof item.keywords === 'string') return item.keywords.split(',').map((word) => word.trim()).filter(Boolean);
+  return [];
+}
+
 function buildLeaderboardFromReviews(reviews) {
   const positiveMap = new Map();
   const negativeMap = new Map();
 
   reviews.forEach((item) => {
-    const target = Number(item.ai_label) === 1 ? positiveMap : negativeMap;
-    extractKeywords(item).forEach((keyword) => {
-      const text = String(keyword || '').trim();
-      if (!text) return;
-      target.set(text, (target.get(text) || 0) + 1);
+    const isPositive = Number(item.ai_label) === 1;
+    const target = isPositive ? positiveMap : negativeMap;
+    const text = item.content || item.comment || item.text || item.review || '';
+
+    buildSentimentKeywords(text, isPositive).forEach((keyword) => {
+      target.set(keyword, (target.get(keyword) || 0) + 1);
     });
   });
 
@@ -624,6 +682,47 @@ function buildLeaderboardFromReviews(reviews) {
   };
 }
 
+function buildSentimentKeywords(text, isPositive) {
+  const normalizedText = normalizeKeywordTextSafe(text);
+  const terms = isPositive ? POSITIVE_LEADERBOARD_TERMS : NEGATIVE_LEADERBOARD_TERMS;
+
+  return terms
+    .filter((item) => item.matches.some((term) => keywordMatches(normalizedText, term)))
+    .map((item) => item.label);
+}
+
+const POSITIVE_LEADERBOARD_TERMS = [
+  { label: 'Ngon', matches: ['ngon', 'ngon qua', 'rat ngon'] },
+  { label: 'Sạch sẽ', matches: ['sach', 'sach se'] },
+  { label: 'Phục vụ nhanh', matches: ['phuc vu nhanh', 'len mon nhanh', 'giao hang nhanh', 'nhanh'] },
+  { label: 'Nhân viên thân thiện', matches: ['nhan vien than thien', 'than thien', 'nhiet tinh', 'de thuong'] },
+  { label: 'Đáng tiền', matches: ['dang tien', 'gia hop ly', 'gia re', 're'] },
+  { label: 'Vừa miệng', matches: ['vua mieng', 'dam da', 'hop khau vi'] },
+  { label: 'Thơm', matches: ['thom'] },
+  { label: 'Tươi', matches: ['tuoi', 'tuoi ngon'] },
+  { label: 'Không gian thoáng', matches: ['thoang', 'rong rai', 'khong gian rong'] },
+  { label: 'Sẽ quay lại', matches: ['se quay lai', 'ung ho', 'se ung ho'] },
+  { label: 'Tuyệt vời', matches: ['tuyet', 'tuyet voi', 'rat tot'] },
+];
+
+const NEGATIVE_LEADERBOARD_TERMS = [
+  { label: 'Thất vọng', matches: ['that vong'] },
+  { label: 'Không ngon', matches: ['khong ngon', 'ko ngon', 'khong hop khau vi'] },
+  { label: 'Chờ lâu', matches: ['cho lau', 'doi lau', 'lau', 'cham'] },
+  { label: 'Phục vụ kém', matches: ['phuc vu kem', 'thai do', 'nhan vien kho chiu', 'khong ai nghe may'] },
+  { label: 'Giá đắt', matches: ['gia dat', 'dat', 'hoi dat'] },
+  { label: 'Không sạch', matches: ['khong sach', 'ban', 'mat ve sinh'] },
+  { label: 'Đồ ăn nguội', matches: ['nguoi', 'do an nguoi'] },
+  { label: 'Đồ ăn khô', matches: ['kho', 'bi kho'] },
+  { label: 'Không tươi', matches: ['khong tuoi', 'kem tuoi'] },
+  { label: 'Nhạt', matches: ['nhat'] },
+  { label: 'Mặn', matches: ['man'] },
+  { label: 'Chua', matches: ['chua'] },
+  { label: 'Ồn ào', matches: ['on ao'] },
+  { label: 'Khó chịu', matches: ['kho chiu'] },
+  { label: 'Sai món', matches: ['sai mon', 'dat nham', 'nham'] },
+];
+
 function buildBusinessLeaderboard(apiLeaderboard, reviews) {
   const apiPositive = normalizeLeaderboardItems(apiLeaderboard?.top_positive);
   const apiNegative = normalizeLeaderboardItems(apiLeaderboard?.top_negative);
@@ -631,12 +730,12 @@ function buildBusinessLeaderboard(apiLeaderboard, reviews) {
 
   return {
     top_positive: completeKeywordList(
-      apiPositive.filter((item) => !isNegativeKeyword(item.text)),
-      normalizeLeaderboardItems(fallback.top_positive).filter((item) => !isNegativeKeyword(item.text)),
+      apiPositive.filter((item) => isPositiveKeyword(item.text)),
+      normalizeLeaderboardItems(fallback.top_positive).filter((item) => isPositiveKeyword(item.text)),
     ),
     top_negative: completeKeywordList(
-      apiNegative.filter((item) => !isPositiveKeyword(item.text)),
-      normalizeLeaderboardItems(fallback.top_negative).filter((item) => !isPositiveKeyword(item.text)),
+      apiNegative.filter((item) => isNegativeKeyword(item.text)),
+      normalizeLeaderboardItems(fallback.top_negative).filter((item) => isNegativeKeyword(item.text)),
     ),
   };
 }
@@ -646,7 +745,7 @@ function completeKeywordList(primary, fallback) {
   const seen = new Set();
 
   [...primary, ...fallback].forEach((item) => {
-    const key = normalizeKeywordText(item.text);
+    const key = normalizeKeywordTextSafe(item.text);
     if (!key || seen.has(key) || result.length >= 5) return;
     seen.add(key);
     result.push(item);
@@ -689,8 +788,19 @@ function normalizeKeywordText(text) {
     .replace(/đ/g, 'd');
 }
 
+function normalizeKeywordTextSafe(text) {
+  return String(text || '')
+    .trim()
+    .toLocaleLowerCase('vi-VN')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[Ä‘Ä]/g, 'd')
+    .replace(/Ä‘/g, 'd');
+}
+
 function isPositiveKeyword(text) {
-  const word = normalizeKeywordText(text);
+  const word = normalizeKeywordTextSafe(text);
   const positiveTerms = [
     'ngon',
     'ngot',
@@ -698,6 +808,7 @@ function isPositiveKeyword(text) {
     'tuyet',
     'tot',
     'nhanh',
+    'than thien',
     'dang tien',
     'hai long',
     'vua mieng',
@@ -718,7 +829,7 @@ function isPositiveKeyword(text) {
 }
 
 function isNegativeKeyword(text) {
-  const word = normalizeKeywordText(text);
+  const word = normalizeKeywordTextSafe(text);
   const negativeTerms = [
     'te',
     'do',
@@ -744,6 +855,11 @@ function isNegativeKeyword(text) {
     'kho',
     'it',
     'doi',
+    'khong ngon',
+    'khong sach',
+    'sai mon',
+    'dat nham',
+    'nham',
   ];
 
   return negativeTerms.some((term) => word === term || word.includes(term));
