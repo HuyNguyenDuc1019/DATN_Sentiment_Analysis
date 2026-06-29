@@ -11,7 +11,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
- const handleLogin = async (event) => {
+const handleLogin = async (event) => {
   event.preventDefault();
   setLoading(true);
   
@@ -30,15 +30,15 @@ export default function LoginScreen() {
     
     if (userError || !user) throw new Error("Không thể xác thực thông tin user.");
 
-    // 3. Chui vào bảng public.users để kiểm tra chức danh (role)
+    // 3. CHUẨN XÁC: Chui vào bảng public.profiles để kiểm tra chức danh (role)
     const { data: userData, error: roleError } = await supabase
-      .from('users')
+      .from('profiles') // <--- ĐÃ SỬA TỪ 'users' THÀNH 'profiles'
       .select('role')
       .eq('id', user.id)
       .single(); // Lấy đúng 1 dòng dữ liệu của user này
 
     if (roleError) {
-      console.warn("Chưa có data trong bảng public.users, mặc định là user thường.");
+      console.warn("Chưa có data trong bảng public.profiles, mặc định là user thường.");
     }
 
     // 4. Lưu quyền vào Local Storage để hệ thống "nhớ" mặt

@@ -319,7 +319,7 @@ class AdminSettingUpdate(BaseModel):
 # =====================================================================
 def check_is_admin(user_id: str):
     try:
-        response = supabase.table('users').select('role').eq('id', user_id).execute()
+        response = supabase.table('profiles').select('role').eq('id', user_id).execute()
         if not response.data or response.data[0]['role'] != 'admin':
             raise HTTPException(status_code=403, detail="Cảnh báo: Lĩnh vực tuyệt mật! Bạn không có quyền Admin.")
     except Exception as e:
@@ -346,7 +346,7 @@ async def get_pending_feedbacks(admin_id: str):
 async def get_admin_users(admin_id: str):
     check_is_admin(admin_id)
     try:
-        res = supabase.table('users').select('*').execute()
+        res = supabase.table('profiles').select('*').execute()
         return res.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -373,7 +373,7 @@ async def get_admin_metrics(admin_id: str):
     
     try:
         reviews_res = supabase.table('scraped_reviews').select('ai_label', count='exact').execute()
-        users_res = supabase.table('users').select('id', count='exact').execute()
+        users_res = supabase.table('profiles').select('id', count='exact').execute()
         feedback_res = supabase.table('feedback_data').select('id', count='exact').eq('status', 'pending').execute()
 
         data = reviews_res.data
@@ -405,7 +405,7 @@ async def manage_user_action(request: AdminActionRequest):
         elif request.action == "upgrade_vip":
             update_data = {"tier": "vip"}
             
-        supabase.table('users').update(update_data).eq('id', request.target_user_id).execute()
+        supabase.table('profiles').update(update_data).eq('id', request.target_user_id).execute()
         return {"status": "success", "message": f"Đã thực hiện thao tác {request.action} thành công."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
