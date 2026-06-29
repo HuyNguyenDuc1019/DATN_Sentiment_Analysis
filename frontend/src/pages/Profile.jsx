@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { User, Shield, Sliders, Save, Check, Camera } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Camera, Check, Save, Shield, Sliders, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
 
@@ -10,6 +11,17 @@ export default function ProfileContent() {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [preferences, setPreferences] = useState(() => ({
+    darkMode: localStorage.getItem('almotion-theme') !== 'light',
+    weeklyEmail: localStorage.getItem('almotion-weekly-email') === 'true',
+  }));
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', preferences.darkMode);
+    document.documentElement.classList.toggle('light', !preferences.darkMode);
+    localStorage.setItem('almotion-theme', preferences.darkMode ? 'dark' : 'light');
+    localStorage.setItem('almotion-weekly-email', String(preferences.weeklyEmail));
+  }, [preferences]);
 
   useEffect(() => {
     if (!user) return;
@@ -50,7 +62,7 @@ export default function ProfileContent() {
 
   const saveProfile = async () => {
     if (!user?.id || !profile.fullName.trim() || !profile.email.includes('@')) {
-      window.alert('Vui lòng nhập họ tên và email hợp lệ.');
+      toast.error('Vui lòng nhập họ tên và email hợp lệ.');
       return;
     }
 
@@ -86,11 +98,11 @@ export default function ProfileContent() {
         },
       }));
 
-      window.alert(profile.email.trim().toLowerCase() !== user.email?.toLowerCase()
+      toast.success(profile.email.trim().toLowerCase() !== user.email?.toLowerCase()
         ? 'Đã lưu thông tin. Hãy kiểm tra email để xác nhận địa chỉ mới.'
         : 'Đã lưu thông tin cá nhân thành công!');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message || 'Không lưu được thông tin.');
     } finally {
       setSaving(false);
     }
@@ -99,11 +111,11 @@ export default function ProfileContent() {
   const changePassword = async () => {
     if (!user?.email) return;
     if (!passwords.current || passwords.next.length < 6) {
-      window.alert('Mật khẩu mới phải có ít nhất 6 ký tự.');
+      toast.error('Mật khẩu mới phải có ít nhất 6 ký tự.');
       return;
     }
     if (passwords.next !== passwords.confirm) {
-      window.alert('Mật khẩu xác nhận không khớp.');
+      toast.error('Mật khẩu xác nhận không khớp.');
       return;
     }
 
@@ -119,9 +131,9 @@ export default function ProfileContent() {
       if (updateError) throw updateError;
 
       setPasswords({ current: '', next: '', confirm: '' });
-      window.alert('Đổi mật khẩu thành công!');
+      toast.success('Đổi mật khẩu thành công!');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message || 'Không đổi được mật khẩu.');
     } finally {
       setChangingPassword(false);
     }
@@ -130,11 +142,11 @@ export default function ProfileContent() {
   const uploadAvatar = async (file) => {
     if (!user?.id || !file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      window.alert('Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.');
+      toast.error('Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.');
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      window.alert('Ảnh đại diện không được vượt quá 2MB.');
+      toast.error('Ảnh đại diện không được vượt quá 2MB.');
       return;
     }
 
@@ -142,11 +154,23 @@ export default function ProfileContent() {
     try {
       const avatarUrl = await compressAvatar(file);
       setProfile((current) => ({ ...current, avatarUrl }));
+      toast.success('Đã chọn ảnh mới. Bấm Lưu thông tin để cập nhật.');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message || 'Không đọc được ảnh đã chọn.');
     } finally {
       setUploadingAvatar(false);
     }
+  };
+
+  const togglePreference = (key) => {
+    const next = { ...preferences, [key]: !preferences[key] };
+    setPreferences(next);
+    toast.success(
+      key === 'darkMode'
+        ? `Đã chuyển sang chế độ ${next.darkMode ? 'tối' : 'sáng'}.`
+        : `${next.weeklyEmail ? 'Đã bật' : 'Đã tắt'} email tóm tắt hàng tuần.`,
+      { id: `profile-${key}` }
+    );
   };
 
   return (
@@ -162,7 +186,7 @@ export default function ProfileContent() {
         </div>
         <div className="lg:col-span-1 flex flex-col gap-6">
           <SecurityCard passwords={passwords} setPasswords={setPasswords} loading={changingPassword} onChangePassword={changePassword} />
-          <PreferencesCard />
+          <PreferencesCard preferences={preferences} onToggle={togglePreference} />
         </div>
       </div>
     </div>
@@ -216,23 +240,23 @@ function PasswordField({ label, value, onChange, placeholder }) {
   return <div><label className="block text-xs font-medium text-slate-300 mb-2">{label}</label><input type="password" value={value} onChange={onChange} placeholder={placeholder} autoComplete="new-password" className="w-full bg-white border border-transparent rounded-lg py-2 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all" /></div>;
 }
 
-function PreferencesCard() {
+function PreferencesCard({ preferences, onToggle }) {
   return (
     <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col">
       <div className="flex items-center gap-3 mb-6"><Sliders className="w-5 h-5 text-slate-300" /><h2 className="text-lg font-medium text-white">Tùy chọn hiển thị</h2></div>
       <div className="space-y-4">
-        <PreferenceToggle title="Chế độ giao diện" description="Chế độ tối (Sáng/Tối)" active />
-        <PreferenceToggle title="Email tóm tắt" description="Nhận báo cáo hàng tuần" active={false} />
+        <PreferenceToggle title="Chế độ giao diện" description={preferences.darkMode ? 'Đang dùng chế độ tối' : 'Đang dùng chế độ sáng'} active={preferences.darkMode} onClick={() => onToggle('darkMode')} />
+        <PreferenceToggle title="Email tóm tắt" description="Nhận báo cáo hàng tuần" active={preferences.weeklyEmail} onClick={() => onToggle('weeklyEmail')} />
       </div>
     </div>
   );
 }
 
-function PreferenceToggle({ title, description, active }) {
+function PreferenceToggle({ title, description, active, onClick }) {
   return (
     <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-slate-700/50">
       <div><div className="text-sm font-medium text-slate-200">{title}</div><div className="text-[11px] text-slate-500 mt-0.5">{description}</div></div>
-      <button type="button" aria-pressed={active} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-default ${active ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+      <button type="button" onClick={onClick} aria-pressed={active} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${active ? 'bg-emerald-500' : 'bg-slate-600'}`}>
         <span className={`${active ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm flex items-center justify-center`}>{active && <Check className="w-3 h-3 text-indigo-600" strokeWidth={3} />}</span>
       </button>
     </div>

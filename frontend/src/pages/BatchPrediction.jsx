@@ -12,6 +12,7 @@ import {
   TableProperties,
   XCircle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useTasks } from '../contexts/TaskContext';
 
 export default function BatchPredictionContent() {
@@ -232,10 +233,20 @@ function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, on
         </div>
 
         <div className="flex gap-2">
-          <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors">
+          <button
+            type="button"
+            title="Lọc phản hồi"
+            onClick={() => toast('Bảng đang hiển thị danh sách phản hồi sau xử lý. Bạn có thể dùng phân trang để xem thêm.')}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors"
+          >
             <Filter className="w-4 h-4" />
           </button>
-          <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors">
+          <button
+            type="button"
+            title="Tải kết quả"
+            onClick={() => downloadResults(tableData)}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors"
+          >
             <Download className="w-4 h-4" />
           </button>
         </div>
@@ -323,4 +334,32 @@ function TableRow({ data }) {
       </td>
     </tr>
   );
+}
+
+function downloadResults(rows) {
+  if (!rows.length) {
+    toast('Chưa có dữ liệu để tải xuống.');
+    return;
+  }
+
+  const headers = ['id', 'content', 'sentiment', 'confidence'];
+  const csv = [
+    headers.join(','),
+    ...rows.map((row) =>
+      headers
+        .map((key) => `"${String(row[key] ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    ),
+  ].join('\n');
+
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `ket-qua-phan-hoi-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast.success('Đã tải danh sách phản hồi đang hiển thị.');
 }
