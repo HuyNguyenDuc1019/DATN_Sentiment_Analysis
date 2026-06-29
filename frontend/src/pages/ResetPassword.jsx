@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { KeyRound, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
+import toast from 'react-hot-toast';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -13,12 +14,12 @@ export default function ResetPassword() {
     event.preventDefault();
 
     if (password.length < 6) {
-      window.alert('Mật khẩu mới phải có ít nhất 6 ký tự.');
+      toast.error('Mật khẩu mới phải có ít nhất 6 ký tự.');
       return;
     }
 
     if (password !== confirmPassword) {
-      window.alert('Mật khẩu xác nhận không khớp.');
+      toast.error('Mật khẩu xác nhận không khớp.');
       return;
     }
 
@@ -28,10 +29,10 @@ export default function ResetPassword() {
       if (error) throw error;
 
       await supabase.auth.signOut();
-      window.alert('Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.');
+      toast.success('Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.');
       navigate('/', { replace: true });
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message || 'Không thể đặt lại mật khẩu.');
     } finally {
       setLoading(false);
     }

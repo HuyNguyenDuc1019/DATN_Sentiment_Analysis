@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, BarChart2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 export default function LoginScreen() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (error) {
-      window.alert(error.message);
+      toast.error(error.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại email và mật khẩu.');
       return;
     }
 

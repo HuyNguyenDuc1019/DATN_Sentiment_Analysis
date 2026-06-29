@@ -9,9 +9,7 @@ import {
   FileText,
   History,
   Link2,
-  Moon,
   Search,
-  Sun,
   X,
 } from 'lucide-react';
 import { useTasks } from '../../contexts/TaskContext';
@@ -22,7 +20,7 @@ export default function TopHeader() {
   const { batch, urlAnalyzer } = useTasks();
   const [keyword, setKeyword] = useState('');
   const [activePanel, setActivePanel] = useState(null);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('almotion-theme') !== 'light');
+  const [darkMode] = useState(() => localStorage.getItem('almotion-theme') !== 'light');
 
   const batchCount = batch.results?.length || 0;
   const urlCount = urlAnalyzer.count || urlAnalyzer.results?.length || 0;
@@ -137,12 +135,6 @@ export default function TopHeader() {
     toast(`Đã ghi nhận từ khóa tìm kiếm: "${value}".`);
   };
 
-  const toggleTheme = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    toast.success(`Đã chuyển sang chế độ ${next ? 'tối' : 'sáng'}.`, { id: 'theme-toggle' });
-  };
-
   const togglePanel = (panel) => {
     setActivePanel((current) => (current === panel ? null : panel));
   };
@@ -169,14 +161,6 @@ export default function TopHeader() {
           className={`text-slate-400 hover:text-white transition-colors ${activePanel === 'history' ? 'text-indigo-300' : ''}`}
         >
           <History className="w-5 h-5" />
-        </button>
-        <button
-          type="button"
-          title={darkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
-          onClick={toggleTheme}
-          className="text-slate-400 hover:text-white transition-colors"
-        >
-          {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
         <button
           type="button"
