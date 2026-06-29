@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, BarChart2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../services/supabaseClient'
 
 export default function LoginScreen() {
   const navigate = useNavigate();
@@ -10,19 +11,55 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    setLoading(false);
+ const handleLogin = async (event) => {
+  event.preventDefault();
+  setLoading(true);
+  
+  // 1. Đăng nhập qua Auth như bình thường
+  const { error } = await signIn(email.trim(), password);
 
-    if (error) {
-      window.alert(error.message);
-      return;
+  if (error) {
+    setLoading(false);
+    window.alert(error.message);
+    return;
+  }
+
+  try {
+    // 2. Lấy ID của người dùng vừa đăng nhập thành công
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) throw new Error("Không thể xác thực thông tin user.");
+
+    // 3. Chui vào bảng public.users để kiểm tra chức danh (role)
+    const { data: userData, error: roleError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single(); // Lấy đúng 1 dòng dữ liệu của user này
+
+    if (roleError) {
+      console.warn("Chưa có data trong bảng public.users, mặc định là user thường.");
     }
 
-    navigate('/dashboard');
-  };
+    // 4. Lưu quyền vào Local Storage để hệ thống "nhớ" mặt
+    const userRole = userData?.role || 'user';
+    localStorage.setItem('userRole', userRole);
+    localStorage.setItem('userId', user.id);
+
+    // 5. MỞ CỔNG (ĐIỀU HƯỚNG)
+    if (userRole === 'admin') {
+      navigate('/admin/dashboard'); // Đá Admin vào khu vực tuyệt mật
+    } else {
+      navigate('/dashboard'); // Đá User thường về trang phân tích
+    }
+
+  } catch (err) {
+    console.error("Lỗi khi kiểm tra phân quyền:", err);
+    window.alert("Đăng nhập thành công nhưng có lỗi khi lấy quyền!");
+  } finally {
+    setLoading(false); // Tắt hiệu ứng xoay xoay
+  }
+};
 
   return (
     <>

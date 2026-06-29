@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
 import LoginScreen from './pages/Login';
 import RegisterScreen from './pages/Register';
@@ -13,6 +13,14 @@ import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
+// Admin Imports
+import AdminProtectedRoute from './components/auth/AdminProtectedRoute';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminFeedback from './pages/admin/AdminFeedback';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminSettings from './pages/admin/AdminSettings';
+
 function App() {
   return (
     <BrowserRouter>
@@ -22,6 +30,17 @@ function App() {
         <Route path="/register" element={<RegisterScreen />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+
+        {/* Admin Routes with Layout & Protection */}
+        <Route path="/admin" element={<AdminProtectedRoute />}>
+          <Route element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="feedback" element={<AdminFeedback />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
+        </Route>
 
         {/* Main App Routes with Layout */}
         <Route element={<ProtectedRoute />}>
