@@ -260,6 +260,31 @@
     background-color: #eef2ff !important;
   }
 
+  html.light .help-topic-card-active,
+  html.light .help-question-row-active {
+    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
+    border-color: #6366f1 !important;
+    box-shadow: 0 14px 34px rgba(79, 70, 229, 0.18) !important;
+  }
+
+  html.light .help-topic-card-active .help-modal-card-title,
+  html.light .help-question-row-active .help-modal-card-title {
+    color: #312e81 !important;
+  }
+
+  html.light .help-topic-icon,
+  html.light .help-question-icon {
+    background-color: #e0e7ff !important;
+    color: #4f46e5 !important;
+  }
+
+  html.light .help-topic-card-active .help-topic-icon,
+  html.light .help-question-row-active .help-question-icon {
+    background-color: #4f46e5 !important;
+    color: #ffffff !important;
+    box-shadow: 0 10px 24px rgba(79, 70, 229, 0.28) !important;
+  }
+
   html.light .help-modal-icon {
     background-color: #dfe7ff !important;
     color: #4f46e5 !important;
