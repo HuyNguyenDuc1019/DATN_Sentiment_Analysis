@@ -1,12 +1,55 @@
 import React, { useState } from 'react';
 import { Sparkles, BarChart2, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { supabase } from '../services/supabaseClient';
+
+const toastStyle = { id: 'register-message' };
+
+function getReadableAuthError(error) {
+  const rawMessage = [
+    error?.message,
+    error?.error_description,
+    error?.details,
+    typeof error === 'string' ? error : '',
+  ].find(Boolean);
+
+  const message = String(rawMessage || '').toLowerCase();
+  const errorName = String(error?.name || '').toLowerCase();
+  const errorStatus = Number(error?.status || error?.statusCode || 0);
+
+  if (
+    errorName.includes('authretryablefetcherror')
+    || errorStatus >= 500
+    || message === '{}'
+    || message.includes('internal server error')
+    || message.includes('failed to fetch')
+    || message.includes('network')
+  ) {
+    return 'Hệ thống xác thực đang bận hoặc lỗi gửi email xác nhận. Vui lòng chờ vài phút rồi thử lại.';
+  }
+
+  if (message.includes('already registered') || message.includes('already exists')) {
+    return 'Email này đã được đăng ký. Bạn hãy quay lại trang đăng nhập.';
+  }
+
+  if (message.includes('password') && (message.includes('6') || message.includes('characters'))) {
+    return 'Mật khẩu cần có ít nhất 6 ký tự.';
+  }
+
+  if (message.includes('invalid') && message.includes('email')) {
+    return 'Email không hợp lệ. Vui lòng kiểm tra lại.';
+  }
+
+  if (message.includes('rate limit') || message.includes('too many')) {
+    return 'Bạn thao tác quá nhanh. Vui lòng chờ một lát rồi thử lại.';
+  }
+
+  return 'Không thể tạo tài khoản. Vui lòng kiểm tra thông tin và thử lại.';
+}
 
 export default function RegisterScreen() {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
@@ -16,24 +59,81 @@ export default function RegisterScreen() {
 
   const handleRegister = async (event) => {
     event.preventDefault();
-    if (form.password !== form.confirm || form.password.length < 6) {
-      toast.error('Mật khẩu xác nhận không khớp hoặc chưa đủ 6 ký tự.');
+
+    const fullName = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+
+    if (!fullName) {
+      toast.error('Vui lòng nhập họ và tên.', toastStyle);
+      return;
+    }
+
+    if (!email) {
+      toast.error('Vui lòng nhập email.', toastStyle);
+      return;
+    }
+
+    if (form.password.length < 6) {
+      toast.error('Mật khẩu cần có ít nhất 6 ký tự.', toastStyle);
+      return;
+    }
+
+    if (form.password !== form.confirm) {
+      toast.error('Mật khẩu xác nhận chưa khớp.', toastStyle);
       return;
     }
 
     setLoading(true);
-    const { data, error } = await signUp(form.email.trim(), form.password, form.name.trim());
-    setLoading(false);
 
-    if (error) {
-      toast.error(error.message || 'Không thể tạo tài khoản. Vui lòng thử lại.');
-      return;
-    }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: form.password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { full_name: fullName },
+        },
+      });
 
-    if (data.session) navigate('/dashboard');
-    else {
-      toast.success('Đăng ký thành công. Hãy kiểm tra email xác nhận.');
-      navigate('/');
+      if (error) {
+        throw error;
+      }
+
+      const userId = data?.user?.id;
+
+      if (userId) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert(
+            {
+              id: userId,
+              email,
+              full_name: fullName,
+              role: 'user',
+              status: 'active',
+              tier: 'free',
+            },
+            { onConflict: 'id' },
+          );
+
+        if (profileError) {
+          console.error('Create profile failed:', profileError);
+        }
+      }
+
+      toast.success(
+        data?.session
+          ? 'Tạo tài khoản thành công.'
+          : 'Tạo tài khoản thành công. Nếu hệ thống yêu cầu xác nhận, hãy kiểm tra email trước khi đăng nhập.',
+        toastStyle,
+      );
+
+      navigate(data?.session ? '/dashboard' : '/');
+    } catch (error) {
+      console.error('Register failed:', error);
+      toast.error(getReadableAuthError(error), toastStyle);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,6 +178,7 @@ export default function RegisterScreen() {
                     onChange={change('name')}
                     placeholder="Nguyễn Văn A"
                     className="input-auth"
+                    autoComplete="name"
                   />
                 </Field>
 
@@ -88,6 +189,7 @@ export default function RegisterScreen() {
                     onChange={change('email')}
                     placeholder="name@company.com"
                     className="input-auth"
+                    autoComplete="email"
                   />
                 </Field>
 
@@ -184,11 +286,13 @@ function PasswordField({ label, value, onChange, visible, onToggle }) {
           onChange={onChange}
           placeholder="••••••••"
           className="input-auth pr-11"
+          autoComplete="new-password"
         />
         <button
           type="button"
           onClick={onToggle}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none"
+          aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
         >
           {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>

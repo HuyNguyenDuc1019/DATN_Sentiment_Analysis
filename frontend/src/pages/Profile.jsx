@@ -6,7 +6,7 @@ import { supabase } from '../services/supabaseClient';
 
 export default function ProfileContent() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState({ fullName: '', email: '', avatarUrl: '' });
+  const [profile, setProfile] = useState({ fullName: '', email: '', avatarUrl: '', role: 'user' });
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -21,6 +21,7 @@ export default function ProfileContent() {
     document.documentElement.classList.toggle('light', !preferences.darkMode);
     localStorage.setItem('almotion-theme', preferences.darkMode ? 'dark' : 'light');
     localStorage.setItem('almotion-weekly-email', String(preferences.weeklyEmail));
+    window.dispatchEvent(new Event('almotion-theme-change'));
   }, [preferences]);
 
   useEffect(() => {
@@ -29,19 +30,24 @@ export default function ProfileContent() {
       fullName: user.user_metadata?.full_name || '',
       email: user.email || '',
       avatarUrl: user.user_metadata?.avatar_url || '',
+      role: localStorage.getItem('userRole') || localStorage.getItem('user_role') || user.app_metadata?.role || user.user_metadata?.role || 'user',
     });
 
     supabase
       .from('profiles')
-      .select('full_name,email,avatar_url')
+      .select('full_name,email,avatar_url,role,status,tier')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
+          const rawRole = data.role || localStorage.getItem('userRole') || localStorage.getItem('user_role') || 'user';
+          localStorage.setItem('userRole', rawRole);
+          localStorage.setItem('user_role', rawRole);
           setProfile({
             fullName: data.full_name || user.user_metadata?.full_name || '',
             email: data.email || user.email || '',
             avatarUrl: data.avatar_url || user.user_metadata?.avatar_url || '',
+            role: rawRole,
           });
         }
       });
@@ -52,7 +58,7 @@ export default function ProfileContent() {
     return source.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   }, [profile]);
 
-  const rawRole = user?.app_metadata?.role || user?.user_metadata?.role || 'user';
+  const rawRole = profile.role || user?.app_metadata?.role || user?.user_metadata?.role || 'user';
   const normalizedRole = String(rawRole).trim().toLowerCase();
   const role = normalizedRole === 'admin' || normalizedRole === 'administrator'
     ? 'Quản trị viên'
@@ -95,6 +101,7 @@ export default function ProfileContent() {
           fullName: profile.fullName.trim(),
           email: profile.email.trim(),
           avatarUrl: profile.avatarUrl,
+          role: profile.role,
         },
       }));
 

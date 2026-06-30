@@ -2,27 +2,37 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
 
-function getFallbackProfile(user) {
-  return {
-    fullName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Người dùng',
-    email: user?.email || '',
-    avatarUrl: user?.user_metadata?.avatar_url || '',
-  };
+function getStoredRole() {
+  return localStorage.getItem('userRole') || localStorage.getItem('user_role') || 'user';
 }
 
-function formatRole(user) {
-  const role = user?.app_metadata?.role || user?.user_metadata?.role || 'Người dùng';
-  const normalizedRole = String(role).trim().toLowerCase();
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
+function formatRole(role) {
+  const normalizedRole = normalizeRole(role);
 
   if (normalizedRole === 'admin' || normalizedRole === 'administrator') {
     return 'Quản trị viên';
   }
 
-  if (normalizedRole === 'user' || normalizedRole === 'member') {
+  if (!normalizedRole || normalizedRole === 'user' || normalizedRole === 'member') {
     return 'Người dùng';
   }
 
   return role;
+}
+
+function getFallbackProfile(user) {
+  return {
+    fullName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Người dùng',
+    email: user?.email || '',
+    avatarUrl: user?.user_metadata?.avatar_url || '',
+    role: user?.app_metadata?.role || user?.user_metadata?.role || getStoredRole(),
+    status: '',
+    tier: '',
+  };
 }
 
 export function useUserProfile() {
@@ -38,7 +48,7 @@ export function useUserProfile() {
     const fallback = getFallbackProfile(user);
     const { data, error } = await supabase
       .from('profiles')
-      .select('full_name,email,avatar_url')
+      .select('full_name,email,avatar_url,role,status,tier')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -47,10 +57,17 @@ export function useUserProfile() {
       return;
     }
 
+    const rawRole = data.role || fallback.role || 'user';
+    localStorage.setItem('userRole', rawRole);
+    localStorage.setItem('user_role', rawRole);
+
     setProfile({
       fullName: data.full_name || fallback.fullName,
       email: data.email || fallback.email,
       avatarUrl: data.avatar_url || fallback.avatarUrl,
+      role: rawRole,
+      status: data.status || '',
+      tier: data.tier || '',
     });
   }, [user]);
 
@@ -58,8 +75,18 @@ export function useUserProfile() {
     loadProfile();
 
     const handleProfileUpdated = (event) => {
-      if (event.detail) setProfile((current) => ({ ...current, ...event.detail }));
-      else loadProfile();
+      if (event.detail) {
+        setProfile((current) => {
+          const nextRole = event.detail.role || current.role;
+          if (nextRole) {
+            localStorage.setItem('userRole', nextRole);
+            localStorage.setItem('user_role', nextRole);
+          }
+          return { ...current, ...event.detail, role: nextRole };
+        });
+      } else {
+        loadProfile();
+      }
     };
 
     window.addEventListener('profile-updated', handleProfileUpdated);
@@ -72,8 +99,23 @@ export function useUserProfile() {
 
   const initials = useMemo(() => {
     const source = profile.fullName.trim() || profile.email || 'U';
-    return source.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join('').toUpperCase();
+    return source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(-2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase();
   }, [profile.email, profile.fullName]);
 
-  return { ...profile, initials, role: formatRole(user) };
+  const role = formatRole(profile.role);
+
+  return {
+    ...profile,
+    initials,
+    role,
+    roleLabel: role,
+    rawRole: profile.role,
+    isAdmin: normalizeRole(profile.role) === 'admin',
+  };
 }

@@ -1,9 +1,27 @@
 import React, { useState } from 'react';
-import { BarChart2, Sparkles } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { Sparkles, BarChart2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
+import toast from 'react-hot-toast';
+
+function getLoginError(error) {
+  const message = String(error?.message || error?.error_description || '').toLowerCase();
+
+  if (message.includes('invalid login credentials')) {
+    return 'Email hoặc mật khẩu chưa đúng. Vui lòng kiểm tra lại.';
+  }
+
+  if (message.includes('email not confirmed')) {
+    return 'Tài khoản chưa xác nhận email. Vui lòng kiểm tra hộp thư.';
+  }
+
+  if (message.includes('rate limit') || message.includes('too many')) {
+    return 'Bạn thao tác quá nhanh. Vui lòng chờ một lát rồi đăng nhập lại.';
+  }
+
+  return error?.message || 'Đăng nhập không thành công. Vui lòng thử lại.';
+}
 
 export default function LoginScreen() {
   const navigate = useNavigate();
@@ -12,64 +30,38 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const getUserRole = async (userId) => {
-    const { data: profileRole } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (profileRole?.role) {
-      return profileRole.role;
-    }
-
-    const { data: userRole } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle();
-
-    return userRole?.role || 'user';
-  };
-
   const handleLogin = async (event) => {
     event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
 
-    if (!email.trim() || !password) {
+    if (!normalizedEmail || !password) {
       toast.error('Vui lòng nhập email và mật khẩu.');
       return;
     }
 
     setLoading(true);
+    const { data, error } = await signIn(normalizedEmail, password);
+    setLoading(false);
 
-    try {
-      const { data, error } = await signIn(email.trim(), password);
-
-      if (error) {
-        toast.error(error.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại email và mật khẩu.');
-        return;
-      }
-
-      const authUser = data?.user || (await supabase.auth.getUser()).data?.user;
-
-      if (!authUser?.id) {
-        toast.error('Không thể xác thực thông tin tài khoản.');
-        return;
-      }
-
-      const userRole = await getUserRole(authUser.id);
-
-      localStorage.setItem('userId', authUser.id);
-      localStorage.setItem('userRole', userRole);
-      localStorage.setItem('user_role', userRole);
-
-      toast.success('Đăng nhập thành công.');
-      navigate(userRole === 'admin' ? '/admin/dashboard' : '/dashboard', { replace: true });
-    } catch (error) {
-      toast.error(error.message || 'Đăng nhập thành công nhưng không lấy được quyền tài khoản.');
-    } finally {
-      setLoading(false);
+    if (error) {
+      toast.error(getLoginError(error));
+      return;
     }
+
+    const userId = data?.user?.id || data?.session?.user?.id;
+    if (userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const role = profile?.role || 'user';
+      localStorage.setItem('userRole', role);
+      localStorage.setItem('user_role', role);
+    }
+
+    navigate('/dashboard');
   };
 
   return (
@@ -91,38 +83,36 @@ export default function LoginScreen() {
         `}
       </style>
 
-      <div className="flex min-h-screen w-full overflow-hidden bg-[#0f172a] font-sans text-slate-200">
-        <div className="relative z-10 flex w-full items-center justify-center p-8 lg:w-1/2">
+      <div className="min-h-screen w-full flex font-sans text-slate-200 bg-[#0f172a] overflow-hidden">
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative z-10">
           <div className="w-full max-w-md">
-            <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-8 shadow-2xl backdrop-blur-md">
-              <div className="mb-8 flex items-center gap-3">
-                <Sparkles className="h-6 w-6 text-indigo-400" fill="currentColor" />
-                <span className="text-xl font-bold tracking-wide text-white">Almotion</span>
+            <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-8 shadow-2xl">
+              <div className="flex items-center gap-3 mb-8">
+                <Sparkles className="w-6 h-6 text-indigo-400" fill="currentColor" />
+                <span className="text-white text-xl font-bold tracking-wide">Almotion</span>
               </div>
 
               <div className="mb-8">
-                <h1 className="mb-2 text-xl font-semibold text-white">Chào mừng trở lại</h1>
-                <p className="text-sm text-slate-400">
-                  Đăng nhập để theo dõi phản hồi khách hàng của bạn.
-                </p>
+                <h1 className="text-xl font-semibold text-white mb-2">Chào mừng trở lại</h1>
+                <p className="text-sm text-slate-400">Đăng nhập để theo dõi phản hồi khách hàng của bạn.</p>
               </div>
 
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-300">Email doanh nghiệp</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Email doanh nghiệp</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="name@company.com"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 transition-all focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-lg py-3 px-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                 </div>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="flex justify-between items-center mb-2">
                     <label className="block text-sm font-medium text-slate-300">Mật khẩu</label>
-                    <Link to="/forgot-password" className="text-xs font-medium text-indigo-400 transition-colors hover:text-indigo-300">
+                    <Link to="/forgot-password" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
                       Quên mật khẩu?
                     </Link>
                   </div>
@@ -130,7 +120,7 @@ export default function LoginScreen() {
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 transition-all focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-lg py-3 px-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                 </div>
 
@@ -138,17 +128,15 @@ export default function LoginScreen() {
                   <input
                     type="checkbox"
                     id="remember"
-                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-800"
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-800"
                   />
-                  <label htmlFor="remember" className="cursor-pointer text-sm text-slate-300">
-                    Ghi nhớ đăng nhập
-                  </label>
+                  <label htmlFor="remember" className="text-sm text-slate-300 cursor-pointer">Ghi nhớ đăng nhập</label>
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="mt-4 w-full rounded-xl bg-indigo-600 py-3 font-medium text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl mt-4 transition-colors shadow-lg shadow-indigo-600/20 disabled:opacity-60"
                 >
                   {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
                 </button>
@@ -157,7 +145,7 @@ export default function LoginScreen() {
               <div className="mt-6 text-center">
                 <p className="text-sm text-slate-400">
                   Chưa có tài khoản?{' '}
-                  <Link to="/register" className="font-medium text-indigo-400 transition-colors hover:text-indigo-300">
+                  <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
                     Đăng ký ngay
                   </Link>
                 </p>
@@ -166,34 +154,31 @@ export default function LoginScreen() {
           </div>
         </div>
 
-        <div className="relative hidden w-1/2 flex-col justify-center overflow-hidden bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#0f172a] p-16 lg:flex">
-          <div className="absolute right-0 top-0 h-[800px] w-[800px] -translate-y-1/2 translate-x-1/3 rounded-full bg-indigo-500/10 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-[600px] w-[600px] -translate-x-1/4 translate-y-1/3 rounded-full bg-purple-600/10 blur-3xl" />
-          <div className="absolute right-0 top-1/4 h-[600px] w-[600px] translate-x-1/2 rounded-full border border-white/5" />
-          <div className="absolute bottom-1/4 right-0 h-[400px] w-[400px] translate-x-1/3 rounded-full border border-white/10" />
+        <div className="hidden lg:flex w-1/2 relative flex-col justify-center bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#0f172a] p-16 overflow-hidden">
+          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+          <div className="absolute top-1/4 right-0 w-[600px] h-[600px] border border-white/5 rounded-full translate-x-1/2" />
+          <div className="absolute bottom-1/4 right-0 w-[400px] h-[400px] border border-white/10 rounded-full translate-x-1/3" />
 
-          <div className="relative z-10 mb-16 max-w-lg">
-            <h2 className="mb-4 text-4xl font-bold leading-tight text-white drop-shadow-md">
+          <div className="relative z-10 max-w-lg mb-16">
+            <h2 className="text-4xl font-bold text-white leading-tight mb-4 drop-shadow-md">
               Hiểu khách hàng từ từng phản hồi
             </h2>
-            <p className="text-sm leading-relaxed text-indigo-200/80">
+            <p className="text-indigo-200/80 text-sm leading-relaxed">
               Theo dõi khen chê, phát hiện vấn đề nổi bật và ra quyết định nhanh hơn từ dữ liệu thực tế.
             </p>
           </div>
 
-          <div className="relative z-10 mx-auto w-full max-w-sm">
-            <div
-              className="relative z-10 rounded-2xl border border-slate-600/50 bg-slate-800/40 p-6 shadow-2xl backdrop-blur-xl"
-              style={{ animation: 'float 6s ease-in-out infinite' }}
-            >
-              <div className="mb-6 flex items-center justify-between">
+          <div className="relative z-10 w-full max-w-sm mx-auto">
+            <div className="bg-slate-800/40 backdrop-blur-xl border border-slate-600/50 rounded-2xl p-6 shadow-2xl relative z-10" style={{ animation: 'float 6s ease-in-out infinite' }}>
+              <div className="flex justify-between items-center mb-6">
                 <span className="text-xs font-medium text-slate-300">Tổng quan phản hồi</span>
-                <BarChart2 className="h-4 w-4 text-slate-400" />
+                <BarChart2 className="w-4 h-4 text-slate-400" />
               </div>
 
-              <div className="mt-4 flex h-24 items-end justify-between gap-3">
+              <div className="flex items-end justify-between gap-3 h-24 mt-4">
                 {[40, 60, 30, 80, 100, 50].map((height, index) => (
-                  <div key={index} className="w-full rounded-t-sm bg-indigo-500" style={{ height: `${height}%` }} />
+                  <div key={index} className="w-full bg-indigo-500 rounded-t-sm" style={{ height: `${height}%` }} />
                 ))}
               </div>
             </div>
@@ -208,16 +193,15 @@ export default function LoginScreen() {
 }
 
 function FloatingBadge({ className, color, text, value, reverse = false }) {
-  const isPositive = color === 'emerald';
-
+  const colorClass = color === 'emerald' ? 'bg-emerald-400 text-emerald-400' : 'bg-rose-500 text-rose-400';
   return (
     <div
-      className={`absolute ${className} z-20 flex items-center gap-2 rounded-full border border-slate-600/50 bg-slate-800/70 px-5 py-2.5 shadow-xl backdrop-blur-md`}
+      className={`absolute ${className} bg-slate-800/70 backdrop-blur-md border border-slate-600/50 rounded-full px-5 py-2.5 shadow-xl flex items-center gap-2 z-20`}
       style={{ animation: reverse ? 'float-reverse 7s ease-in-out infinite' : 'float-delayed 5s ease-in-out infinite 1s' }}
     >
-      <div className={`h-2.5 w-2.5 rounded-full ${isPositive ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-      <span className={`text-sm font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>{text}</span>
-      <span className="ml-1 text-sm font-medium text-slate-300">{value}</span>
+      <div className={`w-2.5 h-2.5 rounded-full ${colorClass.split(' ')[0]} shadow-[0_0_8px_rgba(129,140,248,0.5)]`} />
+      <span className={`text-sm font-semibold ${colorClass.split(' ')[1]}`}>{text}</span>
+      <span className="text-sm font-medium text-slate-300 ml-1">{value}</span>
     </div>
   );
 }

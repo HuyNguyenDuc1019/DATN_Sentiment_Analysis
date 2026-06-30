@@ -13,13 +13,14 @@ import {
   LogOut,
   MessageSquare,
   Settings,
+  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
 
 export default function Sidebar() {
   const location = useLocation();
   const { signOut } = useAuth();
-  const { fullName, avatarUrl, initials, role } = useUserProfile();
+  const { fullName, avatarUrl, initials, role, isAdmin } = useUserProfile();
   const [helpOpen, setHelpOpen] = useState(false);
 
   const getLinkClass = (path) =>
@@ -59,6 +60,11 @@ export default function Sidebar() {
           <Link to="/settings" className={getLinkClass('/settings')}>
             <Settings className="w-5 h-5" />Cài đặt
           </Link>
+          {isAdmin && (
+            <Link to="/admin/dashboard" className={getLinkClass('/admin/dashboard')}>
+              <ShieldCheck className="w-5 h-5" />Trang quản trị
+            </Link>
+          )}
         </nav>
 
         <div className="px-4 pb-4 space-y-1">

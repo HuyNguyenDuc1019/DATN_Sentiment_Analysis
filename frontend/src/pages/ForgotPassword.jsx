@@ -4,6 +4,16 @@ import { ArrowLeft, Mail, Sparkles } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import toast from 'react-hot-toast';
 
+const getErrorMessage = (error) => {
+  const message = error?.message || error?.error_description || '';
+
+  if (message.toLowerCase().includes('rate limit')) {
+    return 'Bạn yêu cầu quá nhanh. Vui lòng chờ một lát rồi thử lại.';
+  }
+
+  return message || 'Không thể gửi liên kết đặt lại mật khẩu. Vui lòng thử lại.';
+};
+
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -11,7 +21,7 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
       toast.error('Vui lòng nhập email để nhận liên kết đặt lại mật khẩu.');
@@ -23,11 +33,14 @@ export default function ForgotPassword() {
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
+
       if (error) throw error;
+
       setSent(true);
       toast.success('Đã gửi liên kết đặt lại mật khẩu. Vui lòng kiểm tra hộp thư email.');
     } catch (error) {
-      toast.error(error.message || 'Không thể gửi liên kết đặt lại mật khẩu.');
+      console.error('Reset password email failed:', error);
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -82,6 +95,7 @@ export default function ForgotPassword() {
                     }}
                     placeholder="name@company.com"
                     className="w-full bg-slate-900/80 border border-slate-700 rounded-lg py-3 px-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    autoComplete="email"
                   />
                 </div>
 

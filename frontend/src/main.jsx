@@ -1,10 +1,9 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
-import { AuthProvider } from './contexts/AuthContext.jsx'
-import { TaskProvider } from './contexts/TaskContext.jsx'
-import toast, { Toaster } from 'react-hot-toast'
+import { createRoot } from 'react-dom/client';
+import './index.css';
+import App from './App.jsx';
+import { AuthProvider } from './contexts/AuthContext.jsx';
+import { TaskProvider } from './contexts/TaskContext.jsx';
+import toast, { Toaster } from 'react-hot-toast';
 
 const toastStyle = {
   minWidth: '320px',
@@ -19,7 +18,10 @@ const toastStyle = {
   lineHeight: '1.45',
   fontSize: '14px',
   fontWeight: 500,
-}
+};
+
+const recentToastKeys = new Map();
+const TOAST_DEDUPE_TIME = 6000;
 
 function formatToastMessage(message) {
   if (!message) return 'Có thông báo mới.';
@@ -29,58 +31,101 @@ function formatToastMessage(message) {
   if (message.error) return String(message.error);
 
   try {
-    return JSON.stringify(message);
+    const text = JSON.stringify(message);
+    if (!text || text === '{}') return 'Thao tác chưa thành công. Vui lòng kiểm tra lại thông tin.';
+    return text;
   } catch {
-    return 'Có thông báo mới.';
+    return 'Thao tác chưa thành công. Vui lòng kiểm tra lại thông tin.';
   }
 }
 
-window.alert = (message) => {
-  toast(formatToastMessage(message), {
-    duration: 4200,
-    style: toastStyle,
-  })
+function normalizeToastKey(type, message) {
+  return `${type}:${formatToastMessage(message).trim().toLowerCase()}`;
 }
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <AuthProvider>
-      <TaskProvider>
-        <App />
-      </TaskProvider>
-      <Toaster
-        position="top-center"
-        containerStyle={{
-          top: 28,
-        }}
-        toastOptions={{
-          duration: 3800,
-          style: toastStyle,
-          success: {
-            style: {
-              ...toastStyle,
-              border: '1px solid rgba(16, 185, 129, 0.35)',
-              boxShadow: '0 24px 70px rgba(16, 185, 129, 0.16)',
-            },
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#ecfdf5',
-            },
-          },
-          error: {
-            style: {
-              ...toastStyle,
-              border: '1px solid rgba(244, 63, 94, 0.38)',
-              boxShadow: '0 24px 70px rgba(244, 63, 94, 0.16)',
-            },
-            iconTheme: {
-              primary: '#f43f5e',
-              secondary: '#fff1f2',
-            },
-          },
-        }}
-      />
-    </AuthProvider>
-  </StrictMode>,
-)
+function shouldShowToast(key) {
+  const now = Date.now();
+  const lastShownAt = recentToastKeys.get(key);
 
+  if (lastShownAt && now - lastShownAt < TOAST_DEDUPE_TIME) {
+    return false;
+  }
+
+  recentToastKeys.set(key, now);
+
+  for (const [savedKey, savedAt] of recentToastKeys.entries()) {
+    if (now - savedAt > TOAST_DEDUPE_TIME) {
+      recentToastKeys.delete(savedKey);
+    }
+  }
+
+  return true;
+}
+
+const originalToast = toast.bind(toast);
+const originalSuccess = toast.success.bind(toast);
+const originalError = toast.error.bind(toast);
+
+toast.success = (message, options = {}) => {
+  const key = options.id || normalizeToastKey('success', message);
+  if (!shouldShowToast(key)) return key;
+  return originalSuccess(formatToastMessage(message), { ...options, id: key });
+};
+
+toast.error = (message, options = {}) => {
+  const key = options.id || normalizeToastKey('error', message);
+  if (!shouldShowToast(key)) return key;
+  return originalError(formatToastMessage(message), { ...options, id: key });
+};
+
+toast.custom = toast.custom;
+
+window.alert = (message) => {
+  const key = normalizeToastKey('alert', message);
+  if (!shouldShowToast(key)) return;
+  originalToast(formatToastMessage(message), {
+    id: key,
+    duration: 4200,
+    style: toastStyle,
+  });
+};
+
+createRoot(document.getElementById('root')).render(
+  <AuthProvider>
+    <TaskProvider>
+      <App />
+    </TaskProvider>
+    <Toaster
+      position="top-center"
+      containerStyle={{
+        top: 28,
+      }}
+      toastOptions={{
+        duration: 4200,
+        style: toastStyle,
+        success: {
+          style: {
+            ...toastStyle,
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            boxShadow: '0 24px 70px rgba(16, 185, 129, 0.16)',
+          },
+          iconTheme: {
+            primary: '#10b981',
+            secondary: '#ecfdf5',
+          },
+        },
+        error: {
+          style: {
+            ...toastStyle,
+            border: '1px solid rgba(244, 63, 94, 0.38)',
+            boxShadow: '0 24px 70px rgba(244, 63, 94, 0.16)',
+          },
+          iconTheme: {
+            primary: '#f43f5e',
+            secondary: '#fff1f2',
+          },
+        },
+      }}
+    />
+  </AuthProvider>,
+);
