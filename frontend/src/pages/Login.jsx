@@ -12,6 +12,26 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getUserRole = async (userId) => {
+    const { data: profileRole } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileRole?.role) {
+      return profileRole.role;
+    }
+
+    const { data: userRole } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    return userRole?.role || 'user';
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault();
 
@@ -37,17 +57,7 @@ export default function LoginScreen() {
         return;
       }
 
-      let userRole = 'user';
-
-      const { data: roleData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', authUser.id)
-        .maybeSingle();
-
-      if (roleData?.role) {
-        userRole = roleData.role;
-      }
+      const userRole = await getUserRole(authUser.id);
 
       localStorage.setItem('userId', authUser.id);
       localStorage.setItem('userRole', userRole);
