@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { CheckCircle2, Download, RefreshCcw, Search, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, Filter, RefreshCw, Search, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
+
+// ====== Chức năng dữ liệu giữ nguyên từ file Feedback (Supabase) ======
 
 const STATUS_LABEL = {
   pending: 'Chờ duyệt',
@@ -10,92 +11,49 @@ const STATUS_LABEL = {
   rejected: 'Đã từ chối',
 };
 
-const STATUS_CLASS = {
-  pending: 'border-amber-400/30 bg-amber-500/10 text-amber-300',
-  approved: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300',
-  rejected: 'border-rose-400/30 bg-rose-500/10 text-rose-300',
-};
-
-const fallbackTheme = {
-  card: 'border-slate-700 bg-slate-900/80 shadow-slate-950/30',
-  text: 'text-white',
-  muted: 'text-slate-400',
-  faint: 'text-slate-500',
-  input: 'border-slate-700 bg-slate-950 text-white placeholder:text-slate-500 focus:border-indigo-500',
-  tableHead: 'border-slate-800 bg-slate-950/70 text-slate-400',
-  tableDivide: 'divide-slate-800',
-  rowHover: 'hover:bg-slate-800/60',
-  buttonGhost: 'border-slate-700 bg-slate-900 text-slate-200 hover:border-indigo-400 hover:text-white',
-};
-
 const normalizeStatus = (status) => status || 'pending';
-const labelText = (value) => (Number(value) === 1 ? 'Hài lòng' : 'Chưa hài lòng');
 
-function StatCard({ theme, label, value, tone = 'indigo' }) {
-  const toneClass =
-    tone === 'green'
-      ? 'text-emerald-400'
-      : tone === 'rose'
-        ? 'text-rose-400'
-        : 'text-indigo-400';
-
-  return (
-    <div className={`rounded-2xl border p-5 shadow-xl ${theme.card}`}>
-      <p className={`text-xs font-black uppercase tracking-wider ${theme.muted}`}>{label}</p>
-      <p className={`mt-3 text-4xl font-black ${toneClass}`}>{value}</p>
-    </div>
-  );
-}
-
-function Th({ theme, children, align = 'left' }) {
-  const alignClass = align === 'right' ? 'text-right' : 'text-left';
-
-  return (
-    <th className={`px-5 py-4 ${alignClass} text-xs font-black uppercase tracking-wider ${theme.muted}`}>
-      {children}
-    </th>
-  );
-}
-
-export default function AdminFeedback() {
-  const { theme = fallbackTheme } = useOutletContext() || {};
+const AdminFeedback = () => {
   const [items, setItems] = useState([]);
   const [profiles, setProfiles] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('pending');
 
   const loadFeedback = useCallback(async () => {
-    setLoading(true);
+    setIsLoading(true);
 
-    const [feedbackResult, profileResult] = await Promise.all([
-      supabase
-        .from('feedback_data')
-        .select('id, original_content, old_ai_label, corrected_label, created_at, user_id, status')
-        .order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, email, full_name'),
-    ]);
+    try {
+      const [feedbackResult, profileResult] = await Promise.all([
+        supabase
+          .from('feedback_data')
+          .select('id, original_content, old_ai_label, corrected_label, created_at, user_id, status')
+          .order('created_at', { ascending: false }),
+        supabase.from('profiles').select('id, email, full_name'),
+      ]);
 
-    if (feedbackResult.error) {
-      toast.error('Không thể tải danh sách phản hồi từ máy chủ.', { id: 'admin-feedback-load-error' });
-      setItems([]);
-    } else {
+      if (feedbackResult.error) throw feedbackResult.error;
+      if (profileResult.error) throw profileResult.error;
+
       setItems(feedbackResult.data || []);
-    }
 
-    if (profileResult.error) {
-      toast.error('Không thể tải danh sách người dùng từ máy chủ.', { id: 'admin-feedback-profile-error' });
-      setProfiles({});
-    } else {
       const mappedProfiles = {};
       (profileResult.data || []).forEach((profile) => {
         mappedProfiles[profile.id] = profile;
       });
       setProfiles(mappedProfiles);
+    } catch (error) {
+      console.error('Lỗi tải phản hồi admin:', error);
+      toast.error('Không thể tải danh sách phản hồi từ máy chủ.', {
+        id: 'admin-feedback-load-error',
+      });
+      setItems([]);
+      setProfiles({});
+    } finally {
+      setIsLoading(false);
     }
-
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -126,198 +84,280 @@ export default function AdminFeedback() {
     });
   }, [items, profiles, search, statusFilter]);
 
-  const updateStatus = async (item, status) => {
+  const handleReview = async (item, action) => {
+    const status = action === 'approve' ? 'approved' : 'rejected';
+    const actionText = action === 'approve' ? 'duyệt' : 'từ chối';
+
     setUpdatingId(item.id);
+    try {
+      const { error } = await supabase.from('feedback_data').update({ status }).eq('id', item.id);
+      if (error) throw error;
 
-    const { error } = await supabase.from('feedback_data').update({ status }).eq('id', item.id);
-
-    if (error) {
-      toast.error('Không thể cập nhật trạng thái phản hồi.', { id: `admin-feedback-update-${item.id}` });
-    } else {
       setItems((current) =>
         current.map((feedback) => (feedback.id === item.id ? { ...feedback, status } : feedback)),
       );
-      toast.success(status === 'approved' ? 'Đã duyệt phản hồi.' : 'Đã từ chối phản hồi.', {
-        id: `admin-feedback-update-${item.id}`,
+      toast.success(`Đã ${actionText} phản hồi thành công!`, {
+        id: `admin-feedback-${action}-${item.id}`,
       });
+    } catch (error) {
+      console.error('Lỗi duyệt phản hồi:', error);
+      toast.error(`Không thể ${actionText} phản hồi. Vui lòng kiểm tra lại quyền truy cập.`, {
+        id: `admin-feedback-${action}-error`,
+      });
+    } finally {
+      setUpdatingId('');
     }
-
-    setUpdatingId('');
   };
 
-  const exportCsv = () => {
-    const header = ['noi_dung_goc', 'nhan_cu', 'nhan_sua', 'trang_thai', 'nguoi_gui', 'thoi_gian'];
-    const rows = filteredItems.map((item) => {
-      const profile = profiles[item.user_id] || {};
+  const handleExport = () => {
+    try {
+      setIsExporting(true);
 
-      return [
-        item.original_content || '',
-        labelText(item.old_ai_label),
-        labelText(item.corrected_label),
-        STATUS_LABEL[normalizeStatus(item.status)],
-        profile.email || item.user_id || '',
-        item.created_at || '',
-      ];
-    });
+      const header = ['noi_dung_goc', 'nhan_he_thong', 'nhan_nguoi_dung_sua', 'trang_thai', 'nguoi_gui', 'thoi_gian'];
+      const rows = filteredItems.map((item) => {
+        const profile = profiles[item.user_id] || {};
+        return [
+          item.original_content || '',
+          item.old_ai_label ?? '',
+          item.corrected_label ?? '',
+          STATUS_LABEL[normalizeStatus(item.status)],
+          profile.email || item.user_id || '',
+          item.created_at || '',
+        ];
+      });
 
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `feedback-data-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+      const csv = [header, ...rows]
+        .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `phobert_retrain_dataset_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Xuất Dataset CSV thành công!', {
+        id: 'admin-feedback-export-success',
+      });
+    } catch (error) {
+      console.error('Lỗi xuất Dataset CSV:', error);
+      toast.error('Không thể xuất Dataset CSV.', {
+        id: 'admin-feedback-export-error',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // ====== Giao diện badge nhãn - giữ nguyên 100% từ file 1 ======
+  const getLabelBadge = (labelValue) => {
+    if (labelValue === null || labelValue === undefined) {
+      return <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-slate-500/10 text-slate-400 border-slate-500/20">Chưa có nhãn</span>;
+    }
+
+    if (Number(labelValue) === 1) {
+      return (
+        <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+          Tích cực (1)
+        </span>
+      );
+    }
+
+    if (Number(labelValue) === 0) {
+      return (
+        <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-rose-500/10 text-rose-400 border-rose-500/20">
+          Tiêu cực (0)
+        </span>
+      );
+    }
+
+    return (
+      <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-orange-500/10 text-orange-400 border-orange-500/20">
+        Khác ({labelValue})
+      </span>
+    );
+  };
+
+  // Badge trạng thái - style đồng bộ với getLabelBadge của file 1
+  const getStatusBadge = (status) => {
+    const normalized = normalizeStatus(status);
+    const classMap = {
+      pending: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      rejected: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    };
+
+    return (
+      <span className={`px-2.5 py-1 text-xs rounded-full font-medium border ${classMap[normalized]}`}>
+        {STATUS_LABEL[normalized]}
+      </span>
+    );
   };
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className={`text-3xl font-black ${theme.text}`}>Quản lý phản hồi</h1>
-          <p className={`mt-2 text-sm ${theme.muted}`}>
-            Theo dõi các đính chính của người dùng và quyết định phản hồi nào được ghi nhận.
-          </p>
+    <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-wide text-white">Quản lý Phản hồi</h1>
+          <p className="text-sm text-slate-400">Duyệt các nhãn người dùng chỉnh sửa để cải thiện bộ dữ liệu.</p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex items-center gap-3">
           <button
-            type="button"
             onClick={loadFeedback}
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition ${theme.buttonGhost}`}
+            disabled={isLoading}
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-700"
+            title="Làm mới"
           >
-            <RefreshCcw className="h-4 w-4" />
-            Làm mới dữ liệu
+            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
           </button>
+
           <button
-            type="button"
-            onClick={exportCsv}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-950/40 transition hover:bg-indigo-500"
+            onClick={handleExport}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Download className="h-4 w-4" />
-            Xuất Dataset CSV
+            {isExporting ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />}
+            <span>Xuất Dataset CSV</span>
           </button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard theme={theme} label="Tổng phản hồi" value={stats.total} />
-        <StatCard theme={theme} label="Chờ xử lý" value={stats.pending} tone="indigo" />
-        <StatCard theme={theme} label="Đã duyệt" value={stats.approved} tone="green" />
-        <StatCard theme={theme} label="Đã từ chối" value={stats.rejected} tone="rose" />
+      {/* ====== Thẻ thống kê - chức năng từ file Feedback (Supabase), style đồng bộ giao diện file 1 ====== */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tổng phản hồi</h3>
+          <p className="mt-4 text-4xl font-bold text-white">{isLoading ? '...' : stats.total}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Chờ xử lý</h3>
+          <p className="mt-4 text-4xl font-bold text-amber-400">{isLoading ? '...' : stats.pending}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Đã duyệt</h3>
+          <p className="mt-4 text-4xl font-bold text-emerald-400">{isLoading ? '...' : stats.approved}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Đã từ chối</h3>
+          <p className="mt-4 text-4xl font-bold text-rose-400">{isLoading ? '...' : stats.rejected}</p>
+        </div>
       </div>
 
-      <div className={`rounded-2xl border shadow-2xl ${theme.card}`}>
-        <div className="flex flex-col gap-3 border-b border-slate-700/60 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-md">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm theo nội dung, email hoặc tên người gửi..."
-              className={`w-full rounded-xl border py-3 pl-11 pr-4 text-sm outline-none transition ${theme.input}`}
-            />
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur-md overflow-hidden">
+        {/* ====== Thanh lọc - giữ icon Filter từ file 1, mở rộng thêm search + select để giữ chức năng lọc/tìm kiếm ====== */}
+        <div className="flex flex-col gap-3 px-5 py-3 border-b border-slate-700/50 bg-slate-900/30 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Filter size={16} />
+            <span>{isLoading ? 'Đang tải...' : `${filteredItems.length} phản hồi`}</span>
           </div>
 
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className={`rounded-xl border px-4 py-3 text-sm font-bold outline-none transition ${theme.input}`}
-          >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="pending">Chờ duyệt</option>
-            <option value="approved">Đã duyệt</option>
-            <option value="rejected">Đã từ chối</option>
-          </select>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm theo nội dung, email, tên..."
+                className="w-full sm:w-64 rounded-lg border border-slate-700 bg-slate-900 py-1.5 pl-8 pr-3 text-xs text-white placeholder:text-slate-500 outline-none focus:border-indigo-500"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 outline-none focus:border-indigo-500"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="approved">Đã duyệt</option>
+              <option value="rejected">Đã từ chối</option>
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1050px] border-collapse">
-            <thead className={`border-b ${theme.tableHead}`}>
-              <tr>
-                <Th theme={theme}>Nội dung gốc</Th>
-                <Th theme={theme}>Nhãn cũ</Th>
-                <Th theme={theme}>Nhãn người dùng sửa</Th>
-                <Th theme={theme}>Người gửi</Th>
-                <Th theme={theme}>Trạng thái</Th>
-                <Th theme={theme} align="right">Hành động</Th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-700/50 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <th className="px-5 py-4 w-[35%]">Nội dung gốc</th>
+                <th className="px-5 py-4">Nhãn hệ thống</th>
+                <th className="px-5 py-4">Nhãn người dùng sửa</th>
+                <th className="px-5 py-4">Người gửi</th>
+                <th className="px-5 py-4">Trạng thái</th>
+                <th className="px-5 py-4 text-right">Hành động</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${theme.tableDivide}`}>
-              {loading ? (
-                Array.from({ length: 4 }).map((_, index) => (
+            <tbody className="divide-y divide-slate-700/50">
+              {isLoading ? (
+                Array(5).fill(0).map((_, index) => (
                   <tr key={index}>
-                    <td className="px-5 py-5" colSpan={6}>
-                      <div className="h-16 animate-pulse rounded-xl bg-slate-500/20" />
+                    <td className="px-5 py-4">
+                      <div className="w-3/4 h-4 bg-slate-700/50 rounded animate-pulse mb-2" />
+                      <div className="w-1/2 h-4 bg-slate-700/50 rounded animate-pulse" />
+                    </td>
+                    <td className="px-5 py-4"><div className="w-20 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
+                    <td className="px-5 py-4"><div className="w-20 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
+                    <td className="px-5 py-4"><div className="w-24 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
+                    <td className="px-5 py-4"><div className="w-16 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <div className="w-8 h-8 bg-slate-700/50 rounded animate-pulse" />
+                        <div className="w-8 h-8 bg-slate-700/50 rounded animate-pulse" />
+                      </div>
                     </td>
                   </tr>
                 ))
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td className={`px-5 py-14 text-center text-sm ${theme.muted}`} colSpan={6}>
+                  <td colSpan="6" className="px-5 py-12 text-center text-slate-500 text-sm">
                     Không có phản hồi nào phù hợp.
                   </td>
                 </tr>
               ) : (
                 filteredItems.map((item) => {
                   const profile = profiles[item.user_id] || {};
-                  const status = normalizeStatus(item.status);
                   const disabled = updatingId === item.id;
 
                   return (
-                    <tr key={item.id} className={`transition ${theme.rowHover}`}>
-                      <td className="max-w-md px-5 py-5">
-                        <p className={`line-clamp-3 text-sm font-semibold leading-6 ${theme.text}`}>
-                          {item.original_content || 'Không có nội dung'}
-                        </p>
-                        <p className={`mt-2 text-xs ${theme.faint}`}>
-                          {item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : 'Chưa có thời gian'}
+                    <tr key={item.id} className="hover:bg-slate-800/30 transition-colors group">
+                      <td className="px-5 py-4 text-sm text-slate-300">
+                        <p className="line-clamp-2" title={item.original_content}>
+                          {item.original_content}
                         </p>
                       </td>
-                      <td className="px-5 py-5">
-                        <span className={Number(item.old_ai_label) === 1 ? 'text-emerald-400' : 'text-rose-400'}>
-                          {labelText(item.old_ai_label)}
-                        </span>
+                      <td className="px-5 py-4">{getLabelBadge(item.old_ai_label)}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          {item.old_ai_label !== item.corrected_label && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500" title="Người dùng đã sửa nhãn" />
+                          )}
+                          {getLabelBadge(item.corrected_label)}
+                        </div>
                       </td>
-                      <td className="px-5 py-5">
-                        <span className={Number(item.corrected_label) === 1 ? 'text-emerald-400' : 'text-rose-400'}>
-                          {labelText(item.corrected_label)}
-                        </span>
+                      <td className="px-5 py-4 text-sm">
+                        <p className="text-slate-200 font-medium truncate max-w-[160px]">{profile.full_name || 'Người dùng'}</p>
+                        <p className="text-xs text-slate-500 truncate max-w-[160px]">{profile.email || item.user_id || 'Không rõ'}</p>
                       </td>
-                      <td className="px-5 py-5">
-                        <p className={`text-sm font-bold ${theme.text}`}>{profile.full_name || 'Người dùng'}</p>
-                        <p className={`mt-1 text-xs ${theme.faint}`}>{profile.email || item.user_id || 'Không rõ'}</p>
-                      </td>
-                      <td className="px-5 py-5">
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${
-                            STATUS_CLASS[status] || STATUS_CLASS.pending
-                          }`}
-                        >
-                          {STATUS_LABEL[status] || STATUS_LABEL.pending}
-                        </span>
-                      </td>
-                      <td className="px-5 py-5 text-right">
-                        <div className="flex justify-end gap-2">
+                      <td className="px-5 py-4">{getStatusBadge(item.status)}</td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex justify-end items-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                           <button
-                            type="button"
+                            onClick={() => handleReview(item, 'approve')}
                             disabled={disabled}
-                            onClick={() => updateStatus(item, 'approved')}
-                            className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-black text-emerald-400 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex items-center justify-center w-8 h-8 rounded text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Duyệt"
                           >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Duyệt
+                            <CheckCircle2 size={20} />
                           </button>
                           <button
-                            type="button"
+                            onClick={() => handleReview(item, 'reject')}
                             disabled={disabled}
-                            onClick={() => updateStatus(item, 'rejected')}
-                            className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-black text-rose-400 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Từ chối"
                           >
-                            <XCircle className="h-4 w-4" />
-                            Từ chối
+                            <XCircle size={20} />
                           </button>
                         </div>
                       </td>
@@ -329,6 +369,8 @@ export default function AdminFeedback() {
           </table>
         </div>
       </div>
-    </section>
+    </div>
   );
-}
+};
+
+export default AdminFeedback;

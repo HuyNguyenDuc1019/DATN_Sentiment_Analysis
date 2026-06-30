@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Activity, MessageSquare, RefreshCcw, ShieldCheck, Users } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Activity, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
+
+// ====== Chức năng dữ liệu giữ nguyên từ file Dashboard (Supabase) ======
 
 const emptyStats = {
   apiCalls: 0,
@@ -30,15 +41,16 @@ function getPositiveRate(reviews) {
   return Math.round((positive / reviews.length) * 100);
 }
 
-export default function AdminDashboard() {
+const AdminDashboard = () => {
   const { theme = fallbackTheme } = useOutletContext() || {};
+
   const [stats, setStats] = useState(emptyStats);
-  const [weeklyData, setWeeklyData] = useState([]);
+  const [weeklyData, setWeeklyData] = useState([]); // { key, label, total }
   const [recentUsers, setRecentUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setIsLoading(true);
 
     try {
       const since = new Date();
@@ -100,7 +112,7 @@ export default function AdminDashboard() {
         id: 'admin-dashboard-load-error',
       });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
@@ -108,127 +120,205 @@ export default function AdminDashboard() {
     loadData();
   }, [loadData]);
 
-  const maxWeekly = useMemo(() => Math.max(1, ...weeklyData.map((item) => item.total)), [weeklyData]);
+  // Chuyển weeklyData (key/label/total) sang định dạng chartData mà AreaChart của file 1 cần (date/api_calls)
+  const chartData = useMemo(
+    () => weeklyData.map((item) => ({ date: item.key, api_calls: item.total })),
+    [weeklyData]
+  );
+
+  // ====== Cấu hình thẻ chỉ số - giữ nguyên 100% từ file 1 (cardConfig) ======
+  const cardConfig = [
+    {
+      title: 'Tổng phản hồi đã xử lý',
+      value: stats.apiCalls,
+      icon: <Activity className="h-5 w-5 text-indigo-400" />,
+      formatter: formatNumber,
+    },
+    {
+      title: 'Tổng người dùng',
+      value: stats.users,
+      icon: <Users className="h-5 w-5 text-indigo-400" />,
+      formatter: formatNumber,
+    },
+    {
+      title: 'Phản hồi chờ xử lý',
+      value: stats.pendingFeedback,
+      icon: <MessageSquare className="h-5 w-5 text-indigo-400" />,
+      formatter: formatNumber,
+    },
+    {
+      title: 'Tỉ lệ tích cực',
+      value: stats.positiveRate,
+      icon: <TrendingUp className="h-5 w-5 text-indigo-400" />,
+      formatter: (value) => `${Number(value || 0).toFixed(0)}%`,
+    },
+  ];
 
   return (
-    <section className="space-y-6">
-      <PageHeader
-        theme={theme}
-        title="Tổng quan hệ thống"
-        description="Theo dõi các chỉ số quan trọng của toàn bộ hệ thống."
-        onRefresh={loadData}
-        loading={loading}
-      />
-
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard theme={theme} icon={Activity} label="Tổng phản hồi đã xử lý" value={formatNumber(stats.apiCalls)} />
-        <StatCard theme={theme} icon={Users} label="Tổng người dùng" value={formatNumber(stats.users)} />
-        <StatCard theme={theme} icon={MessageSquare} label="Phản hồi chờ xử lý" value={formatNumber(stats.pendingFeedback)} />
-        <StatCard theme={theme} icon={ShieldCheck} label="Tỉ lệ tích cực" value={`${stats.positiveRate}%`} />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <Panel
-          theme={theme}
-          title="Lưu lượng phản hồi 7 ngày qua"
-          description="Số phản hồi được ghi nhận theo từng ngày."
+    <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-wide text-white">Tổng quan hệ thống</h1>
+          <p className="text-sm text-slate-400">Theo dõi các chỉ số quan trọng của toàn bộ hệ thống.</p>
+        </div>
+        {/* Nút làm mới - giữ chức năng refresh từ file Dashboard (Supabase) */}
+        <button
+          type="button"
+          onClick={loadData}
+          disabled={isLoading}
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-60 md:mt-0"
         >
-          <div className="flex h-64 items-end gap-3 border-b border-l border-dashed border-slate-500/60 px-6 pb-0">
-            {weeklyData.map((item) => (
-              <div key={item.key} className="flex flex-1 flex-col items-center gap-2">
-                <div
-                  className="w-full rounded-t-lg bg-indigo-500 transition-all"
-                  style={{ height: `${Math.max(8, (item.total / maxWeekly) * 210)}px` }}
-                  title={`${item.label}: ${item.total}`}
-                />
-                <span className={`text-xs font-semibold ${theme.muted}`}>{item.label}</span>
+          <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          Làm mới dữ liệu
+        </button>
+      </div>
+
+      {/* ====== Thẻ chỉ số - giao diện giữ nguyên 100% từ file 1 ====== */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {isLoading ? (
+          Array(4).fill(0).map((_, index) => (
+            <div key={index} className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+              <div className="flex items-center justify-between">
+                <div className="w-24 h-4 bg-slate-700 rounded animate-pulse" />
+                <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
               </div>
-            ))}
-          </div>
-        </Panel>
+              <div className="mt-4">
+                <div className="w-32 h-10 bg-slate-700 rounded animate-pulse" />
+              </div>
+            </div>
+          ))
+        ) : (
+          cardConfig.map((card, index) => (
+            <div key={index} className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md transition-colors hover:bg-slate-800">
+              <div className="flex items-start justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{card.title}</h3>
+                {card.icon}
+              </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-4xl font-bold text-white">{card.formatter(card.value)}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
 
-        <Panel theme={theme} title="Người dùng mới gần đây" description="6 tài khoản mới nhất trong bảng profiles.">
-          <div className="space-y-3">
-            {recentUsers.length ? (
-              recentUsers.map((item) => (
-                <div key={item.id} className={`rounded-xl border p-4 ${theme.cardSoft}`}>
-                  <p className={`truncate font-bold ${theme.text}`}>{item.full_name || item.email || 'Chưa có tên'}</p>
-                  <p className={`mt-1 truncate text-sm ${theme.muted}`}>{item.email || '-'}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge tone={String(item.role).toLowerCase() === 'admin' ? 'green' : 'blue'}>
-                      {String(item.role).toLowerCase() === 'admin' ? 'Admin' : 'Người dùng'}
-                    </Badge>
-                    <Badge>{item.status || 'active'}</Badge>
-                    <Badge>{item.tier || 'free'}</Badge>
-                  </div>
+      {/* ====== Biểu đồ AreaChart - giao diện giữ nguyên 100% từ file 1 ====== */}
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+        <h3 className="mb-2 text-sm font-medium text-slate-200">Lưu lượng phản hồi 7 ngày qua</h3>
+        <p className="mb-6 text-xs text-slate-500">Số phản hồi được ghi nhận theo từng ngày.</p>
+
+        <div className="h-64 w-full">
+          {isLoading ? (
+            <div className="w-full h-full relative overflow-hidden flex items-end pb-8 px-8 gap-4 justify-between">
+              <div className="absolute inset-0 flex flex-col justify-between py-8">
+                {Array(5).fill(0).map((_, index) => (
+                  <div key={index} className="w-full h-px bg-slate-700/50" />
+                ))}
+              </div>
+              {[40, 70, 45, 90, 65, 30, 80].map((height, index) => (
+                <div
+                  key={index}
+                  className="w-full bg-slate-700/50 rounded-t-sm animate-pulse z-10"
+                  style={{ height: `${height}%`, animationDelay: `${index * 0.1}s` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="colorApiCalls" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  stroke="#94a3b8"
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => {
+                    const date = new Date(value);
+                    return Number.isNaN(date.getTime()) ? value : `${date.getDate()}/${date.getMonth() + 1}`;
+                  }}
+                />
+                <YAxis
+                  stroke="#94a3b8"
+                  tick={{ fontSize: 12 }}
+                  allowDecimals={false}
+                  tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: 12,
+                    color: '#e2e8f0',
+                  }}
+                  labelStyle={{ color: '#f8fafc' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="api_calls"
+                  name="Phản hồi"
+                  stroke="#818cf8"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#colorApiCalls)"
+                  activeDot={{ r: 6, fill: '#818cf8', stroke: '#0f172a', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* ====== Danh sách người dùng mới - chức năng giữ từ file Dashboard (Supabase), style theo file 1 ====== */}
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+        <h3 className="mb-2 text-sm font-medium text-slate-200">Người dùng mới gần đây</h3>
+        <p className="mb-6 text-xs text-slate-500">6 tài khoản mới nhất trong bảng profiles.</p>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {isLoading ? (
+            Array(6).fill(0).map((_, index) => (
+              <div key={index} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                <div className="w-32 h-4 bg-slate-700 rounded animate-pulse" />
+                <div className="mt-2 w-24 h-3 bg-slate-700 rounded animate-pulse" />
+              </div>
+            ))
+          ) : recentUsers.length ? (
+            recentUsers.map((item) => (
+              <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                <p className="truncate font-bold text-white">{item.full_name || item.email || 'Chưa có tên'}</p>
+                <p className="mt-1 truncate text-sm text-slate-400">{item.email || '-'}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${
+                      String(item.role).toLowerCase() === 'admin'
+                        ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'
+                        : 'bg-indigo-500/15 text-indigo-300 ring-indigo-500/30'
+                    }`}
+                  >
+                    {String(item.role).toLowerCase() === 'admin' ? 'Admin' : 'Người dùng'}
+                  </span>
+                  <span className="rounded-full bg-slate-500/15 px-2.5 py-1 text-xs font-bold text-slate-300 ring-1 ring-slate-500/30">
+                    {item.status || 'active'}
+                  </span>
+                  <span className="rounded-full bg-slate-500/15 px-2.5 py-1 text-xs font-bold text-slate-300 ring-1 ring-slate-500/30">
+                    {item.tier || 'free'}
+                  </span>
                 </div>
-              ))
-            ) : (
-              <EmptyText theme={theme}>Chưa có người dùng nào.</EmptyText>
-            )}
-          </div>
-        </Panel>
+              </div>
+            ))
+          ) : (
+            <p className="col-span-full rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
+              Chưa có người dùng nào.
+            </p>
+          )}
+        </div>
       </div>
-    </section>
-  );
-}
-
-function PageHeader({ theme, title, description, onRefresh, loading }) {
-  return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className={`text-3xl font-black ${theme.text}`}>{title}</h1>
-        <p className={`mt-2 text-sm ${theme.muted}`}>{description}</p>
-      </div>
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={loading}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-60"
-      >
-        <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        Làm mới dữ liệu
-      </button>
     </div>
   );
-}
+};
 
-function StatCard({ theme, icon: Icon, label, value }) {
-  return (
-    <div className={`rounded-2xl border p-6 shadow-xl ${theme.card}`}>
-      <div className="mb-7 flex items-center justify-between">
-        <p className={`text-xs font-black uppercase tracking-wide ${theme.muted}`}>{label}</p>
-        <Icon className="h-5 w-5 text-indigo-500" />
-      </div>
-      <p className={`text-4xl font-black ${theme.text}`}>{value}</p>
-    </div>
-  );
-}
-
-function Panel({ theme, title, description, children }) {
-  return (
-    <div className={`rounded-2xl border p-6 shadow-xl ${theme.card}`}>
-      <h2 className={`font-black ${theme.text}`}>{title}</h2>
-      {description && <p className={`mt-2 text-sm ${theme.muted}`}>{description}</p>}
-      <div className="mt-6">{children}</div>
-    </div>
-  );
-}
-
-function Badge({ children, tone = 'slate' }) {
-  const className = {
-    slate: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
-    green: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
-    blue: 'bg-indigo-500/15 text-indigo-300 ring-indigo-500/30',
-  }[tone];
-
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${className}`}>{children}</span>;
-}
-
-function EmptyText({ theme, children }) {
-  return (
-    <p className={`rounded-xl border border-dashed p-6 text-center text-sm ${theme.muted}`}>
-      {children}
-    </p>
-  );
-}
+export default AdminDashboard;

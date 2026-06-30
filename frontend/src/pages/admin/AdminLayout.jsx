@@ -1,137 +1,167 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
-import { ArrowLeft, BarChart3, MessageSquare, Moon, Sparkles, Sun, Users } from 'lucide-react';
-import { useUserProfile } from '../../hooks/useUserProfile';
+﻿import React, { useEffect, useState } from 'react';
+import { Outlet, NavLink, Link } from 'react-router-dom';
+import { LayoutDashboard, MessageSquare, Users, Settings, Menu, X, Sparkles, ArrowLeft } from 'lucide-react';
+import { getAdminRoleLabel, getDisplayInitials } from './adminHelpers';
 
-const navItems = [
-  { to: '/admin/dashboard', label: 'Bảng điều khiển', icon: BarChart3 },
-  { to: '/admin/feedback', label: 'Quản lý phản hồi', icon: MessageSquare },
-  { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
-];
-
-const themes = {
-  dark: {
-    app: 'bg-slate-950 text-slate-100',
-    sidebar: 'border-slate-800 bg-slate-950',
-    logo: 'text-white',
-    navBase: 'bg-slate-900/70 text-slate-300 hover:bg-slate-800 hover:text-white',
-    navActive: 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30',
-    header: 'border-slate-800 bg-slate-950',
-    main: 'bg-slate-950',
-    card: 'border-slate-700 bg-slate-900/80 shadow-slate-950/30',
-    cardSoft: 'border-slate-700 bg-slate-950/70',
-    text: 'text-white',
-    muted: 'text-slate-400',
-    faint: 'text-slate-500',
-    input: 'border-slate-700 bg-slate-950 text-white placeholder:text-slate-500 focus:border-indigo-500',
-    tableHead: 'border-slate-800 bg-slate-950/70 text-slate-400',
-    tableDivide: 'divide-slate-800',
-    rowHover: 'hover:bg-slate-800/60',
-    buttonGhost: 'border-slate-700 bg-slate-900 text-slate-200 hover:border-indigo-400 hover:text-white',
-    avatar: 'border-slate-700 bg-slate-800 text-white',
-  },
-  light: {
-    app: 'bg-[#eef5ff] text-slate-900',
-    sidebar: 'border-slate-200 bg-white/85 shadow-xl shadow-slate-200/70',
-    logo: 'text-slate-950',
-    navBase: 'bg-white text-slate-700 shadow-sm hover:bg-indigo-50 hover:text-indigo-700',
-    navActive: 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30',
-    header: 'border-slate-200 bg-white/80 shadow-sm shadow-slate-200/80',
-    main: 'bg-[#eef5ff]',
-    card: 'border-slate-200 bg-white shadow-xl shadow-slate-200/70',
-    cardSoft: 'border-slate-200 bg-slate-50',
-    text: 'text-slate-950',
-    muted: 'text-slate-600',
-    faint: 'text-slate-500',
-    input: 'border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 focus:border-indigo-500',
-    tableHead: 'border-slate-200 bg-slate-50 text-slate-500',
-    tableDivide: 'divide-slate-200',
-    rowHover: 'hover:bg-indigo-50/70',
-    buttonGhost: 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:text-indigo-700',
-    avatar: 'border-slate-300 bg-indigo-50 text-indigo-700',
-  },
-};
-
-export default function AdminLayout() {
-  const { fullName, initials, roleLabel } = useUserProfile();
-  const [mode, setMode] = useState(() => localStorage.getItem('admin-theme') || 'dark');
-  const isDark = mode === 'dark';
-  const theme = themes[mode] || themes.dark;
+const AdminLayout = () => {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [adminProfile, setAdminProfile] = useState({
+    full_name: 'Admin User',
+    email: '',
+    role: 'admin',
+    avatar_url: '',
+  });
 
   useEffect(() => {
-    localStorage.setItem('admin-theme', mode);
-  }, [mode]);
+    let isMounted = true;
 
-  const outletContext = useMemo(() => ({ isDark, theme }), [isDark, theme]);
+    const loadAdminProfile = async () => {
+      try {
+        const { supabase } = await import('../../services/supabaseClient');
+        const { data: authData } = await supabase.auth.getUser();
+        const user = authData?.user;
+
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name,email,avatar_url,role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (isMounted) {
+          setAdminProfile({
+            full_name: profile?.full_name || user.user_metadata?.full_name || user.email || 'Admin User',
+            email: profile?.email || user.email || '',
+            role: profile?.role || 'admin',
+            avatar_url: profile?.avatar_url || '',
+          });
+        }
+      } catch {
+        if (isMounted) {
+          setAdminProfile((prev) => ({
+            ...prev,
+            full_name: localStorage.getItem('fullName') || localStorage.getItem('full_name') || prev.full_name,
+            email: localStorage.getItem('email') || prev.email,
+            role: localStorage.getItem('role') || prev.role,
+          }));
+        }
+      }
+    };
+
+    loadAdminProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const initials = getDisplayInitials(adminProfile.full_name, adminProfile.email);
+
+  const getLinkClass = ({ isActive }) => isActive
+    ? 'flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-600 text-white font-medium transition-colors'
+    : 'flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors';
 
   return (
-    <div className={`flex h-screen overflow-hidden transition-colors duration-300 ${theme.app}`}>
-      <aside className={`flex w-64 shrink-0 flex-col border-r p-4 transition-colors duration-300 ${theme.sidebar}`}>
-        <div className="mb-8 flex items-center gap-3 px-2">
-          <Sparkles className="h-7 w-7 text-indigo-500" fill="currentColor" />
-          <span className={`text-xl font-black ${theme.logo}`}>Almotion</span>
+    <div className="flex h-screen bg-slate-900 text-white font-sans overflow-hidden">
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 flex-shrink-0 flex flex-col h-full bg-[#0f172a] border-r border-slate-800 transition-transform duration-300 ease-in-out
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:static'}
+        `}
+      >
+        <div className="flex items-center justify-between px-6 py-8">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-6 h-6 text-indigo-400" fill="currentColor" />
+            <span className="text-white text-xl font-bold tracking-wide">Almotion</span>
+          </div>
+          <button
+            className="lg:hidden text-slate-400 hover:text-white"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <nav className="space-y-2">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition ${
-                  isActive ? theme.navActive : theme.navBase
-                }`
-              }
-            >
-              <Icon className="h-5 w-5 shrink-0" />
-              <span className="truncate">{label}</span>
-            </NavLink>
-          ))}
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
+          <NavLink to="/admin/dashboard" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
+            <LayoutDashboard className="w-5 h-5" />Bảng điều khiển
+          </NavLink>
+          <NavLink to="/admin/feedback" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
+            <MessageSquare className="w-5 h-5" />Quản lý Phản hồi
+          </NavLink>
+          <NavLink to="/admin/users" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
+            <Users className="w-5 h-5" />Quản lý Người dùng
+          </NavLink>
+          <NavLink to="/admin/settings" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
+            <Settings className="w-5 h-5" />Cài đặt lõi
+          </NavLink>
         </nav>
 
-        <div className="mt-auto space-y-3">
-          <Link
-            to="/dashboard"
-            className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Về trang khách
+        <div className="px-4 pb-4 space-y-1">
+          <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors">
+            <ArrowLeft className="w-5 h-5" />Về trang khách
           </Link>
-
-          <div className={`rounded-xl border p-4 transition-colors duration-300 ${theme.card}`}>
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-black text-white">
-                {initials || 'AD'}
-              </div>
-              <div className="min-w-0">
-                <p className={`truncate text-sm font-black ${theme.text}`}>{fullName || 'Admin User'}</p>
-                <p className={`text-xs font-semibold ${theme.muted}`}>{roleLabel || 'Quản trị viên'}</p>
-              </div>
-            </div>
-          </div>
         </div>
+
+        <Link to="/admin/profile" className="p-4 mx-4 mb-6 mt-2 rounded-xl border border-slate-800 flex items-center gap-3 hover:bg-slate-800/50 transition-colors cursor-pointer">
+          <div className="w-10 h-10 flex-shrink-0 rounded-full bg-indigo-600 overflow-hidden flex items-center justify-center text-white font-semibold text-sm">
+            {adminProfile.avatar_url ? (
+              <img src={adminProfile.avatar_url} alt={adminProfile.full_name} className="h-full w-full object-cover" />
+            ) : (
+              initials
+            )}
+          </div>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-white text-sm font-medium" title={adminProfile.full_name}>
+              {adminProfile.full_name}
+            </span>
+            <span className="truncate text-slate-500 text-xs" title={adminProfile.email || getAdminRoleLabel(adminProfile.role)}>
+              {getAdminRoleLabel(adminProfile.role)}
+            </span>
+          </div>
+        </Link>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className={`flex h-20 items-center justify-end gap-3 border-b px-8 transition-colors duration-300 ${theme.header}`}>
-          <button
-            type="button"
-            onClick={() => setMode((current) => (current === 'dark' ? 'light' : 'dark'))}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${theme.buttonGhost}`}
-            title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
-          >
-            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </button>
+      <div className="flex flex-col flex-1 min-w-0">
+        <header className="h-20 flex-shrink-0 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between px-8">
+          <div className="flex items-center gap-3">
+            <button
+              className="text-slate-400 hover:text-white lg:hidden"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="font-medium text-slate-200 lg:hidden">Menu Admin</span>
+          </div>
 
-          <div className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-black ${theme.avatar}`}>
-            {initials || 'AD'}
+          <div className="flex items-center gap-5 ml-auto">
+            <Link
+              to="/admin/profile"
+              title="Mở hồ sơ quản trị viên"
+              className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 overflow-hidden flex items-center justify-center text-slate-300 font-semibold text-xs cursor-pointer hover:border-indigo-400 transition-colors"
+            >
+              {adminProfile.avatar_url ? (
+                <img src={adminProfile.avatar_url} alt={adminProfile.full_name} className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </Link>
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${theme.main}`}>
-          <Outlet context={outletContext} />
+        <main className="flex-1 overflow-y-auto bg-slate-900">
+          <Outlet />
         </main>
       </div>
     </div>
   );
-}
+};
+
+export default AdminLayout;

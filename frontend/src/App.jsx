@@ -18,6 +18,7 @@ import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminFeedback from './pages/admin/AdminFeedback';
 import AdminUsers from './pages/admin/AdminUsers';
+import AdminSettings from './pages/admin/AdminSettings';
 
 function App() {
   return (
@@ -29,15 +30,16 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          <Route path="/admin" element={<AdminProtectedRoute />}>
-            <Route element={<AdminLayout />}>
-              <Route index element={<Navigate to="/admin/dashboard" replace />} />
-              <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="feedback" element={<AdminFeedback />} />
-              <Route path="users" element={<AdminUsers />} />
-            </Route>
-          </Route>
-
+         <Route path="/admin" element={<AdminProtectedRoute />}>
+  <Route element={<AdminLayout />}>
+    <Route index element={<Navigate to="/admin/dashboard" replace />} />
+    <Route path="dashboard" element={<AdminDashboard />} />
+    <Route path="feedback" element={<AdminFeedback />} />
+    <Route path="users" element={<AdminUsers />} />
+    <Route path="settings" element={<AdminSettings />} />
+    <Route path="profile" element={<Profile />} />  {/* 👈 thêm dòng này */}
+  </Route>
+</Route>
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />

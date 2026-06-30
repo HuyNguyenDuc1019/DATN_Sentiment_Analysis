@@ -1,19 +1,41 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+const WINDOW_SIZE = 3;
+
+/**
+ * Dải số luôn bắt đầu TỪ trang hiện tại (không ghim số 1 cố định).
+ * Ví dụ totalPages = 100:
+ *   page = 1 -> 1 2 3 ... 100
+ *   page = 2 -> 2 3 4 ... 100
+ *   page = 4 -> 4 5 6 ... 100
+ * Bấm vào bất kỳ số nào trong dải sẽ chuyển trang đó thành điểm bắt đầu mới.
+ */
 function getPageItems(currentPage, totalPages) {
-  if (totalPages <= 5) {
+  if (totalPages <= WINDOW_SIZE + 1) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
   }
 
-  if (currentPage <= 2) {
-    return [1, 2, 3, 'dots-right', totalPages];
+  let start = currentPage;
+  let end = Math.min(start + WINDOW_SIZE - 1, totalPages);
+
+  // Gần cuối: kéo lùi điểm bắt đầu để vẫn đủ WINDOW_SIZE số (nếu còn đủ trang)
+  if (end - start + 1 < WINDOW_SIZE) {
+    start = Math.max(1, end - WINDOW_SIZE + 1);
   }
 
-  if (currentPage >= totalPages - 1) {
-    return [1, 'dots-left', totalPages - 2, totalPages - 1, totalPages];
+  const items = [];
+  for (let page = start; page <= end; page += 1) {
+    items.push(page);
   }
 
-  return [1, 'dots-left', currentPage - 1, currentPage, currentPage + 1, 'dots-right', totalPages];
+  if (end < totalPages - 1) {
+    items.push('dots-right');
+    items.push(totalPages);
+  } else if (end < totalPages) {
+    items.push(totalPages);
+  }
+
+  return items;
 }
 
 export default function Pagination({ page, totalPages, onPageChange, className = '' }) {

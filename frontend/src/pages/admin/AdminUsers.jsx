@@ -1,220 +1,248 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { RefreshCcw, Search, Save } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Ban, Crown, RefreshCw, Search, ShieldAlert, ShieldCheck, Unlock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
 
-const roleOptions = ['user', 'admin'];
-const statusOptions = ['active', 'blocked'];
-const tierOptions = ['free', 'vip'];
-
-const fallbackTheme = {
-  card: 'border-slate-700 bg-slate-900/80 shadow-slate-950/30',
-  text: 'text-white',
-  muted: 'text-slate-400',
-  input: 'border-slate-700 bg-slate-950 text-white placeholder:text-slate-500 focus:border-indigo-500',
-  tableHead: 'border-slate-800 bg-slate-950/70 text-slate-400',
-  tableDivide: 'divide-slate-800',
-  rowHover: 'hover:bg-slate-800/60',
-  buttonGhost: 'border-slate-700 bg-slate-900 text-slate-200 hover:border-indigo-400 hover:text-white',
-};
-
-export default function AdminUsers() {
-  const { theme = fallbackTheme } = useOutletContext() || {};
+const AdminUsers = () => {
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
+  // ====== Chức năng dữ liệu giữ từ file Users (Supabase) - thay cho fetch ADMIN_API_BASE ======
+  const fetchUsers = async () => {
     try {
+      setIsLoading(true);
+
       const { data, error } = await supabase
         .from('profiles')
-        .select('id,email,full_name,avatar_url,role,status,tier,created_at')
+        .select('id,email,full_name,role,status,tier,created_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setUsers(data || []);
     } catch (error) {
-      console.error('Load admin users failed:', error);
+      console.error('Lỗi tải users admin:', error);
       toast.error('Không thể tải danh sách người dùng từ máy chủ.', {
         id: 'admin-users-load-error',
       });
+      setUsers([]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
-
-  const filteredUsers = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (!keyword) return users;
-
-    return users.filter((item) =>
-      [item.email, item.full_name, item.role, item.status, item.tier]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(keyword)),
-    );
-  }, [search, users]);
-
-  const updateLocalUser = (id, field, value) => {
-    setUsers((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
-  const saveUser = async (item) => {
-    setSavingId(item.id);
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // ====== Tìm kiếm - giữ nguyên 100% từ file 1 ======
+  const filteredUsers = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    if (!keyword) return users;
+
+    return users.filter((user) =>
+      [user.email, user.full_name, user.role, user.status, user.tier]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword))
+    );
+  }, [searchTerm, users]);
+
+  // Thao tác (ban/unban/upgrade/downgrade) - ghi trực tiếp vào bảng profiles trên Supabase
+  const handleAction = async (targetUser, action) => {
+    setProcessingId(targetUser.id);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: item.full_name || null,
-          role: item.role || 'user',
-          status: item.status || 'active',
-          tier: item.tier || 'free',
-        })
-        .eq('id', item.id);
+      const updatePayload =
+        action === 'ban'
+          ? { status: 'blocked' }
+          : action === 'unban'
+            ? { status: 'active' }
+            : action === 'upgrade_vip'
+              ? { tier: 'vip' }
+              : { tier: 'free' }; // downgrade_vip
+
+      const { error } = await supabase.from('profiles').update(updatePayload).eq('id', targetUser.id);
 
       if (error) throw error;
-      toast.success('Đã cập nhật tài khoản.', {
-        id: `admin-users-save-${item.id}`,
+
+      setUsers((current) =>
+        current.map((user) => (user.id === targetUser.id ? { ...user, ...updatePayload } : user))
+      );
+      toast.success('Thao tác thành công!', {
+        id: `admin-user-action-${targetUser.id}-${action}`,
       });
     } catch (error) {
-      console.error('Save user failed:', error);
-      toast.error('Không thể lưu thay đổi tài khoản.', {
-        id: `admin-users-save-error-${item.id}`,
+      console.error('Lỗi thao tác user:', error);
+      toast.error('Có lỗi xảy ra khi thực hiện thao tác.', {
+        id: `admin-user-action-error-${action}`,
       });
     } finally {
-      setSavingId('');
+      setProcessingId(null);
     }
+  };
+
+  // ====== Badge - giữ nguyên 100% từ file 1 ======
+  const getStatusBadge = (status) => {
+    const isActive = status === 'active';
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium border ${
+        isActive
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+      }`}>
+        {isActive ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
+        {isActive ? 'Hoạt động' : 'Bị khóa'}
+      </span>
+    );
+  };
+
+  const getTierBadge = (tier) => {
+    const safeTier = tier?.toLowerCase() || 'free';
+    const isVIP = safeTier === 'vip';
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium border ${
+        isVIP
+          ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+          : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+      }`}>
+        {isVIP && <Crown size={12} />}
+        {isVIP ? 'VIP' : 'Free'}
+      </span>
+    );
   };
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className={`text-3xl font-black ${theme.text}`}>Quản lý người dùng</h1>
-          <p className={`mt-2 text-sm ${theme.muted}`}>Quản trị tài khoản, phân quyền và gói dịch vụ.</p>
+    <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-wide text-white">Quản lý Người dùng</h1>
+          <p className="text-sm text-slate-400">Quản trị tài khoản, phân quyền và nâng cấp dịch vụ.</p>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <label className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm email, tên, vai trò..."
-              className={`h-11 w-full rounded-xl border pl-10 pr-4 text-sm font-semibold outline-none transition sm:w-80 ${theme.input}`}
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Tìm email..."
+              className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-500"
             />
-          </label>
+          </div>
           <button
-            type="button"
-            onClick={loadUsers}
-            disabled={loading}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition disabled:opacity-60 ${theme.buttonGhost}`}
+            onClick={fetchUsers}
+            disabled={isLoading}
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-700 shrink-0"
+            title="Làm mới"
           >
-            <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
+            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      <div className={`overflow-hidden rounded-2xl border shadow-xl ${theme.card}`}>
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur-md overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className={`border-b text-xs uppercase tracking-wide ${theme.tableHead}`}>
-              <tr>
-                <th className="px-5 py-4">Tài khoản</th>
-                <th className="px-5 py-4">Họ tên</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-700/50 text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-900/30">
+                <th className="px-5 py-4">Tài khoản (Email)</th>
                 <th className="px-5 py-4">Vai trò</th>
                 <th className="px-5 py-4">Trạng thái</th>
                 <th className="px-5 py-4">Gói dịch vụ</th>
                 <th className="px-5 py-4 text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${theme.tableDivide}`}>
-              {filteredUsers.length ? (
-                filteredUsers.map((item) => (
-                  <tr key={item.id} className={`align-middle transition ${theme.rowHover}`}>
-                    <td className="px-5 py-4">
-                      <p className={`font-bold ${theme.text}`}>{item.email || '-'}</p>
-                      <p className={`mt-1 max-w-[260px] truncate text-xs ${theme.muted}`}>{item.id}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <input
-                        value={item.full_name || ''}
-                        onChange={(event) => updateLocalUser(item.id, 'full_name', event.target.value)}
-                        className={`h-10 w-full rounded-lg border px-3 text-sm font-semibold outline-none ${theme.input}`}
-                        placeholder="Chưa có tên"
-                      />
-                    </td>
-                    <td className="px-5 py-4">
-                      <Select
-                        theme={theme}
-                        value={item.role || 'user'}
-                        options={roleOptions}
-                        onChange={(value) => updateLocalUser(item.id, 'role', value)}
-                      />
-                    </td>
-                    <td className="px-5 py-4">
-                      <Select
-                        theme={theme}
-                        value={item.status || 'active'}
-                        options={statusOptions}
-                        onChange={(value) => updateLocalUser(item.id, 'status', value)}
-                      />
-                    </td>
-                    <td className="px-5 py-4">
-                      <Select
-                        theme={theme}
-                        value={item.tier || 'free'}
-                        options={tierOptions}
-                        onChange={(value) => updateLocalUser(item.id, 'tier', value)}
-                      />
-                    </td>
+            <tbody className="divide-y divide-slate-700/50">
+              {isLoading ? (
+                Array(4).fill(0).map((_, index) => (
+                  <tr key={index}>
+                    <td className="px-5 py-4"><div className="w-40 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
+                    <td className="px-5 py-4"><div className="w-16 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
+                    <td className="px-5 py-4"><div className="w-24 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
+                    <td className="px-5 py-4"><div className="w-16 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
                     <td className="px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => saveUser(item)}
-                        disabled={savingId === item.id}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-indigo-500 disabled:opacity-60"
-                      >
-                        <Save className="h-4 w-4" />
-                        {savingId === item.id ? 'Đang lưu...' : 'Lưu'}
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <div className="w-8 h-8 bg-slate-700/50 rounded animate-pulse" />
+                        <div className="w-8 h-8 bg-slate-700/50 rounded animate-pulse" />
+                      </div>
                     </td>
                   </tr>
                 ))
-              ) : (
+              ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className={`px-5 py-16 text-center ${theme.muted}`}>
-                    {loading ? 'Đang tải danh sách người dùng...' : 'Không có người dùng phù hợp.'}
+                  <td colSpan="5" className="px-5 py-12 text-center text-slate-500 text-sm">
+                    Không có người dùng phù hợp.
                   </td>
                 </tr>
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-800/30 transition-colors group">
+                    <td className="px-5 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm text-slate-300 font-medium">{user.email || user.full_name || 'Chưa có email'}</span>
+                        <span className="text-xs text-slate-500 mt-0.5 font-mono" title={user.id}>
+                          ID: {String(user.id || '').substring(0, 8)}...
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="text-sm text-slate-400 capitalize">{user.role || 'user'}</span>
+                    </td>
+                    <td className="px-5 py-4">{getStatusBadge(user.status)}</td>
+                    <td className="px-5 py-4">{getTierBadge(user.tier)}</td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                        {user.status === 'active' ? (
+                          <button
+                            onClick={() => handleAction(user, 'ban')}
+                            disabled={processingId === user.id || user.role === 'admin'}
+                            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed tooltip-trigger"
+                            title={user.role === 'admin' ? 'Không thể khóa Admin' : 'Khóa tài khoản'}
+                          >
+                            <Ban size={18} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleAction(user, 'unban')}
+                            disabled={processingId === user.id}
+                            className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed tooltip-trigger"
+                            title="Mở khóa tài khoản"
+                          >
+                            <Unlock size={18} />
+                          </button>
+                        )}
+
+                        {(!user.tier || user.tier.toLowerCase() !== 'vip') ? (
+                          <button
+                            onClick={() => handleAction(user, 'upgrade_vip')}
+                            disabled={processingId === user.id || user.status !== 'active'}
+                            className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed tooltip-trigger"
+                            title="Nâng cấp lên VIP"
+                          >
+                            <Crown size={18} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleAction(user, 'downgrade_vip')}
+                            disabled={processingId === user.id}
+                            className="p-1.5 text-indigo-400 hover:text-slate-400 hover:bg-slate-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed tooltip-trigger"
+                            title="Hạ xuống gói Free"
+                          >
+                            <Crown size={18} fill="currentColor" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </div>
-    </section>
+    </div>
   );
-}
+};
 
-function Select({ theme, value, options, onChange }) {
-  return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className={`h-10 w-full rounded-lg border px-3 text-sm font-bold outline-none ${theme.input}`}
-    >
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
-  );
-}
+export default AdminUsers;
