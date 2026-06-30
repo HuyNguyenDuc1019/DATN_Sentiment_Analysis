@@ -21,8 +21,22 @@ const toastStyle = {
   fontWeight: 500,
 }
 
+function formatToastMessage(message) {
+  if (!message) return 'Có thông báo mới.';
+  if (typeof message === 'string') return message;
+  if (message.message) return String(message.message);
+  if (message.detail) return String(message.detail);
+  if (message.error) return String(message.error);
+
+  try {
+    return JSON.stringify(message);
+  } catch {
+    return 'Có thông báo mới.';
+  }
+}
+
 window.alert = (message) => {
-  toast(String(message || 'Có thông báo mới.'), {
+  toast(formatToastMessage(message), {
     duration: 4200,
     style: toastStyle,
   })

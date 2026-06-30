@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Mail, Sparkles } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import toast from 'react-hot-toast';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -13,7 +14,7 @@ export default function ForgotPassword() {
     const normalizedEmail = email.trim();
 
     if (!normalizedEmail) {
-      window.alert('Vui lòng nhập email để nhận liên kết đặt lại mật khẩu.');
+      toast.error('Vui lòng nhập email để nhận liên kết đặt lại mật khẩu.');
       return;
     }
 
@@ -24,9 +25,9 @@ export default function ForgotPassword() {
       });
       if (error) throw error;
       setSent(true);
-      window.alert('Đã gửi liên kết đặt lại mật khẩu. Vui lòng kiểm tra hộp thư email.');
+      toast.success('Đã gửi liên kết đặt lại mật khẩu. Vui lòng kiểm tra hộp thư email.');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message || 'Không thể gửi liên kết đặt lại mật khẩu.');
     } finally {
       setLoading(false);
     }

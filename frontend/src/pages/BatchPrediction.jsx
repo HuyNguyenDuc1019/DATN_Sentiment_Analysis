@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   CloudUpload,
   Download,
   Filter,
@@ -14,6 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTasks } from '../contexts/TaskContext';
+import Pagination from '../components/ui/Pagination';
 
 export default function BatchPredictionContent() {
   const inputRef = useRef(null);
@@ -66,8 +65,7 @@ export default function BatchPredictionContent() {
             hasFile={Boolean(file)}
             page={page}
             totalPages={totalPages}
-            onPrev={() => setPage((current) => Math.max(1, current - 1))}
-            onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onPageChange={setPage}
           />
         </div>
       </div>
@@ -184,7 +182,7 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
   );
 }
 
-function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, onPrev, onNext }) {
+function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, onPageChange }) {
   if (loading) {
     return (
       <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col h-full">
@@ -268,19 +266,11 @@ function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, on
         </table>
       </div>
 
-      <div className="pt-4 border-t border-slate-700 mt-4 flex items-center justify-between text-sm text-slate-400">
-        <div>Hiển thị {tableData.length} trên tổng {total} phản hồi</div>
-        <div className="flex items-center gap-1">
-          <button onClick={onPrev} disabled={page <= 1} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-700 text-white font-medium border border-slate-600">
-            {page}
-          </button>
-          <button onClick={onNext} disabled={page >= totalPages} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
-            <ChevronRight className="w-4 h-4" />
-          </button>
+      <div className="pt-4 border-t border-slate-700 mt-4 flex flex-col gap-3 text-sm text-slate-400 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          Hiển thị {tableData.length} trên tổng {total} phản hồi · Trang {page}/{totalPages}
         </div>
+        <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
       </div>
     </div>
   );

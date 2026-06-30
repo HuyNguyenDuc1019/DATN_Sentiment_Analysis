@@ -8,6 +8,7 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import { useTasks } from '../contexts/TaskContext';
+import Pagination from '../components/ui/Pagination';
 
 export default function UrlAnalyzerContent() {
   const { urlAnalyzer } = useTasks();
@@ -171,17 +172,11 @@ export default function UrlAnalyzerContent() {
             <p className="py-8 text-center text-slate-500">Chưa có dữ liệu phản hồi.</p>
           )}
           {!loading && visible.length > 0 && (
-            <div className="flex items-center justify-between border-t border-slate-700 pt-4 text-sm text-slate-400">
-              <span>Hiển thị {pagedVisible.length} trên tổng {visible.length} phản hồi</span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="rounded-lg border border-slate-700 px-3 py-1.5 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
-                  Trước
-                </button>
-                <span className="rounded-lg bg-slate-700 px-3 py-1.5 text-white">{page}/{totalPages}</span>
-                <button onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-700 px-3 py-1.5 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
-                  Sau
-                </button>
-              </div>
+            <div className="flex flex-col gap-3 border-t border-slate-700 pt-4 text-sm text-slate-400 xl:flex-row xl:items-center xl:justify-between">
+              <span>
+                Hiển thị {pagedVisible.length} trên tổng {visible.length} phản hồi · Trang {page}/{totalPages}
+              </span>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
           )}
         </div>
