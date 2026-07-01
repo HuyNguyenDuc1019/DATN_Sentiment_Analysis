@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'; // Bổ sung useRef
 import { Save, RefreshCw, Sliders, HardDrive, BrainCircuit, BookA, BellRing, Tags, Plus, Trash2, AlertTriangle, RotateCcw, Download, Upload } from 'lucide-react'; // Bổ sung Download, Upload
 import toast from 'react-hot-toast';
+import { supabase } from '../../services/supabaseClient';
 
 const DEFAULT_SETTINGS = {
   ai_threshold: 0.5,
@@ -30,7 +31,15 @@ const AdminSettings = () => {
     const fetchSettings = async () => {
       try {
         setIsLoading(true);
-        const adminId = localStorage.getItem('userId');
+        // Lấy ID người dùng trực tiếp từ hệ thống bảo mật của Supabase
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !authData?.user) {
+          // Nếu chưa đăng nhập, đá văng ra trang login (tuỳ chọn) hoặc báo lỗi
+          throw new Error("Không tìm thấy thông tin đăng nhập (Supabase Session rỗng)!");
+        }
+
+        const adminId = authData.user.id;
         const res = await fetch(`http://localhost:8000/api/admin/settings?admin_id=${adminId}`);
         if (!res.ok) throw new Error('Lỗi từ phía máy chủ');
         const data = await res.json();

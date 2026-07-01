@@ -2,6 +2,7 @@
 import { Outlet, NavLink, Link } from 'react-router-dom';
 import { LayoutDashboard, MessageSquare, Users, Settings, Menu, X, Sparkles, ArrowLeft } from 'lucide-react';
 import { getAdminRoleLabel, getDisplayInitials } from './adminHelpers';
+import Footer from '../../components/layout/Footer';
 
 const AdminLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -156,8 +157,11 @@ const AdminLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-slate-900">
-          <Outlet />
+      <main className="flex-1 overflow-y-auto bg-slate-900">
+          <div className="flex flex-col min-h-full">
+            <Outlet />
+            <Footer />
+          </div>
         </main>
       </div>
     </div>
