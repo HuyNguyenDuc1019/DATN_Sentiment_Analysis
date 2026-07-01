@@ -26,8 +26,14 @@ const AdminFeedback = () => {
   const loadFeedback = useCallback(async () => {
     setIsLoading(true);
     try {
-      const adminId = localStorage.getItem('userId');
-      if (!adminId) throw new Error("Không tìm thấy thông tin đăng nhập!");
+      // Lấy ID người dùng trực tiếp từ hệ thống bảo mật của Supabase (Thay vì localStorage)
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !authData?.user) {
+        throw new Error("Không tìm thấy thông tin đăng nhập (Phiên hết hạn)!");
+      }
+
+      const adminId = authData.user.id;
 
       const res = await fetch(`http://localhost:8000/api/admin/feedback?admin_id=${adminId}`);
       if (!res.ok) throw new Error('Lỗi server');

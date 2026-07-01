@@ -9,20 +9,23 @@ const AdminUsers = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
 
-// ====== Chức năng dữ liệu ĐÃ ĐƯỢC BỌC ÁO GIÁP ======
+// ====== Chức năng dữ liệu ĐÃ ĐƯỢC BỌC ÁO GIÁP & ĐỒNG BỘ SUPABASE ======
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
       console.log("1. Bắt đầu gọi API lấy danh sách...");
 
-      const adminId = localStorage.getItem('userId');
-      console.log("2. Admin ID đang dùng:", adminId);
+      // Lấy ID người dùng trực tiếp từ hệ thống bảo mật của Supabase (Thay vì localStorage)
+      const { data: authData, error: authError } = await supabase.auth.getUser();
 
-      if (!adminId) {
-         toast.error("Không tìm thấy thông tin đăng nhập!");
-         setIsLoading(false); // Đảm bảo tắt loading nếu thiếu ID
+      if (authError || !authData?.user) {
+         toast.error("Không tìm thấy thông tin đăng nhập (Phiên hết hạn)!");
+         setIsLoading(false);
          return;
       }
+
+      const adminId = authData.user.id;
+      console.log("2. Admin ID đang dùng:", adminId);
 
       const res = await fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`);
       console.log("3. Trạng thái Backend trả về:", res.status);
