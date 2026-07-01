@@ -77,8 +77,15 @@ const AdminUsers = () => {
   const handleAction = async (targetUser, action) => {
     setProcessingId(targetUser.id);
     try {
-      const adminId = localStorage.getItem('userId');
-      if (!adminId) throw new Error("Không tìm thấy thông tin đăng nhập!");
+      // Lấy ID người dùng trực tiếp từ hệ thống bảo mật của Supabase
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !authData?.user) {
+        // Nếu chưa đăng nhập, đá văng ra trang login (tuỳ chọn) hoặc báo lỗi
+        throw new Error("Không tìm thấy thông tin đăng nhập (Supabase Session rỗng)!");
+      }
+
+      const adminId = authData.user.id;
 
       // 1. Gọi API Backend thay vì chọc thẳng DB
       const res = await fetch(`http://localhost:8000/api/admin/users/action`, {
