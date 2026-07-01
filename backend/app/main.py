@@ -14,7 +14,8 @@ from collections import defaultdict
 from fastapi.responses import StreamingResponse
 import io
 import csv
-
+from datetime import datetime, timedelta
+from fastapi import HTTPException as FastAPIHTTPException
 app = FastAPI(
     title="Foody Sentiment Analysis API",
     description="API phân loại cảm xúc bình luận tiếng Việt sử dụng PhoBERT",
@@ -567,3 +568,252 @@ async def get_admin_metrics_chart(admin_id: str, days: int = 7):
         return {"chart_data": chart_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/admin/metrics/sentiment-chart")
+async def get_admin_sentiment_chart(admin_id: str, days: int = 7):
+    from collections import defaultdict
+    from datetime import datetime, timedelta, timezone
+    from fastapi import HTTPException as FastAPIHTTPException
+
+    try:
+        safe_days = max(int(days), 1)
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=safe_days - 1)
+
+        response = (
+            supabase
+            .table("scraped_reviews")
+            .select("ai_label, created_at")
+            .gte("created_at", start_date.isoformat())
+            .lte("created_at", end_date.isoformat())
+            .execute()
+        )
+
+        rows = response.data or []
+
+        grouped = defaultdict(lambda: {
+            "positive": 0,
+            "negative": 0,
+            "total": 0,
+        })
+
+        for index in range(safe_days):
+            day = (start_date + timedelta(days=index)).date().isoformat()
+            grouped[day]
+
+        for row in rows:
+            created_at = row.get("created_at")
+            if not created_at:
+                continue
+
+            date_key = str(created_at)[:10]
+            label = row.get("ai_label")
+
+            if int(label or 0) == 1:
+                grouped[date_key]["positive"] += 1
+            else:
+                grouped[date_key]["negative"] += 1
+
+            grouped[date_key]["total"] += 1
+
+        chart_data = [
+            {
+                "date": date,
+                "positive": values["positive"],
+                "negative": values["negative"],
+                "total": values["total"],
+            }
+            for date, values in sorted(grouped.items())
+        ]
+
+        return {
+            "chart_data": chart_data,
+        }
+
+    except Exception as error:
+        raise FastAPIHTTPException(status_code=500, detail=str(error))
+    
+
+@app.get("/api/admin/activity-logs")
+async def get_admin_activity_logs(admin_id: str, limit: int = 8):
+ 
+    def safe_date(value):
+        if not value:
+            return ""
+        return str(value)
+ 
+    def short_text(value, max_len=90):
+        text = str(value or "").strip()
+        if len(text) <= max_len:
+            return text
+        return text[:max_len].rstrip() + "..."
+ 
+    def build_time_value(value):
+        raw = safe_date(value)
+        if not raw:
+            return ""
+        return raw
+ 
+    def fetch_user_name_map(user_ids):
+        """Lấy tên hiển thị (full_name -> email -> ẩn danh) cho một danh sách user_id."""
+        name_map = {}
+        clean_ids = [uid for uid in set(user_ids) if uid]
+ 
+        if not clean_ids:
+            return name_map
+ 
+        profiles_res = (
+            supabase
+            .table("profiles")
+            .select("id, full_name, email")
+            .in_("id", clean_ids)
+            .execute()
+        )
+ 
+        for profile in profiles_res.data or []:
+            name_map[profile.get("id")] = (
+                profile.get("full_name")
+                or profile.get("email")
+                or "Người dùng ẩn danh"
+            )
+ 
+        return name_map
+ 
+    try:
+        safe_limit = max(1, min(int(limit or 8), 20))
+        activities = []
+ 
+        # ====== 1) Phản hồi vừa được chỉnh nhãn ======
+        feedback_res = (
+            supabase
+            .table("feedback_data")
+            .select("id, original_content, corrected_label, created_at, user_id")
+            .order("created_at", desc=True)
+            .limit(safe_limit)
+            .execute()
+        )
+ 
+        feedback_rows = feedback_res.data or []
+        feedback_user_map = fetch_user_name_map(
+            row.get("user_id") for row in feedback_rows
+        )
+ 
+        for item in feedback_rows:
+            label = "Tích cực" if int(item.get("corrected_label") or 0) == 1 else "Tiêu cực"
+            user_name = feedback_user_map.get(item.get("user_id"), "Người dùng ẩn danh")
+            activities.append({
+                "id": f"feedback-{item.get('id')}",
+                "type": "feedback",
+                "title": "Có phản hồi vừa được chỉnh nhãn",
+                "description": f"{user_name} đã chỉnh một phản hồi thành {label}: {short_text(item.get('original_content'))}",
+                "created_at": build_time_value(item.get("created_at")),
+            })
+ 
+        # ====== 2) Tài khoản mới ======
+        users_res = (
+            supabase
+            .table("profiles")
+            .select("id, email, full_name, role, tier, created_at")
+            .order("created_at", desc=True)
+            .limit(safe_limit)
+            .execute()
+        )
+ 
+        for item in users_res.data or []:
+            name = item.get("full_name") or item.get("email") or "Một tài khoản"
+            tier = item.get("tier") or "free"
+            role = item.get("role") or "user"
+            activities.append({
+                "id": f"user-{item.get('id')}",
+                "type": "user",
+                "title": "Tài khoản mới được ghi nhận",
+                "description": f"{name} đang ở vai trò {role}, gói dịch vụ {tier}.",
+                "created_at": build_time_value(item.get("created_at")),
+            })
+ 
+        # ====== 3) Phản hồi được cào/nhập theo lô (URL / CSV) ======
+        # Lấy thêm user_id để biết CHÍNH XÁC ai là người thực hiện cào link / import file,
+        # thay vì chỉ ghi chung chung "Hệ thống vừa ghi nhận phản hồi".
+        recent_reviews_res = (
+            supabase
+            .table("scraped_reviews")
+            .select("id, source_url, created_at, user_id")
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+ 
+        recent_review_rows = recent_reviews_res.data or []
+        review_user_map = fetch_user_name_map(
+            row.get("user_id") for row in recent_review_rows
+        )
+ 
+        # Gộp theo (nguồn + người thực hiện + phút) để không lẫn hoạt động
+        # của 2 người dùng khác nhau cào cùng 1 nguồn vào cùng 1 thông báo.
+        source_groups = {}
+ 
+        for item in recent_review_rows:
+            source = item.get("source_url") or "Nguồn không xác định"
+            user_id = item.get("user_id")
+            created_at = build_time_value(item.get("created_at"))
+            minute_key = created_at[:16] if created_at else source
+            key = f"{source}-{user_id}-{minute_key}"
+ 
+            if key not in source_groups:
+                source_groups[key] = {
+                    "source_url": source,
+                    "user_id": user_id,
+                    "minute_key": minute_key,
+                    "created_at": created_at,
+                }
+ 
+        for key, group in source_groups.items():
+            minute_str = group["minute_key"]
+            actual_count = 0
+ 
+            if minute_str:
+                try:
+                    start_dt = datetime.fromisoformat(minute_str.replace("Z", ""))
+                    start_iso = start_dt.isoformat()
+                    end_iso = (start_dt + timedelta(minutes=1)).isoformat()
+ 
+                    count_query = (
+                        supabase
+                        .table("scraped_reviews")
+                        .select("id", count="exact", head=True)
+                        .eq("source_url", group["source_url"])
+                        .gte("created_at", start_iso)
+                        .lt("created_at", end_iso)
+                    )
+                    if group["user_id"]:
+                        count_query = count_query.eq("user_id", group["user_id"])
+ 
+                    count_res = count_query.execute()
+                    actual_count = count_res.count or 0
+                except ValueError:
+                    actual_count = 0
+ 
+            source_name = "CSV Upload" if group["source_url"] == "CSV_Upload" else "đường dẫn đã theo dõi"
+            user_name = review_user_map.get(group["user_id"], "Người dùng ẩn danh")
+ 
+            activities.append({
+                "id": f"reviews-{key}",
+                "type": "review",
+                "title": "Hệ thống vừa ghi nhận phản hồi",
+                "description": f"{user_name} vừa ghi nhận {actual_count} phản hồi từ {source_name}.",
+                "created_at": group["created_at"],
+            })
+ 
+        # ====== Gộp, sắp xếp theo thời gian mới nhất, và cắt theo limit ======
+        activities = sorted(
+            activities,
+            key=lambda item: item.get("created_at") or "",
+            reverse=True
+        )[:safe_limit]
+ 
+        return {
+            "activities": activities
+        }
+ 
+    except Exception as error:
+        raise FastAPIHTTPException(status_code=500, detail=str(error))

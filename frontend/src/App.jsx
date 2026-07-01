@@ -37,7 +37,7 @@ function App() {
     <Route path="feedback" element={<AdminFeedback />} />
     <Route path="users" element={<AdminUsers />} />
     <Route path="settings" element={<AdminSettings />} />
-    <Route path="profile" element={<Profile />} />  {/* 👈 thêm dòng này */}
+    <Route path="profile" element={<Profile />} />  
   </Route>
 </Route>
           <Route element={<ProtectedRoute />}>

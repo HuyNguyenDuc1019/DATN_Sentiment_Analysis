@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,9 +12,7 @@ import {
 import { Activity, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
-
-// ====== Chức năng dữ liệu giữ nguyên từ file Dashboard (Supabase) ======
-
+import AdminActivityLog from './AdminActivityLog';
 const emptyStats = {
   apiCalls: 0,
   users: 0,
@@ -35,51 +33,40 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString('vi-VN');
 }
 
-function getPositiveRate(reviews) {
-  if (!reviews.length) return 0;
-  const positive = reviews.filter((item) => Number(item.ai_label) === 1).length;
-  return Math.round((positive / reviews.length) * 100);
-}
-
 const AdminDashboard = () => {
   const { theme = fallbackTheme } = useOutletContext() || {};
 
   const [stats, setStats] = useState(emptyStats);
-  const [weeklyData, setWeeklyData] = useState([]); // { key, label, total }
+  const [weeklyData, setWeeklyData] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-// ====== HÀM LOAD DỮ LIỆU ĐÃ ĐƯỢC CHUYỂN QUA FASTAPI ======
   const loadData = useCallback(async () => {
     setIsLoading(true);
 
     try {
-// Lấy ID người dùng trực tiếp từ hệ thống bảo mật của Supabase
-const { data: authData, error: authError } = await supabase.auth.getUser();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
 
-if (authError || !authData?.user) {
-  // Nếu chưa đăng nhập, đá văng ra trang login (tuỳ chọn) hoặc báo lỗi
-  throw new Error("Không tìm thấy thông tin đăng nhập (Supabase Session rỗng)!");
-}
+      if (authError || !authData?.user) {
+        throw new Error('Không tìm thấy thông tin đăng nhập.');
+      }
 
-const adminId = authData.user.id;
+      const adminId = authData.user.id;
 
-      // Gọi 3 API Backend cùng lúc để lấy dữ liệu (Nhanh và an toàn tuyệt đối)
       const [metricsRes, chartRes, usersRes] = await Promise.all([
         fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
-        fetch(`http://localhost:8000/api/admin/metrics/chart?admin_id=${adminId}&days=7`),
-        fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`)
+        fetch(`http://localhost:8000/api/admin/metrics/sentiment-chart?admin_id=${adminId}&days=7`),
+        fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`),
       ]);
 
       if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
-        throw new Error('Lỗi server khi tải dữ liệu dashboard');
+        throw new Error('Lỗi server khi tải dữ liệu dashboard.');
       }
 
       const metricsData = await metricsRes.json();
       const chartDataResponse = await chartRes.json();
       const usersData = await usersRes.json();
 
-      // 1. Cập nhật 4 thẻ thống kê (Lấy số liệu Backend đã tính sẵn)
       setStats({
         apiCalls: metricsData.total_api_calls || 0,
         users: metricsData.total_users || 0,
@@ -87,20 +74,21 @@ const adminId = authData.user.id;
         positiveRate: metricsData.global_positive_ratio || 0,
       });
 
-      // 2. Cập nhật Biểu đồ (Map lại data từ Backend cho khớp định dạng của Recharts)
-      const formattedChartData = (chartDataResponse.chart_data || []).map(item => ({
+      const formattedChartData = (chartDataResponse.chart_data || []).map((item) => ({
         key: item.date,
         label: item.date,
-        total: item.api_calls
+        positive: Number(item.positive || item.positive_count || 0),
+        negative: Number(item.negative || item.negative_count || 0),
+        total: Number(item.total || item.api_calls || 0),
       }));
+
       setWeeklyData(formattedChartData);
 
-      // 3. Cập nhật Danh sách người dùng mới (Lấy 6 người tạo gần nhất)
       const recent = (usersData || [])
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 6);
-      setRecentUsers(recent);
 
+      setRecentUsers(recent);
     } catch (error) {
       console.error('Load admin dashboard failed:', error);
       toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
@@ -115,13 +103,16 @@ const adminId = authData.user.id;
     loadData();
   }, [loadData]);
 
-  // Chuyển weeklyData (key/label/total) sang định dạng chartData mà AreaChart của file 1 cần (date/api_calls)
   const chartData = useMemo(
-    () => weeklyData.map((item) => ({ date: item.key, api_calls: item.total })),
+    () =>
+      weeklyData.map((item) => ({
+        date: item.key,
+        positive: item.positive || 0,
+        negative: item.negative || 0,
+      })),
     [weeklyData]
   );
 
-  // ====== Cấu hình thẻ chỉ số - giữ nguyên 100% từ file 1 (cardConfig) ======
   const cardConfig = [
     {
       title: 'Tổng phản hồi đã xử lý',
@@ -154,9 +145,11 @@ const adminId = authData.user.id;
       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-wide text-white">Tổng quan hệ thống</h1>
-          <p className="text-sm text-slate-400">Theo dõi các chỉ số quan trọng của toàn bộ hệ thống.</p>
+          <p className="text-sm text-slate-400">
+            Theo dõi các chỉ số quan trọng của toàn bộ hệ thống.
+          </p>
         </div>
-        {/* Nút làm mới - giữ chức năng refresh từ file Dashboard (Supabase) */}
+
         <button
           type="button"
           onClick={loadData}
@@ -168,25 +161,34 @@ const adminId = authData.user.id;
         </button>
       </div>
 
-      {/* ====== Thẻ chỉ số - giao diện giữ nguyên 100% từ file 1 ====== */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
-          Array(4).fill(0).map((_, index) => (
-            <div key={index} className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
-              <div className="flex items-center justify-between">
-                <div className="w-24 h-4 bg-slate-700 rounded animate-pulse" />
-                <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
+          Array(4)
+            .fill(0)
+            .map((_, index) => (
+              <div
+                key={index}
+                className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-24 h-4 bg-slate-700 rounded animate-pulse" />
+                  <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
+                </div>
+                <div className="mt-4">
+                  <div className="w-32 h-10 bg-slate-700 rounded animate-pulse" />
+                </div>
               </div>
-              <div className="mt-4">
-                <div className="w-32 h-10 bg-slate-700 rounded animate-pulse" />
-              </div>
-            </div>
-          ))
+            ))
         ) : (
           cardConfig.map((card, index) => (
-            <div key={index} className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md transition-colors hover:bg-slate-800">
+            <div
+              key={index}
+              className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md transition-colors hover:bg-slate-800"
+            >
               <div className="flex items-start justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{card.title}</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  {card.title}
+                </h3>
                 {card.icon}
               </div>
               <div className="mt-4 flex items-end justify-between">
@@ -196,19 +198,23 @@ const adminId = authData.user.id;
           ))
         )}
       </div>
-
-      {/* ====== Biểu đồ AreaChart - giao diện giữ nguyên 100% từ file 1 ====== */}
       <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
-        <h3 className="mb-2 text-sm font-medium text-slate-200">Lưu lượng phản hồi 7 ngày qua</h3>
-        <p className="mb-6 text-xs text-slate-500">Số phản hồi được ghi nhận theo từng ngày.</p>
+        <h3 className="mb-2 text-sm font-medium text-slate-200">
+          Phân hóa phản hồi 7 ngày qua
+        </h3>
+        <p className="mb-6 text-xs text-slate-500">
+          Đường xanh là phản hồi tích cực, đường đỏ là phản hồi tiêu cực.
+        </p>
 
         <div className="h-64 w-full">
           {isLoading ? (
             <div className="w-full h-full relative overflow-hidden flex items-end pb-8 px-8 gap-4 justify-between">
               <div className="absolute inset-0 flex flex-col justify-between py-8">
-                {Array(5).fill(0).map((_, index) => (
-                  <div key={index} className="w-full h-px bg-slate-700/50" />
-                ))}
+                {Array(5)
+                  .fill(0)
+                  .map((_, index) => (
+                    <div key={index} className="w-full h-px bg-slate-700/50" />
+                  ))}
               </div>
               {[40, 70, 45, 90, 65, 30, 80].map((height, index) => (
                 <div
@@ -220,13 +226,7 @@ const adminId = authData.user.id;
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="colorApiCalls" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
                 <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
                 <XAxis
                   dataKey="date"
@@ -234,14 +234,16 @@ const adminId = authData.user.id;
                   tick={{ fontSize: 12 }}
                   tickFormatter={(value) => {
                     const date = new Date(value);
-                    return Number.isNaN(date.getTime()) ? value : `${date.getDate()}/${date.getMonth() + 1}`;
+                    return Number.isNaN(date.getTime())
+                      ? value
+                      : `${date.getDate()}/${date.getMonth() + 1}`;
                   }}
                 />
                 <YAxis
                   stroke="#94a3b8"
                   tick={{ fontSize: 12 }}
                   allowDecimals={false}
-                  tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
+                  tickFormatter={(value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value)}
                 />
                 <Tooltip
                   contentStyle={{
@@ -252,39 +254,52 @@ const adminId = authData.user.id;
                   }}
                   labelStyle={{ color: '#f8fafc' }}
                 />
-                <Area
+                <Line
                   type="monotone"
-                  dataKey="api_calls"
-                  name="Phản hồi"
-                  stroke="#818cf8"
+                  dataKey="positive"
+                  name="Tích cực"
+                  stroke="#10b981"
                   strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorApiCalls)"
-                  activeDot={{ r: 6, fill: '#818cf8', stroke: '#0f172a', strokeWidth: 2 }}
+                  dot={{ r: 4, fill: '#10b981' }}
+                  activeDot={{ r: 6, fill: '#10b981', stroke: '#0f172a', strokeWidth: 2 }}
                 />
-              </AreaChart>
+                <Line
+                  type="monotone"
+                  dataKey="negative"
+                  name="Tiêu cực"
+                  stroke="#f43f5e"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#f43f5e' }}
+                  activeDot={{ r: 6, fill: '#f43f5e', stroke: '#0f172a', strokeWidth: 2 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
-
-      {/* ====== Danh sách người dùng mới - chức năng giữ từ file Dashboard (Supabase), style theo file 1 ====== */}
+          <AdminActivityLog />
       <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
         <h3 className="mb-2 text-sm font-medium text-slate-200">Người dùng mới gần đây</h3>
-        <p className="mb-6 text-xs text-slate-500">6 tài khoản mới nhất trong bảng profiles.</p>
+        <p className="mb-6 text-xs text-slate-500">
+          6 tài khoản mới nhất trong bảng profiles.
+        </p>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {isLoading ? (
-            Array(6).fill(0).map((_, index) => (
-              <div key={index} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-                <div className="w-32 h-4 bg-slate-700 rounded animate-pulse" />
-                <div className="mt-2 w-24 h-3 bg-slate-700 rounded animate-pulse" />
-              </div>
-            ))
+            Array(6)
+              .fill(0)
+              .map((_, index) => (
+                <div key={index} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                  <div className="w-32 h-4 bg-slate-700 rounded animate-pulse" />
+                  <div className="mt-2 w-24 h-3 bg-slate-700 rounded animate-pulse" />
+                </div>
+              ))
           ) : recentUsers.length ? (
             recentUsers.map((item) => (
               <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-                <p className="truncate font-bold text-white">{item.full_name || item.email || 'Chưa có tên'}</p>
+                <p className="truncate font-bold text-white">
+                  {item.full_name || item.email || 'Chưa có tên'}
+                </p>
                 <p className="mt-1 truncate text-sm text-slate-400">{item.email || '-'}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span
