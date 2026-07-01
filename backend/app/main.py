@@ -50,37 +50,32 @@ async def load_model():
         print(f"❌ Lỗi khi tải mô hình: {e}")
 
 # =====================================================================
-# HÀM BÓC TÁCH KHÍA CẠNH & CẢNH BÁO ĐỎ (ACTION REQUIRED)
+# HÀM BÓC TÁCH KHÍA CẠNH & CẢNH BÁO ĐỎ (ĐÃ NÂNG CẤP DÙNG TỪ ĐIỂN ĐỘNG)
 # =====================================================================
-ASPECT_DICT = {
-    "Món ăn": ["mì cay", "trà sữa", "mặn", "nhạt", "nguội", "ngon", "dở", "sống", "cháy", "chua", "ngọt", "đậm đà", "vừa miệng", "đồ ăn", "nước lẩu", "thịt bò", "hải sản"],
-    "Dịch vụ": ["nhân viên", "bảo vệ", "quản lý", "thái độ", "chậm", "lâu", "nhiệt tình", "chửi", "phục vụ", "order", "lên món", "giao hàng"],
-    "Không gian": ["máy lạnh", "nóng", "bẩn", "dơ", "sạch", "chỗ để xe", "ồn ào", "rộng rãi", "thoáng mát", "nhà vệ sinh", "decor", "view"]
-}
-
-SENSITIVE_WORDS = ["ngộ độc", "đau bụng", "ruồi", "thái độ", "tẩy chay", "dị vật", "chửi", "tệ"]
-
-def extract_insights(text: str, ai_label: int):
+def extract_insights(text: str, ai_label: int, dynamic_aspects: dict, sensitive_words_str: str, crisis_enabled: bool):
     text_lower = text.lower()
     found_aspects = set()
     found_keywords = []
     is_action_required = False
     
-    # 1. Quét tìm khía cạnh và từ khóa
-    for aspect, keywords in ASPECT_DICT.items():
-        for kw in keywords:
-            if kw in text_lower:
-                found_aspects.add(aspect)
-                found_keywords.append(kw)
+    # Dịch chuỗi từ cấm (ngăn cách bởi dấu phẩy) thành mảng (List)
+    sensitive_words = [w.strip().lower() for w in sensitive_words_str.split(",") if w.strip()]
+    
+    # 1. Quét tìm khía cạnh theo từ điển động lấy từ Database
+    if isinstance(dynamic_aspects, dict):
+        for aspect, keywords in dynamic_aspects.items():
+            for kw in keywords:
+                kw_clean = kw.strip().lower()
+                if kw_clean and kw_clean in text_lower:
+                    found_aspects.add(aspect)
+                    found_keywords.append(kw_clean)
                 
-    # 2. Check cảnh báo đỏ (Chỉ bật khi AI dán nhãn 0 - Tiêu cực VÀ có từ nhạy cảm)
-    if ai_label == 0: 
-        if any(bad_word in text_lower for bad_word in SENSITIVE_WORDS):
+    # 2. Check cảnh báo đỏ (Chỉ bật khi Admin gạt nút xanh VÀ AI dán nhãn 0 VÀ có từ nhạy cảm)
+    if crisis_enabled and ai_label == 0: 
+        if any(bad_word in text_lower for bad_word in sensitive_words):
             is_action_required = True
             
-    # Ép kiểu set() về list() để Supabase chấp nhận dạng mảng (Array)
     return list(found_aspects), list(set(found_keywords)), is_action_required
-
 
 # =====================================================================
 # API 1: DỰ ĐOÁN 1 CÂU BÌNH LUẬN (TEST NHANH)
@@ -132,14 +127,43 @@ async def predict_batch(request: BatchPredictRequest):
     if predictor is None:
         raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")
         
+    # 1. NẠP CẤU HÌNH HỆ THỐNG TỪ DATABASE
+    try:
+        settings_res = supabase.table("system_settings").select("*").eq("id", 1).single().execute()
+        sys_settings = settings_res.data
+        dynamic_aspects = sys_settings.get("aspect_dictionary", {})
+        sensitive_words_str = sys_settings.get("custom_dictionary", "")
+        crisis_enabled = sys_settings.get("crisis_alert_enabled", True)
+        retention_days = sys_settings.get("data_retention_days", 30) # Lấy cấu hình số ngày dọn rác
+    except Exception as e:
+        print(f"⚠️ Lỗi khi tải cấu hình từ DB, dùng mặc định. Chi tiết: {e}")
+        dynamic_aspects = {}
+        sensitive_words_str = ""
+        crisis_enabled = True
+        retention_days = 30
+
+    # ==========================================
+    # 🧹 TÍNH NĂNG DỌN RÁC TỰ ĐỘNG (DATA RETENTION)
+    # ==========================================
+    try:
+        from datetime import datetime, timedelta
+        # Tính ra mốc thời gian quá khứ (Ví dụ: Ngày hiện tại trừ đi 30 ngày)
+        cutoff_date = (datetime.now() - timedelta(days=retention_days)).isoformat()
+        
+        # Lệnh dọn dẹp: Tìm những dòng của user này có ngày tạo nhỏ hơn mốc thời gian và xóa sạch
+        supabase.table("scraped_reviews").delete().eq("user_id", request.user_id).lt("created_at", cutoff_date).execute()
+        print(f"🧹 Đã dọn dẹp các dữ liệu cũ hơn {retention_days} ngày của user {request.user_id}.")
+    except Exception as cleanup_error:
+        print(f"⚠️ Lỗi khi dọn rác (không ảnh hưởng luồng chính): {cleanup_error}")
+
+    # ==========================================
+    # QUÁ TRÌNH PHÂN TÍCH AI (Giữ nguyên như cũ)
+    # ==========================================
     start_time = time.time()
-    
     all_reviews = request.reviews
     total_reviews = len(all_reviews)
     results = []
     db_records = []
-
-    # CHUNKING: Chia mảng lớn thành các mảng nhỏ (10 câu/lần) để chống văng RAM
     CHUNK_SIZE = 10 
 
     try:
@@ -150,13 +174,15 @@ async def predict_batch(request: BatchPredictRequest):
                 if not item.content.strip():
                     continue
                     
-                # 1. Gọi AI dự đoán
+                # Gọi AI dự đoán
                 pred_result = predictor.predict(item.content)
                 label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
                 confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
                 
-                # 2. Bóc tách thông tin nâng cao (Aspect-based & Action Required)
-                aspects, keywords, is_action = extract_insights(item.content, label)
+                # Bóc tách thông tin truyền cấu hình động vào
+                aspects, keywords, is_action = extract_insights(
+                    item.content, label, dynamic_aspects, sensitive_words_str, crisis_enabled
+                )
                 
                 results.append({
                     "text": item.content,
@@ -164,28 +190,31 @@ async def predict_batch(request: BatchPredictRequest):
                     "confidence": confidence
                 })
                 
-                # 3. Gom dữ liệu vào Record để Insert Database
+                # Gom dữ liệu vào Record
                 db_records.append({
                     "content": item.content, 
-                    "review_date": item.review_date,       # Ngày đăng
+                    "review_date": item.review_date,
                     "ai_label": label, 
                     "confidence": confidence,
-                    "aspects": aspects,                    # Mảng khía cạnh
-                    "keywords": keywords,                  # Mảng từ khóa
-                    "is_action_required": is_action,       # Cờ cảnh báo
+                    "aspects": aspects,
+                    "keywords": keywords,
+                    "is_action_required": is_action,
                     "user_id": request.user_id,
                     "source_url": request.source_url 
                 })
 
-        # Giai đoạn 4: Bắn hàng loạt vào bảng scraped_reviews
+        # Bắn hàng loạt vào bảng scraped_reviews
         if db_records:
             try:
                 supabase.table("scraped_reviews").insert(db_records).execute()
-                print(f"✅ Đã lưu thành công {len(db_records)} bình luận đầy đủ thông số vào Database!")
+                print(f"✅ Đã lưu thành công {len(db_records)} bình luận vào Database!")
             except Exception as db_error:
                 print(f"❌ Lỗi khi lưu vào Supabase: {str(db_error)}")
+                raise HTTPException(status_code=400, detail=f"Lỗi Database: {str(db_error)}")
                 
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình xử lý mảng: {str(e)}")
 
     end_time = time.time()
@@ -195,10 +224,8 @@ async def predict_batch(request: BatchPredictRequest):
         "results": results,
         "total_processed": len(results),
         "processing_time": f"{processing_time}s",
-        "message": "Phân tích và bóc tách dữ liệu thành công"
+        "message": "Phân tích và bóc tách dữ liệu thành công với cấu hình động!"
     }
-
-
 # =====================================================================
 # API 4: VÒNG LẶP PHẢN HỒI (HUMAN-IN-THE-LOOP)
 # =====================================================================
@@ -298,24 +325,29 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 # =====================================================================
-# DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
+# 1. DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
 # =====================================================================
 class AdminActionRequest(BaseModel):
     admin_id: str
     target_user_id: str
-    action: str
+    action: str  # ban, unban, upgrade_vip, downgrade_vip
 
 class AdminFeedbackReview(BaseModel):
     admin_id: str
-    feedback_id: str  # Theo DB của bạn id là kiểu UUID, nên để str ở đây là hoàn toàn chuẩn
-    action: str
+    feedback_id: str
+    action: str  # approve, reject
 
 class AdminSettingUpdate(BaseModel):
     admin_id: str
     ai_threshold: float
-    max_upload_size_free: int  
+    max_upload_size_free: int
+    custom_dictionary: str        
+    crisis_alert_enabled: bool 
+    aspect_dictionary: dict   
+    data_retention_days: int
+
 # =====================================================================
-# HÀM BẢO VỆ (TRẠM GÁC): KIỂM TRA QUYỀN ADMIN
+# 2. HÀM BẢO VỆ (TRẠM GÁC): KIỂM TRA QUYỀN ADMIN
 # =====================================================================
 def check_is_admin(user_id: str):
     try:
@@ -326,22 +358,12 @@ def check_is_admin(user_id: str):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail="Lỗi kiểm tra quyền truy cập.")
-# =====================================================================
-# API ADMIN: LẤY DANH SÁCH FEEDBACK CHỜ DUYỆT
-# =====================================================================
-@app.get("/api/admin/feedbacks")
-async def get_pending_feedbacks(admin_id: str):
-    check_is_admin(admin_id)
-    try:
-        # Lấy các feedback đang có status là 'pending'
-        res = supabase.table('feedback_data').select('*').eq('status', 'pending').execute()
-        return res.data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 # =====================================================================
-# API ADMIN: LẤY DANH SÁCH NGƯỜI DÙNG
+# 3. NHÓM API QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG (USER MANAGEMENT)
 # =====================================================================
+
+# API: Lấy danh sách toàn bộ người dùng
 @app.get("/api/admin/users")
 async def get_admin_users(admin_id: str):
     check_is_admin(admin_id)
@@ -351,85 +373,81 @@ async def get_admin_users(admin_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# =====================================================================
-# API ADMIN: LẤY CẤU HÌNH HỆ THỐNG HIỆN TẠI
-# =====================================================================
-@app.get("/api/admin/settings")
-async def get_system_settings(admin_id: str):
-    check_is_admin(admin_id)
-    try:
-        res = supabase.table('system_settings').select('*').eq('id', 1).execute()
-        if not res.data:
-            return {"ai_threshold": 0.75, "max_upload_size_free": 5} # Trả về mặc định nếu bảng trống
-        return res.data[0]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-# =====================================================================
-# API ADMIN 1: THỐNG KÊ TỔNG QUAN (SYSTEM METRICS)
-# =====================================================================
-@app.get("/api/admin/metrics")
-async def get_admin_metrics(admin_id: str):
-    check_is_admin(admin_id) # Bắt buộc phải qua trạm gác
-    
-    try:
-        reviews_res = supabase.table('scraped_reviews').select('ai_label', count='exact').execute()
-        users_res = supabase.table('profiles').select('id', count='exact').execute()
-        feedback_res = supabase.table('feedback_data').select('id', count='exact').eq('status', 'pending').execute()
-
-        data = reviews_res.data
-        total_reviews = len(data)
-        positive_count = sum(1 for item in data if item['ai_label'] == 1)
-        
-        return {
-            "total_api_calls": total_reviews,
-            "total_users": users_res.count if hasattr(users_res, 'count') else 0,
-            "pending_feedbacks": feedback_res.count if hasattr(feedback_res, 'count') else 0,
-            "global_positive_ratio": round((positive_count / total_reviews) * 100, 1) if total_reviews > 0 else 0
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# =====================================================================
-# API ADMIN 2: QUẢN LÝ NGƯỜI DÙNG (USER MANAGEMENT)
-# =====================================================================
+# API: Thay đổi trạng thái (Khóa/Mở khóa) hoặc Gói dịch vụ (VIP/Free)
 @app.put("/api/admin/users/action")
-async def manage_user_action(request: AdminActionRequest):
+async def update_user_action(request: AdminActionRequest):
     check_is_admin(request.admin_id)
     
+    # Dịch hành động (action) từ Frontend sang cấu trúc dữ liệu lưu vào DB
+    update_payload = {}
+    if request.action == "ban":
+        update_payload = {"status": "blocked"}  # Đồng bộ khớp với trạng thái blocked ở Frontend
+    elif request.action == "unban":
+        update_payload = {"status": "active"}   # Đồng bộ khớp với trạng thái active ở Frontend
+    elif request.action == "upgrade_vip":
+        update_payload = {"tier": "vip"}
+    elif request.action == "downgrade_vip":
+        update_payload = {"tier": "free"}
+    else:
+        raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
+
     try:
-        update_data = {}
-        if request.action == "ban":
-            update_data = {"status": "banned"}
-        elif request.action == "unban":
-            update_data = {"status": "active"}
-        elif request.action == "upgrade_vip":
-            update_data = {"tier": "vip"}
-            
-        supabase.table('profiles').update(update_data).eq('id', request.target_user_id).execute()
-        return {"status": "success", "message": f"Đã thực hiện thao tác {request.action} thành công."}
+        res = supabase.table('profiles').update(update_payload).eq('id', request.target_user_id).execute()
+        return {"status": "success", "message": f"Đã thực hiện thao tác {request.action} thành công.", "updated_data": res.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # =====================================================================
-# API ADMIN 3: DUYỆT DATA FEEDBACK & XUẤT CSV (MLOps)
+# 4. NHÓM API QUẢN LÝ PHẢN HỒI NHÃN & MLOps (FEEDBACK MANAGEMENT)
 # =====================================================================
+
+# API: Lấy danh sách phản hồi (Tối ưu kết hợp bảng để lấy thông tin Email, Tên hiển thị)
+@app.get("/api/admin/feedback")
+async def get_admin_feedbacks(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        # 1. Lấy toàn bộ phản hồi
+        feedback_res = supabase.table('feedback_data').select('*').order('created_at', desc=True).execute()
+        
+        # 2. Lấy toàn bộ user để lấy Email và Tên
+        profiles_res = supabase.table('profiles').select('id, email, full_name').execute()
+        
+        # 3. Biến danh sách user thành một cuốn từ điển để tìm kiếm cho nhanh
+        profiles_dict = {p['id']: p for p in profiles_res.data} if profiles_res.data else {}
+        
+        # 4. Gắn thông tin profile vào từng cái feedback
+        result = []
+        if feedback_res.data:
+            for item in feedback_res.data:
+                # Tạo ra một trường 'profiles' ảo để Frontend đọc được
+                item['profiles'] = profiles_dict.get(item.get('user_id'))
+                result.append(item)
+                
+        return result
+    except Exception as e:
+        # In lỗi ra Terminal để nếu có sai sót mình còn dễ bắt bệnh
+        print(f"⚠️ LỖI API FEEDBACK: {str(e)}") 
+        raise HTTPException(status_code=500, detail=str(e))
+
+# API: Duyệt hoặc từ chối nhãn hiệu chỉnh dữ liệu từ người dùng
 @app.put("/api/admin/feedback/review")
 async def review_feedback(request: AdminFeedbackReview):
     check_is_admin(request.admin_id)
     try:
         status = "approved" if request.action == "approve" else "rejected"
         supabase.table('feedback_data').update({"status": status}).eq('id', request.feedback_id).execute()
-        return {"status": "success", "message": f"Đã {status} mẫu dữ liệu này."}
+        return {"status": "success", "message": f"Đã thực hiện {status} mẫu dữ liệu này thành công."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# API: Xuất tập dữ liệu đã qua kiểm duyệt thành file CSV sạch để Re-train Model AI
 @app.get("/api/admin/dataset/export")
 async def export_retrain_dataset(admin_id: str):
     check_is_admin(admin_id)
     try:
         response = supabase.table('feedback_data').select('original_content, corrected_label').eq('status', 'approved').execute()
         if not response.data:
-            raise HTTPException(status_code=404, detail="Chưa có dữ liệu nào được duyệt để xuất.")
+            raise HTTPException(status_code=404, detail="Chưa có dữ liệu nào được duyệt để xuất bộ dữ liệu.")
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -448,71 +466,104 @@ async def export_retrain_dataset(admin_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # =====================================================================
-# API ADMIN 4: CÀI ĐẶT LÕI (SYSTEM SETTINGS)
+# 5. NHÓM API QUẢN TRỊ CÀI ĐẶT LÕI HỆ THỐNG (SYSTEM SETTINGS)
 # =====================================================================
+
+# API: Tải cấu hình hệ thống hiện tại lên giao diện Admin
+@app.get("/api/admin/settings")
+async def get_system_settings(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        res = supabase.table('system_settings').select('*').eq('id', 1).execute()
+        if not res.data:
+            return {
+                "ai_threshold": 0.75, 
+                "max_upload_size_free": 5,
+                "data_retention_days": 30,
+                "custom_dictionary": "",
+                "crisis_alert_enabled": True,
+                "aspect_dictionary": {}
+            }
+        return res.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# API: Lưu và cập nhật toàn diện cấu hình hệ thống (Vá lỗi đồng bộ từ điển & Vòng đời dữ liệu)
 @app.put("/api/admin/settings")
 async def update_system_settings(request: AdminSettingUpdate):
     check_is_admin(request.admin_id)
     try:
         supabase.table('system_settings').update({
             "ai_threshold": request.ai_threshold,
-            "max_upload_size_free": request.max_upload_size_free
+            "max_upload_size_free": request.max_upload_size_free,
+            "custom_dictionary": request.custom_dictionary,
+            "crisis_alert_enabled": request.crisis_alert_enabled,
+            "aspect_dictionary": request.aspect_dictionary,
+            "data_retention_days": request.data_retention_days
         }).eq('id', 1).execute()
-        return {"status": "success", "message": "Đã cập nhật cấu hình hệ thống!"}
+        return {"status": "success", "message": "Đã cập nhật cấu hình hệ thống toàn diện!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-from datetime import datetime, timedelta
-from collections import defaultdict
 
 # =====================================================================
-# API ADMIN 5: BIỂU ĐỒ LƯU LƯỢNG HỆ THỐNG (CHART METRICS)
+# 6. NHÓM API THỐNG KÊ BIỂU ĐỒ & ĐIỀU HÀNH (METRICS & DASHBOARD)
 # =====================================================================
+
+# API: Thống kê số liệu tổng quan trên màn hình Bảng điều khiển
+@app.get("/api/admin/metrics")
+async def get_admin_metrics(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        reviews_res = supabase.table('scraped_reviews').select('ai_label', count='exact').execute()
+        users_res = supabase.table('profiles').select('id', count='exact').execute()
+        feedback_res = supabase.table('feedback_data').select('id', count='exact').eq('status', 'pending').execute()
+
+        data = reviews_res.data
+        total_reviews = len(data)
+        positive_count = sum(1 for item in data if item['ai_label'] == 1)
+        
+        return {
+            "total_api_calls": total_reviews,
+            "total_users": users_res.count if hasattr(users_res, 'count') else 0,
+            "pending_feedbacks": feedback_res.count if hasattr(feedback_res, 'count') else 0,
+            "global_positive_ratio": round((positive_count / total_reviews) * 100, 1) if total_reviews > 0 else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# API: Thống kê lưu lượng cuộc gọi theo từng ngày phục vụ vẽ biểu đồ đường (Line Chart)
 @app.get("/api/admin/metrics/chart")
 async def get_admin_metrics_chart(admin_id: str, days: int = 7):
-    check_is_admin(admin_id) # Trạm gác bảo mật
-    
+    check_is_admin(admin_id)
     try:
-        # 1. Tính toán mốc thời gian (Ví dụ: 7 ngày trước)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         start_date_iso = start_date.isoformat()
 
-        # 2. Lấy dữ liệu từ Supabase trong khoảng thời gian đó
-        # LƯU Ý: Đảm bảo cột review_date (hoặc created_at) trong DB là kiểu mốc thời gian hợp lệ
         response = supabase.table('scraped_reviews') \
             .select('review_date') \
             .gte('review_date', start_date_iso) \
             .execute()
             
         data = response.data
-        
-        # 3. Gom nhóm và đếm số lượng theo Từng Ngày
         daily_counts = defaultdict(int)
         
-        # Khởi tạo sẵn mảng 7 ngày với giá trị 0 (để biểu đồ không bị đứt quãng nếu có ngày ko ai cào)
+        # Khởi tạo giá trị nền bằng 0 để tránh đứt gãy dữ liệu ngày trống
         for i in range(days):
             day_str = (end_date - timedelta(days=i)).strftime('%Y-%m-%d')
             daily_counts[day_str] = 0
             
-        # Đếm số dòng dữ liệu thực tế
         for item in data:
             if item.get('review_date'):
-                # Cắt lấy phần "YYYY-MM-DD" từ chuỗi thời gian
                 date_str = str(item['review_date'])[:10] 
                 if date_str in daily_counts:
                     daily_counts[date_str] += 1
                     
-        # 4. Sắp xếp lại theo thứ tự thời gian tăng dần (Cũ -> Mới) cho Frontend vẽ biểu đồ
         chart_data = [
             {"date": date, "api_calls": count} 
             for date, count in sorted(daily_counts.items())
         ]
         
         return {"chart_data": chart_data}
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-
-

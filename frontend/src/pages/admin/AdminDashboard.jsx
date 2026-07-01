@@ -49,66 +49,54 @@ const AdminDashboard = () => {
   const [recentUsers, setRecentUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+// ====== HÀM LOAD DỮ LIỆU ĐÃ ĐƯỢC CHUYỂN QUA FASTAPI ======
   const loadData = useCallback(async () => {
     setIsLoading(true);
 
     try {
-      const since = new Date();
-      since.setDate(since.getDate() - 6);
-      since.setHours(0, 0, 0, 0);
+      const adminId = localStorage.getItem('userId');
+      if (!adminId) throw new Error("Không tìm thấy thông tin đăng nhập!");
 
-      const [usersResult, reviewsCountResult, feedbackCountResult, pendingFeedbackResult, recentReviewsResult] =
-        await Promise.all([
-          supabase
-            .from('profiles')
-            .select('id,email,full_name,role,status,tier,created_at')
-            .order('created_at', { ascending: false }),
-          supabase.from('scraped_reviews').select('id', { count: 'exact', head: true }),
-          supabase.from('feedback_data').select('id', { count: 'exact', head: true }),
-          supabase
-            .from('feedback_data')
-            .select('id', { count: 'exact', head: true })
-            .or('status.is.null,status.eq.pending'),
-          supabase.from('scraped_reviews').select('id,ai_label,created_at').gte('created_at', since.toISOString()),
-        ]);
+      // Gọi 3 API Backend cùng lúc để lấy dữ liệu (Nhanh và an toàn tuyệt đối)
+      const [metricsRes, chartRes, usersRes] = await Promise.all([
+        fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
+        fetch(`http://localhost:8000/api/admin/metrics/chart?admin_id=${adminId}&days=7`),
+        fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`)
+      ]);
 
-      if (usersResult.error) throw usersResult.error;
-      if (reviewsCountResult.error) throw reviewsCountResult.error;
-      if (feedbackCountResult.error) throw feedbackCountResult.error;
-      if (pendingFeedbackResult.error) throw pendingFeedbackResult.error;
-      if (recentReviewsResult.error) throw recentReviewsResult.error;
+      if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
+        throw new Error('Lỗi server khi tải dữ liệu dashboard');
+      }
 
-      const reviews = recentReviewsResult.data || [];
-      const users = usersResult.data || [];
+      const metricsData = await metricsRes.json();
+      const chartDataResponse = await chartRes.json();
+      const usersData = await usersRes.json();
 
-      setRecentUsers(users.slice(0, 6));
+      // 1. Cập nhật 4 thẻ thống kê (Lấy số liệu Backend đã tính sẵn)
       setStats({
-        apiCalls: reviewsCountResult.count || 0,
-        users: users.length,
-        pendingFeedback: pendingFeedbackResult.count || 0,
-        positiveRate: getPositiveRate(reviews),
+        apiCalls: metricsData.total_api_calls || 0,
+        users: metricsData.total_users || 0,
+        pendingFeedback: metricsData.pending_feedbacks || 0,
+        positiveRate: metricsData.global_positive_ratio || 0,
       });
 
-      const days = Array.from({ length: 7 }, (_, index) => {
-        const date = new Date(since);
-        date.setDate(since.getDate() + index);
-        return {
-          key: date.toISOString().slice(0, 10),
-          label: date.toLocaleDateString('vi-VN', { weekday: 'short' }),
-          total: 0,
-        };
-      });
+      // 2. Cập nhật Biểu đồ (Map lại data từ Backend cho khớp định dạng của Recharts)
+      const formattedChartData = (chartDataResponse.chart_data || []).map(item => ({
+        key: item.date,
+        label: item.date,
+        total: item.api_calls
+      }));
+      setWeeklyData(formattedChartData);
 
-      reviews.forEach((item) => {
-        const key = new Date(item.created_at).toISOString().slice(0, 10);
-        const found = days.find((day) => day.key === key);
-        if (found) found.total += 1;
-      });
+      // 3. Cập nhật Danh sách người dùng mới (Lấy 6 người tạo gần nhất)
+      const recent = (usersData || [])
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, 6);
+      setRecentUsers(recent);
 
-      setWeeklyData(days);
     } catch (error) {
       console.error('Load admin dashboard failed:', error);
-      toast.error('Không thể tải dữ liệu thống kê. Vui lòng kiểm tra quyền đọc dữ liệu.', {
+      toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
         id: 'admin-dashboard-load-error',
       });
     } finally {

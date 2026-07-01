@@ -22,27 +22,33 @@ const AdminFeedback = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
 
+// ====== 1. HÀM LOAD DỮ LIỆU ĐÃ CHUYỂN QUA GỌI API BACKEND ======
   const loadFeedback = useCallback(async () => {
     setIsLoading(true);
-
     try {
-      const [feedbackResult, profileResult] = await Promise.all([
-        supabase
-          .from('feedback_data')
-          .select('id, original_content, old_ai_label, corrected_label, created_at, user_id, status')
-          .order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id, email, full_name'),
-      ]);
+      const adminId = localStorage.getItem('userId');
+      if (!adminId) throw new Error("Không tìm thấy thông tin đăng nhập!");
 
-      if (feedbackResult.error) throw feedbackResult.error;
-      if (profileResult.error) throw profileResult.error;
-
-      setItems(feedbackResult.data || []);
-
+      const res = await fetch(`http://localhost:8000/api/admin/feedback?admin_id=${adminId}`);
+      if (!res.ok) throw new Error('Lỗi server');
+      
+      const data = await res.json();
+      
+      // Xử lý dữ liệu trả về từ API (đã được Backend join sẵn bảng profiles)
+      const formattedItems = [];
       const mappedProfiles = {};
-      (profileResult.data || []).forEach((profile) => {
-        mappedProfiles[profile.id] = profile;
+
+      data.forEach(item => {
+        // Tách phần profiles ra để lưu riêng vào state cho code bên dưới chạy khớp
+        if (item.profiles) {
+           mappedProfiles[item.user_id] = item.profiles;
+        }
+        // Xóa thuộc tính profiles để item trở về chuẩn cũ
+        const { profiles, ...cleanItem } = item;
+        formattedItems.push(cleanItem);
       });
+
+      setItems(formattedItems);
       setProfiles(mappedProfiles);
     } catch (error) {
       console.error('Lỗi tải phản hồi admin:', error);
@@ -84,15 +90,32 @@ const AdminFeedback = () => {
     });
   }, [items, profiles, search, statusFilter]);
 
+// ====== 2. HÀM THAO TÁC DUYỆT ĐÃ CHUYỂN QUA GỌI API BACKEND ======
   const handleReview = async (item, action) => {
     const status = action === 'approve' ? 'approved' : 'rejected';
     const actionText = action === 'approve' ? 'duyệt' : 'từ chối';
 
     setUpdatingId(item.id);
     try {
-      const { error } = await supabase.from('feedback_data').update({ status }).eq('id', item.id);
-      if (error) throw error;
+      const adminId = localStorage.getItem('userId');
+      if (!adminId) throw new Error("Không tìm thấy thông tin đăng nhập!");
 
+      const res = await fetch(`http://localhost:8000/api/admin/feedback/review`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          admin_id: adminId,
+          feedback_id: item.id,
+          action: action // "approve" hoặc "reject"
+        })
+      });
+
+      if (!res.ok) {
+         const err = await res.json();
+         throw new Error(err.detail || 'Lỗi server');
+      }
+
+      // Cập nhật giao diện ngay lập tức
       setItems((current) =>
         current.map((feedback) => (feedback.id === item.id ? { ...feedback, status } : feedback)),
       );
@@ -101,50 +124,50 @@ const AdminFeedback = () => {
       });
     } catch (error) {
       console.error('Lỗi duyệt phản hồi:', error);
-      toast.error(`Không thể ${actionText} phản hồi. Vui lòng kiểm tra lại quyền truy cập.`, {
+      toast.error(`Không thể ${actionText} phản hồi: ${error.message}`, {
         id: `admin-feedback-${action}-error`,
       });
     } finally {
       setUpdatingId('');
     }
   };
-
-  const handleExport = () => {
+// ====== HÀM XUẤT DATASET ĐÃ ĐƯỢC CHUYỂN QUA GỌI API BACKEND ======
+  const handleExport = async () => {
     try {
       setIsExporting(true);
+      
+      const adminId = localStorage.getItem('userId');
+      if (!adminId) throw new Error("Không tìm thấy thông tin đăng nhập!");
 
-      const header = ['noi_dung_goc', 'nhan_he_thong', 'nhan_nguoi_dung_sua', 'trang_thai', 'nguoi_gui', 'thoi_gian'];
-      const rows = filteredItems.map((item) => {
-        const profile = profiles[item.user_id] || {};
-        return [
-          item.original_content || '',
-          item.old_ai_label ?? '',
-          item.corrected_label ?? '',
-          STATUS_LABEL[normalizeStatus(item.status)],
-          profile.email || item.user_id || '',
-          item.created_at || '',
-        ];
+      // 1. Gọi API tải file từ Backend
+      const response = await fetch(`http://localhost:8000/api/admin/dataset/export?admin_id=${adminId}`, {
+        method: 'GET',
       });
 
-      const csv = [header, ...rows]
-        .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
-        .join('\n');
-      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Lỗi khi tải file từ Server');
+      }
+
+      // 2. Ép trình duyệt tự động tải file CSV vừa nhận được về máy
+      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `phobert_retrain_dataset_${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(link);
       link.click();
+      
+      // Dọn dẹp bộ nhớ
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      toast.success('Xuất Dataset CSV thành công!', {
+      toast.success('Xuất Dataset AI thành công!', {
         id: 'admin-feedback-export-success',
       });
     } catch (error) {
       console.error('Lỗi xuất Dataset CSV:', error);
-      toast.error('Không thể xuất Dataset CSV.', {
+      toast.error(`Thất bại: ${error.message}`, {
         id: 'admin-feedback-export-error',
       });
     } finally {

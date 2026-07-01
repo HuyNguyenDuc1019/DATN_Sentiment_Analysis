@@ -100,7 +100,7 @@ const AdminLayout = () => {
             <Users className="w-5 h-5" />Quản lý Người dùng
           </NavLink>
           <NavLink to="/admin/settings" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
-            <Settings className="w-5 h-5" />Cài đặt lõi
+            <Settings className="w-5 h-5" />Cài đặt hệ thống
           </NavLink>
         </nav>
 
