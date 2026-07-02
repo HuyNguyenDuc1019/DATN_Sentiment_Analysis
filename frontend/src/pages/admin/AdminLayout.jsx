@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { logAdminActivity } from '../../services/adminActivityLogger';
 import { getAdminRoleLabel, getDisplayInitials } from './adminHelpers';
 import Footer from '../../components/layout/Footer';
 
@@ -50,6 +51,20 @@ const AdminLayout = () => {
             role: profile?.role || 'admin',
             avatar_url: profile?.avatar_url || '',
           });
+        }
+
+        // ====== Ghi nhật ký "đăng nhập" ======
+        // Chỉ ghi 1 lần mỗi phiên trình duyệt (sessionStorage), tránh việc
+        // mỗi lần chuyển trang/refresh trong khu vực admin bị tính là 1 lần đăng nhập mới.
+        const sessionKey = `admin_login_logged_${user.id}`;
+        if (typeof window !== 'undefined' && !window.sessionStorage.getItem(sessionKey)) {
+          logAdminActivity({
+            actionType: 'admin_login',
+            targetType: 'admin',
+            targetId: user.id,
+            description: 'đăng nhập vào khu vực quản trị',
+          });
+          window.sessionStorage.setItem(sessionKey, '1');
         }
       } catch {
         if (isMounted) {

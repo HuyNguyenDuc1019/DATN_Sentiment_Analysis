@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Activity, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
+import { Activity, Download, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
 import AdminActivityLog from './AdminActivityLog';
@@ -139,6 +139,235 @@ const AdminDashboard = () => {
       formatter: (value) => `${Number(value || 0).toFixed(0)}%`,
     },
   ];
+const handleExportPdf = useCallback(() => {
+  const exportedAt = new Date().toLocaleString('vi-VN');
+
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+
+  const chartRows = chartData.length
+    ? chartData
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(item.date)}</td>
+              <td class="positive">${formatNumber(item.positive)}</td>
+              <td class="negative">${formatNumber(item.negative)}</td>
+              <td>${formatNumber(Number(item.positive || 0) + Number(item.negative || 0))}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `<tr><td colspan="4">Chưa có dữ liệu phân hóa phản hồi.</td></tr>`;
+
+  const userRows = recentUsers.length
+    ? recentUsers
+        .map(
+          (user, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(user.full_name || user.email || 'Người dùng')}</td>
+              <td>${escapeHtml(user.email || '-')}</td>
+              <td>${escapeHtml(user.role === 'admin' ? 'Quản trị viên' : 'Người dùng')}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `<tr><td colspan="4">Chưa có dữ liệu người dùng gần đây.</td></tr>`;
+
+  const reportWindow = window.open('', '_blank', 'width=1100,height=800');
+
+  if (!reportWindow) {
+    toast.error('Trình duyệt đang chặn cửa sổ xuất PDF. Vui lòng cho phép popup.');
+    return;
+  }
+
+  reportWindow.document.open();
+  reportWindow.document.write(`
+    <!doctype html>
+    <html lang="vi">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Báo cáo nhanh Almotion</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background: #020617;
+            color: #e5e7eb;
+          }
+          .page { padding: 32px; }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+          }
+          h1 { margin: 0 0 8px; font-size: 28px; }
+          p { margin: 0; color: #94a3b8; }
+          .badge {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #4f46e5;
+            color: #c7d2fe;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 700;
+          }
+          .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+          }
+          .card {
+            border: 1px solid #334155;
+            background: #0f172a;
+            border-radius: 16px;
+            padding: 18px;
+          }
+          .label {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+          }
+          .value {
+            margin-top: 14px;
+            font-size: 30px;
+            font-weight: 900;
+            color: #fff;
+          }
+          .section {
+            border: 1px solid #334155;
+            background: #0f172a;
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 22px;
+          }
+          .section h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+          th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #1f2937;
+          }
+          th {
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: .08em;
+          }
+          .positive { color: #34d399; font-weight: 800; }
+          .negative { color: #fb7185; font-weight: 800; }
+          .footer {
+            margin-top: 28px;
+            color: #64748b;
+            font-size: 12px;
+            text-align: right;
+          }
+          @media print {
+            body {
+              background: #020617 !important;
+              color: #e5e7eb !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="page">
+          <div class="header">
+            <div>
+              <h1>Báo cáo nhanh hệ thống Almotion</h1>
+              <p>Tổng hợp nhanh các chỉ số quản trị, phản hồi và người dùng gần đây.</p>
+            </div>
+            <div>
+              <span class="badge">Xuất lúc ${escapeHtml(exportedAt)}</span>
+            </div>
+          </div>
+
+          <section class="cards">
+            <div class="card">
+              <div class="label">Tổng phản hồi đã xử lý</div>
+              <div class="value">${formatNumber(stats.apiCalls)}</div>
+            </div>
+            <div class="card">
+              <div class="label">Tổng người dùng</div>
+              <div class="value">${formatNumber(stats.users)}</div>
+            </div>
+            <div class="card">
+              <div class="label">Phản hồi chờ xử lý</div>
+              <div class="value">${formatNumber(stats.pendingFeedback)}</div>
+            </div>
+            <div class="card">
+              <div class="label">Tỉ lệ tích cực</div>
+              <div class="value">${Number(stats.positiveRate || 0).toFixed(0)}%</div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Phân hóa phản hồi 7 ngày qua</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Tích cực</th>
+                  <th>Tiêu cực</th>
+                  <th>Tổng</th>
+                </tr>
+              </thead>
+              <tbody>${chartRows}</tbody>
+            </table>
+          </section>
+
+          <section class="section">
+            <h2>Người dùng mới gần đây</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Tên hiển thị</th>
+                  <th>Email</th>
+                  <th>Vai trò</th>
+                </tr>
+              </thead>
+              <tbody>${userRows}</tbody>
+            </table>
+          </section>
+
+          <div class="footer">Almotion Admin Dashboard</div>
+        </main>
+      </body>
+    </html>
+  `);
+  reportWindow.document.close();
+
+  setTimeout(() => {
+    reportWindow.focus();
+    reportWindow.print();
+  }, 400);
+
+  toast.success('Đã mở bản báo cáo. Chọn Save as PDF để lưu file.');
+}, [chartData, recentUsers, stats]);
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
@@ -150,15 +379,26 @@ const AdminDashboard = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadData}
-          disabled={isLoading}
-          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-60 md:mt-0"
-        >
-          <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Làm mới dữ liệu
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-3 md:mt-0">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-black text-slate-200 shadow-lg transition hover:border-indigo-400 hover:text-white"
+          >
+            <Download className="h-4 w-4" />
+            Xuất Báo cáo PDF
+          </button>
+
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={isLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-60"
+          >
+            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Làm mới dữ liệu
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Download, Filter, RefreshCw, Search, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
+import { logAdminActivity } from '../../services/adminActivityLogger';
 
 // ====== Chức năng dữ liệu giữ nguyên từ file Feedback (Supabase) ======
 
@@ -135,6 +136,16 @@ const adminId = authData.user.id;
       toast.success(`Đã ${actionText} phản hồi thành công!`, {
         id: `admin-feedback-${action}-${item.id}`,
       });
+
+      // ====== Ghi nhật ký hoạt động: admin nào vừa duyệt/từ chối phản hồi nào ======
+      logAdminActivity({
+        actionType: action === 'approve' ? 'feedback_approved' : 'feedback_rejected',
+        targetType: 'feedback',
+        targetId: item.id,
+        description: `${actionText} phản hồi: "${(item.original_content || '').slice(0, 60)}${
+          (item.original_content || '').length > 60 ? '...' : ''
+        }"`,
+      });
     } catch (error) {
       console.error('Lỗi duyệt phản hồi:', error);
       toast.error(`Không thể ${actionText} phản hồi: ${error.message}`, {
@@ -144,6 +155,7 @@ const adminId = authData.user.id;
       setUpdatingId('');
     }
   };
+  
 // ====== HÀM XUẤT DATASET ĐÃ ĐƯỢC CHUYỂN QUA GỌI API BACKEND ======
   const handleExport = async () => {
     try {
@@ -177,6 +189,14 @@ const adminId = authData.user.id;
 
       toast.success('Xuất Dataset AI thành công!', {
         id: 'admin-feedback-export-success',
+      });
+
+      // ====== Ghi nhật ký hoạt động: admin nào vừa xuất dataset CSV ======
+      logAdminActivity({
+        actionType: 'dataset_exported',
+        targetType: 'dataset',
+        targetId: null,
+        description: 'xuất dataset CSV để retrain mô hình AI',
       });
     } catch (error) {
       console.error('Lỗi xuất Dataset CSV:', error);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Ban, Crown, RefreshCw, Search, ShieldAlert, ShieldCheck, Unlock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
+import { logAdminActivity } from '../../services/adminActivityLogger';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -121,6 +122,24 @@ const AdminUsers = () => {
       toast.success('Thao tác thành công!', {
         id: `admin-user-action-${targetUser.id}-${action}`,
       });
+
+      // ====== Ghi nhật ký hoạt động: admin nào vừa khóa/mở khóa/nâng cấp tài khoản nào ======
+      const targetLabel = targetUser.email || targetUser.full_name || targetUser.id;
+      const actionMeta = {
+        ban: { type: 'user_banned', text: `khóa tài khoản ${targetLabel}` },
+        unban: { type: 'user_unbanned', text: `mở khóa tài khoản ${targetLabel}` },
+        upgrade_vip: { type: 'user_upgraded_vip', text: `nâng cấp tài khoản ${targetLabel} lên VIP` },
+        downgrade_vip: { type: 'user_downgraded_vip', text: `hạ tài khoản ${targetLabel} xuống gói Free` },
+      }[action];
+
+      if (actionMeta) {
+        logAdminActivity({
+          actionType: actionMeta.type,
+          targetType: 'user',
+          targetId: targetUser.id,
+          description: actionMeta.text,
+        });
+      }
       
     } catch (error) {
       console.error('Lỗi thao tác user:', error);
