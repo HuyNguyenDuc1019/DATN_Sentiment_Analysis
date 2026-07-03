@@ -1,48 +1,78 @@
 import { supabase } from './supabaseClient';
 
-// Cache thông tin admin hiện tại trong phiên làm việc để tránh gọi lại
-// supabase.auth.getUser() + query profiles mỗi lần ghi log.
+// Cache thông tin admin hiện tại trong phiên làm việc.
+// Khi logout hoặc đổi tài khoản thì gọi resetAdminActivityCache().
 let cachedAdmin = null;
 
 async function getCurrentAdmin() {
   if (cachedAdmin) return cachedAdmin;
 
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
   const user = authData?.user;
 
-  if (!user) {
-    return { id: null, name: 'Quản trị viên' };
+  if (authError || !user) {
+    return {
+      id: null,
+      name: 'Quản trị viên',
+      role: null,
+    };
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, email')
+    .select('full_name, email, role')
     .eq('id', user.id)
     .maybeSingle();
 
+  if (profileError) {
+    console.error('Không thể lấy profile admin:', profileError);
+  }
+
   cachedAdmin = {
     id: user.id,
-    name: profile?.full_name || profile?.email || user.email || 'Quản trị viên',
+    name:
+      profile?.full_name ||
+      profile?.email ||
+      user.email ||
+      'Quản trị viên',
+    role: profile?.role || null,
   };
 
   return cachedAdmin;
 }
 
 /**
- * Ghi 1 dòng nhật ký hoạt động admin. Gọi hàm này NGAY SAU khi một thao tác
- * quản trị (duyệt/từ chối phản hồi, khóa/mở khóa user, nâng/hạ VIP...) đã
- * cập nhật thành công vào database.
+ * Ghi 1 dòng nhật ký hoạt động admin.
  *
- * @param {Object} params
- * @param {string} params.actionType - Mã hành động, ví dụ 'feedback_approved'
- * @param {string} params.targetType - 'feedback' | 'user'
- * @param {string|number} [params.targetId] - ID của đối tượng bị tác động
- * @param {string} params.description - Mô tả hành động, KHÔNG kèm tên admin,
- *   ví dụ: 'duyệt phản hồi: "Đồ ăn ngon"' hoặc 'khóa tài khoản user@mail.com'
+ * Chỉ ghi log nếu tài khoản hiện tại có role = admin.
+ * Không làm gián đoạn thao tác chính nếu ghi log lỗi.
+ *
+ * Ví dụ:
+ * await logAdminActivity({
+ *   actionType: 'user_upgraded_vip',
+ *   targetType: 'user',
+ *   targetId: targetUser.id,
+ *   description: `nâng cấp tài khoản ${targetUser.email} lên VIP`,
+ * });
  */
-export async function logAdminActivity({ actionType, targetType, targetId, description }) {
+export async function logAdminActivity({
+  actionType,
+  targetType,
+  targetId = null,
+  description = '',
+}) {
   try {
     const admin = await getCurrentAdmin();
+
+    if (!admin.id) {
+      console.warn('Bỏ qua ghi log vì chưa có admin_id.');
+      return;
+    }
+
+    if (admin.role !== 'admin') {
+      console.warn('Bỏ qua ghi log vì tài khoản hiện tại không phải admin.');
+      return;
+    }
 
     const { error } = await supabase.from('admin_activity_logs').insert({
       admin_id: admin.id,
@@ -57,15 +87,12 @@ export async function logAdminActivity({ actionType, targetType, targetId, descr
       console.error('Không thể ghi nhật ký hoạt động:', error);
     }
   } catch (error) {
-    // Ghi log là hành động phụ - lỗi ở đây KHÔNG được làm gián đoạn
-    // thao tác chính (duyệt/khóa/nâng cấp...) mà admin vừa thực hiện.
     console.error('Không thể ghi nhật ký hoạt động:', error);
   }
 }
 
 /**
- * Gọi hàm này khi admin đăng xuất hoặc chuyển tài khoản, để tránh cache
- * sai tên admin cho phiên làm việc kế tiếp.
+ * Gọi hàm này khi admin đăng xuất hoặc chuyển tài khoản.
  */
 export function resetAdminActivityCache() {
   cachedAdmin = null;

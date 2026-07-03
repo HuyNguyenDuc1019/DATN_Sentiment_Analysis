@@ -477,28 +477,76 @@ async def update_user_action(request: AdminActionRequest):
 @app.get("/api/admin/feedback")
 async def get_admin_feedbacks(admin_id: str):
     check_is_admin(admin_id)
+
     try:
-        # 1. Lấy toàn bộ phản hồi
-        feedback_res = supabase.table('feedback_data').select('*').order('created_at', desc=True).execute()
-        
-        # 2. Lấy toàn bộ user để lấy Email và Tên
-        profiles_res = supabase.table('profiles').select('id, email, full_name').execute()
-        
-        # 3. Biến danh sách user thành một cuốn từ điển để tìm kiếm cho nhanh
-        profiles_dict = {p['id']: p for p in profiles_res.data} if profiles_res.data else {}
-        
-        # 4. Gắn thông tin profile vào từng cái feedback
+        # 1. Lấy toàn bộ feedback
+        feedback_res = (
+            supabase
+            .table("feedback_data")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        feedback_rows = feedback_res.data or []
+
+        # 2. Lấy toàn bộ user để lấy email và tên
+        profiles_res = (
+            supabase
+            .table("profiles")
+            .select("id, email, full_name")
+            .execute()
+        )
+
+        profiles_dict = {
+            p["id"]: p
+            for p in (profiles_res.data or [])
+        }
+
+        # 3. Lấy toàn bộ review có confidence
+        reviews_res = (
+            supabase
+            .table("scraped_reviews")
+            .select("id, user_id, content, ai_label, confidence, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        reviews = reviews_res.data or []
+
+        # 4. Tạo lookup theo user_id + content + ai_label
+        review_lookup = {}
+
+        for review in reviews:
+            key = (
+                review.get("user_id"),
+                (review.get("content") or "").strip().lower(),
+                str(review.get("ai_label"))
+            )
+
+            if key not in review_lookup:
+                review_lookup[key] = review.get("confidence")
+
+        # 5. Gắn profiles + ai_confidence vào từng feedback
         result = []
-        if feedback_res.data:
-            for item in feedback_res.data:
-                # Tạo ra một trường 'profiles' ảo để Frontend đọc được
-                item['profiles'] = profiles_dict.get(item.get('user_id'))
-                result.append(item)
-                
+
+        for item in feedback_rows:
+            item["profiles"] = profiles_dict.get(item.get("user_id"))
+
+            key = (
+                item.get("user_id"),
+                (item.get("original_content") or "").strip().lower(),
+                str(item.get("old_ai_label"))
+            )
+
+            item["ai_confidence"] = review_lookup.get(key)
+
+            result.append(item)
+
         return result
+
     except Exception as e:
-        # In lỗi ra Terminal để nếu có sai sót mình còn dễ bắt bệnh
-        print(f"⚠️ LỖI API FEEDBACK: {str(e)}") 
+        print(f"⚠️ LỖI API FEEDBACK: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # API: Duyệt hoặc từ chối nhãn hiệu chỉnh dữ liệu từ người dùng
@@ -604,42 +652,7 @@ async def get_admin_metrics(admin_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # API: Thống kê lưu lượng cuộc gọi theo từng ngày phục vụ vẽ biểu đồ đường (Line Chart)
-@app.get("/api/admin/metrics/chart")
-async def get_admin_metrics_chart(admin_id: str, days: int = 7):
-    check_is_admin(admin_id)
-    try:
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=days)
-        start_date_iso = start_date.isoformat()
 
-        response = supabase.table('scraped_reviews') \
-            .select('review_date') \
-            .gte('review_date', start_date_iso) \
-            .execute()
-            
-        data = response.data
-        daily_counts = defaultdict(int)
-        
-        # Khởi tạo giá trị nền bằng 0 để tránh đứt gãy dữ liệu ngày trống
-        for i in range(days):
-            day_str = (end_date - timedelta(days=i)).strftime('%Y-%m-%d')
-            daily_counts[day_str] = 0
-            
-        for item in data:
-            if item.get('review_date'):
-                date_str = str(item['review_date'])[:10] 
-                if date_str in daily_counts:
-                    daily_counts[date_str] += 1
-                    
-        chart_data = [
-            {"date": date, "api_calls": count} 
-            for date, count in sorted(daily_counts.items())
-        ]
-        
-        return {"chart_data": chart_data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
 @app.get("/api/admin/metrics/sentiment-chart")
 async def get_admin_sentiment_chart(admin_id: str, days: int = 7):
     from collections import defaultdict
@@ -704,187 +717,454 @@ async def get_admin_sentiment_chart(admin_id: str, days: int = 7):
     except Exception as error:
         raise FastAPIHTTPException(status_code=500, detail=str(error))
     
+        # =====================================================================
+# 7. NHÓM API MỞ RỘNG CHO "QUẢN LÝ PHẢN HỒI":
+#    Modal chi tiết, Hành động hàng loạt, Xuất CSV theo lựa chọn,
+#    và liên kết Confidence (Cách A: join qua scraped_review_id).
+#    -> TOÀN BỘ PHẦN NÀY LÀ THÊM MỚI, KHÔNG ĐỤNG CODE CŨ Ở TRÊN.
+#
+#    Yêu cầu Supabase (chạy 1 lần trong SQL Editor):
+#    ALTER TABLE feedback_data ADD COLUMN IF NOT EXISTS review_history jsonb DEFAULT '[]'::jsonb;
+#    ALTER TABLE feedback_data ADD COLUMN IF NOT EXISTS scraped_review_id uuid REFERENCES scraped_reviews(id);
+# =====================================================================
 
-@app.get("/api/admin/activity-logs")
-async def get_admin_activity_logs(admin_id: str, limit: int = 8):
- 
-    def safe_date(value):
-        if not value:
-            return ""
-        return str(value)
- 
-    def short_text(value, max_len=90):
-        text = str(value or "").strip()
-        if len(text) <= max_len:
-            return text
-        return text[:max_len].rstrip() + "..."
- 
-    def build_time_value(value):
-        raw = safe_date(value)
-        if not raw:
-            return ""
-        return raw
- 
-    def fetch_user_name_map(user_ids):
-        """Lấy tên hiển thị (full_name -> email -> ẩn danh) cho một danh sách user_id."""
-        name_map = {}
-        clean_ids = [uid for uid in set(user_ids) if uid]
- 
-        if not clean_ids:
-            return name_map
- 
-        profiles_res = (
-            supabase
-            .table("profiles")
-            .select("id, full_name, email")
-            .in_("id", clean_ids)
+class AdminFeedbackDetailReview(BaseModel):
+    admin_id: str
+    feedback_id: str
+    action: str                        # "approve" | "reject" | "edit_label"
+    reason: Optional[str] = None       # bắt buộc khi reject/edit_label
+    new_label: Optional[int] = None    # dùng khi action = "edit_label"
+
+
+class AdminFeedbackBulkReview(BaseModel):
+    admin_id: str
+    feedback_ids: list[str]
+    action: str                        # "approve" | "reject" | "edit_label" | "delete"
+    reason: Optional[str] = None
+    new_label: Optional[int] = None
+
+
+class AdminFeedbackExportSelected(BaseModel):
+    admin_id: str
+    feedback_ids: list[str]
+
+
+# ====== MỚI (Cách A): model cho việc FE gắn scraped_review_id sau khi tạo feedback ======
+class FeedbackLinkSource(BaseModel):
+    user_id: str
+    scraped_review_id: str
+
+
+def _append_review_history(feedback_id: str, entry: dict):
+    """Đọc review_history hiện có rồi nối thêm entry mới.
+    Nếu cột review_history chưa được tạo trên Supabase, hàm bỏ qua êm
+    để không làm vỡ luồng duyệt/từ chối chính."""
+    try:
+        current = supabase.table('feedback_data').select('review_history').eq('id', feedback_id).single().execute()
+        history = (current.data or {}).get('review_history') or []
+        history.append(entry)
+        supabase.table('feedback_data').update({"review_history": history}).eq('id', feedback_id).execute()
+    except Exception as e:
+        print(f"⚠️ Không thể ghi review_history (có thể cột chưa tồn tại trên Supabase): {e}")
+
+
+# ====== MỚI (Cách A): API để FE gọi ngay sau khi POST /feedback thành công,
+#         gắn scraped_review_id vào dòng feedback vừa tạo -> cho phép join confidence sau này.
+#         Không đụng gì tới endpoint /feedback cũ. ======
+@app.put("/api/feedback/{feedback_id}/link-source")
+async def link_feedback_source(feedback_id: str, request: FeedbackLinkSource):
+    try:
+        current = supabase.table('feedback_data').select('user_id').eq('id', feedback_id).single().execute()
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi này.")
+
+        # Chỉ cho phép chính chủ phản hồi gắn nguồn cho dòng của mình (không phải admin-only)
+        if current.data.get('user_id') != request.user_id:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền cập nhật phản hồi này.")
+
+        supabase.table('feedback_data').update({
+            "scraped_review_id": request.scraped_review_id
+        }).eq('id', feedback_id).execute()
+
+        return {"status": "success", "message": "Đã liên kết nguồn gốc phản hồi thành công."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ====== MỚI (Cách A): trả về map { feedback_id: confidence } cho toàn bộ phản hồi có scraped_review_id
+#         -> FE dùng để hiển thị cột "Độ tin cậy" cho cả bảng, không cần sửa loadFeedback cũ. ======
+@app.get("/api/admin/feedback/confidence-map")
+async def get_feedback_confidence_map(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        feedback_res = (
+            supabase.table('feedback_data')
+            .select('id, scraped_review_id')
+            .not_.is_('scraped_review_id', 'null')
             .execute()
         )
- 
-        for profile in profiles_res.data or []:
-            name_map[profile.get("id")] = (
-                profile.get("full_name")
-                or profile.get("email")
-                or "Người dùng ẩn danh"
-            )
- 
-        return name_map
- 
+        rows = feedback_res.data or []
+        review_ids = list({row['scraped_review_id'] for row in rows if row.get('scraped_review_id')})
+
+        if not review_ids:
+            return {}
+
+        reviews_res = supabase.table('scraped_reviews').select('id, confidence').in_('id', review_ids).execute()
+        confidence_by_review = {r['id']: r.get('confidence') for r in (reviews_res.data or [])}
+
+        result = {}
+        for row in rows:
+            rid = row.get('scraped_review_id')
+            if rid and rid in confidence_by_review:
+                result[row['id']] = confidence_by_review[rid]
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# API: Lấy chi tiết đầy đủ 1 phản hồi cho Modal (kèm review_history + confidence join qua scraped_review_id)
+@app.get("/api/admin/feedback/{feedback_id}/detail")
+async def get_admin_feedback_detail(feedback_id: str, admin_id: str):
+    check_is_admin(admin_id)
+
     try:
-        safe_limit = max(1, min(int(limit or 8), 20))
-        activities = []
- 
-        # ====== 1) Phản hồi vừa được chỉnh nhãn ======
+        res = (
+            supabase
+            .table("feedback_data")
+            .select("*")
+            .eq("id", feedback_id)
+            .single()
+            .execute()
+        )
+
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi này.")
+
+        item = res.data
+
+        profile_res = (
+            supabase
+            .table("profiles")
+            .select("id, email, full_name")
+            .eq("id", item.get("user_id"))
+            .execute()
+        )
+
+        item["profiles"] = profile_res.data[0] if profile_res.data else None
+        item["review_history"] = item.get("review_history") or []
+        item["ai_confidence"] = None
+
+        # Cách 1: lấy theo scraped_review_id nếu có
+        if item.get("scraped_review_id"):
+            review_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("confidence")
+                .eq("id", item.get("scraped_review_id"))
+                .execute()
+            )
+
+            if review_res.data:
+                item["ai_confidence"] = review_res.data[0].get("confidence")
+
+        # Cách 2: fallback theo user_id + nội dung + nhãn AI cũ
+        if item["ai_confidence"] is None:
+            review_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("confidence, created_at")
+                .eq("user_id", item.get("user_id"))
+                .eq("content", item.get("original_content"))
+                .eq("ai_label", item.get("old_ai_label"))
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+
+            if review_res.data:
+                item["ai_confidence"] = review_res.data[0].get("confidence")
+
+        # Cách 3: fallback cuối nếu label không khớp kiểu dữ liệu
+        if item["ai_confidence"] is None:
+            review_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("confidence, created_at")
+                .eq("user_id", item.get("user_id"))
+                .eq("content", item.get("original_content"))
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+
+            if review_res.data:
+                item["ai_confidence"] = review_res.data[0].get("confidence")
+
+        return item
+
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+# API: Duyệt / Từ chối / Sửa nhãn có lý do (dùng cho Modal chi tiết) + ghi lịch sử
+@app.put("/api/admin/feedback/review-detailed")
+async def review_feedback_detailed(request: AdminFeedbackDetailReview):
+    check_is_admin(request.admin_id)
+
+    if request.action in ("reject", "edit_label") and not (request.reason and request.reason.strip()):
+        raise HTTPException(status_code=400, detail="Vui lòng nhập lý do trước khi từ chối hoặc sửa nhãn.")
+
+    try:
+        current = supabase.table('feedback_data').select('corrected_label, status').eq('id', request.feedback_id).single().execute()
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi này.")
+
+        previous_label = current.data.get('corrected_label')
+        previous_status = current.data.get('status')
+
+        update_payload = {}
+        if request.action == "approve":
+            update_payload["status"] = "approved"
+        elif request.action == "reject":
+            update_payload["status"] = "rejected"
+        elif request.action == "edit_label":
+            if request.new_label is None:
+                raise HTTPException(status_code=400, detail="Thiếu nhãn mới (new_label).")
+            update_payload["corrected_label"] = request.new_label
+        else:
+            raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
+
+        supabase.table('feedback_data').update(update_payload).eq('id', request.feedback_id).execute()
+
+        _append_review_history(request.feedback_id, {
+            "admin_id": request.admin_id,
+            "action": request.action,
+            "reason": request.reason,
+            "previous_label": previous_label,
+            "previous_status": previous_status,
+            "new_label": request.new_label,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return {"status": "success", "message": "Đã cập nhật phản hồi thành công."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# API: Hành động hàng loạt (duyệt / từ chối / sửa nhãn / xóa nhiều mục cùng lúc)
+@app.put("/api/admin/feedback/bulk-review")
+async def bulk_review_feedback(request: AdminFeedbackBulkReview):
+    check_is_admin(request.admin_id)
+
+    if not request.feedback_ids:
+        raise HTTPException(status_code=400, detail="Chưa chọn phản hồi nào.")
+
+    if request.action in ("reject", "edit_label") and not (request.reason and request.reason.strip()):
+        raise HTTPException(status_code=400, detail="Vui lòng nhập lý do trước khi từ chối/sửa nhãn hàng loạt.")
+
+    try:
+        if request.action == "delete":
+            supabase.table('feedback_data').delete().in_('id', request.feedback_ids).execute()
+            return {"status": "success", "message": f"Đã xóa {len(request.feedback_ids)} phản hồi."}
+
+        update_payload = {}
+        if request.action == "approve":
+            update_payload["status"] = "approved"
+        elif request.action == "reject":
+            update_payload["status"] = "rejected"
+        elif request.action == "edit_label":
+            if request.new_label is None:
+                raise HTTPException(status_code=400, detail="Thiếu nhãn mới (new_label).")
+            update_payload["corrected_label"] = request.new_label
+        else:
+            raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
+
+        supabase.table('feedback_data').update(update_payload).in_('id', request.feedback_ids).execute()
+
+        for fid in request.feedback_ids:
+            _append_review_history(fid, {
+                "admin_id": request.admin_id,
+                "action": f"bulk_{request.action}",
+                "reason": request.reason,
+                "new_label": request.new_label,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+        return {"status": "success", "message": f"Đã xử lý {len(request.feedback_ids)} phản hồi ({request.action})."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# API: Xuất CSV chỉ những phản hồi được chọn tick (khác export dataset retrain vốn chỉ lấy approved)
+@app.post("/api/admin/feedback/export-selected")
+async def export_selected_feedback(request: AdminFeedbackExportSelected):
+    check_is_admin(request.admin_id)
+    try:
+        if not request.feedback_ids:
+            raise HTTPException(status_code=400, detail="Chưa chọn phản hồi nào để xuất.")
+
+        response = supabase.table('feedback_data').select('*').in_('id', request.feedback_ids).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu để xuất.")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['id', 'original_content', 'old_ai_label', 'corrected_label', 'status', 'user_id', 'created_at'])
+        for item in response.data:
+            writer.writerow([
+                item.get('id'), item.get('original_content'), item.get('old_ai_label'),
+                item.get('corrected_label'), item.get('status'), item.get('user_id'), item.get('created_at'),
+            ])
+        output.seek(0)
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=selected_feedback_export.csv"}
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    # =====================================================================
+# API BỔ SUNG: LẤY ĐỘ TIN CẬY CHO ADMIN FEEDBACK
+# Chỉ thêm mới, không đổi UI / logic cũ
+# =====================================================================
+
+# =====================================================================
+# API BỔ SUNG: RETRAIN FLAG + EXPORT DATASET NÂNG CAO
+# =====================================================================
+
+class AdminRetrainFlagRequest(BaseModel):
+    admin_id: str
+    feedback_id: str
+    include_retrain: bool
+
+
+class AdminAdvancedDatasetExportRequest(BaseModel):
+    admin_id: str
+    mode: str = "all"  # all | mismatch | low_confidence
+    low_confidence_threshold: float = 0.5
+
+
+@app.put("/api/admin/feedback/retrain-flag")
+async def update_feedback_retrain_flag(request: AdminRetrainFlagRequest):
+    check_is_admin(request.admin_id)
+
+    try:
+        supabase.table("feedback_data").update({
+            "include_retrain": request.include_retrain
+        }).eq("id", request.feedback_id).execute()
+
+        return {
+            "status": "success",
+            "message": "Đã cập nhật cờ retrain."
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# API BỔ SUNG CHO TRANG ADMIN USERS
+# - Thống kê hoạt động dữ liệu theo từng user
+# - Lịch sử thao tác quản trị theo từng user
+# Thêm đoạn này vào CUỐI file main.py
+# =====================================================================
+
+@app.get("/api/admin/users/activity-summary")
+async def get_admin_users_activity_summary(admin_id: str):
+    check_is_admin(admin_id)
+
+    try:
+        summary = {}
+
+        reviews_res = (
+            supabase
+            .table("scraped_reviews")
+            .select("user_id, created_at")
+            .execute()
+        )
+
+        for row in reviews_res.data or []:
+            user_id = row.get("user_id")
+            if not user_id:
+                continue
+
+            if user_id not in summary:
+                summary[user_id] = {
+                    "review_count": 0,
+                    "feedback_count": 0,
+                    "last_activity_at": None,
+                }
+
+            summary[user_id]["review_count"] += 1
+
+            created_at = row.get("created_at")
+            if created_at and (
+                not summary[user_id]["last_activity_at"]
+                or str(created_at) > str(summary[user_id]["last_activity_at"])
+            ):
+                summary[user_id]["last_activity_at"] = created_at
+
         feedback_res = (
             supabase
             .table("feedback_data")
-            .select("id, original_content, corrected_label, created_at, user_id")
-            .order("created_at", desc=True)
-            .limit(safe_limit)
+            .select("user_id, created_at")
             .execute()
         )
- 
-        feedback_rows = feedback_res.data or []
-        feedback_user_map = fetch_user_name_map(
-            row.get("user_id") for row in feedback_rows
-        )
- 
-        for item in feedback_rows:
-            label = "Tích cực" if int(item.get("corrected_label") or 0) == 1 else "Tiêu cực"
-            user_name = feedback_user_map.get(item.get("user_id"), "Người dùng ẩn danh")
-            activities.append({
-                "id": f"feedback-{item.get('id')}",
-                "type": "feedback",
-                "title": "Có phản hồi vừa được chỉnh nhãn",
-                "description": f"{user_name} đã chỉnh một phản hồi thành {label}: {short_text(item.get('original_content'))}",
-                "created_at": build_time_value(item.get("created_at")),
-            })
- 
-        # ====== 2) Tài khoản mới ======
-        users_res = (
-            supabase
-            .table("profiles")
-            .select("id, email, full_name, role, tier, created_at")
-            .order("created_at", desc=True)
-            .limit(safe_limit)
-            .execute()
-        )
- 
-        for item in users_res.data or []:
-            name = item.get("full_name") or item.get("email") or "Một tài khoản"
-            tier = item.get("tier") or "free"
-            role = item.get("role") or "user"
-            activities.append({
-                "id": f"user-{item.get('id')}",
-                "type": "user",
-                "title": "Tài khoản mới được ghi nhận",
-                "description": f"{name} đang ở vai trò {role}, gói dịch vụ {tier}.",
-                "created_at": build_time_value(item.get("created_at")),
-            })
- 
-        # ====== 3) Phản hồi được cào/nhập theo lô (URL / CSV) ======
-        # Lấy thêm user_id để biết CHÍNH XÁC ai là người thực hiện cào link / import file,
-        # thay vì chỉ ghi chung chung "Hệ thống vừa ghi nhận phản hồi".
-        recent_reviews_res = (
-            supabase
-            .table("scraped_reviews")
-            .select("id, source_url, created_at, user_id")
-            .order("created_at", desc=True)
-            .limit(200)
-            .execute()
-        )
- 
-        recent_review_rows = recent_reviews_res.data or []
-        review_user_map = fetch_user_name_map(
-            row.get("user_id") for row in recent_review_rows
-        )
- 
-        # Gộp theo (nguồn + người thực hiện + phút) để không lẫn hoạt động
-        # của 2 người dùng khác nhau cào cùng 1 nguồn vào cùng 1 thông báo.
-        source_groups = {}
- 
-        for item in recent_review_rows:
-            source = item.get("source_url") or "Nguồn không xác định"
-            user_id = item.get("user_id")
-            created_at = build_time_value(item.get("created_at"))
-            minute_key = created_at[:16] if created_at else source
-            key = f"{source}-{user_id}-{minute_key}"
- 
-            if key not in source_groups:
-                source_groups[key] = {
-                    "source_url": source,
-                    "user_id": user_id,
-                    "minute_key": minute_key,
-                    "created_at": created_at,
+
+        for row in feedback_res.data or []:
+            user_id = row.get("user_id")
+            if not user_id:
+                continue
+
+            if user_id not in summary:
+                summary[user_id] = {
+                    "review_count": 0,
+                    "feedback_count": 0,
+                    "last_activity_at": None,
                 }
- 
-        for key, group in source_groups.items():
-            minute_str = group["minute_key"]
-            actual_count = 0
- 
-            if minute_str:
-                try:
-                    start_dt = datetime.fromisoformat(minute_str.replace("Z", ""))
-                    start_iso = start_dt.isoformat()
-                    end_iso = (start_dt + timedelta(minutes=1)).isoformat()
- 
-                    count_query = (
-                        supabase
-                        .table("scraped_reviews")
-                        .select("id", count="exact", head=True)
-                        .eq("source_url", group["source_url"])
-                        .gte("created_at", start_iso)
-                        .lt("created_at", end_iso)
-                    )
-                    if group["user_id"]:
-                        count_query = count_query.eq("user_id", group["user_id"])
- 
-                    count_res = count_query.execute()
-                    actual_count = count_res.count or 0
-                except ValueError:
-                    actual_count = 0
- 
-            source_name = "CSV Upload" if group["source_url"] == "CSV_Upload" else "đường dẫn đã theo dõi"
-            user_name = review_user_map.get(group["user_id"], "Người dùng ẩn danh")
- 
-            activities.append({
-                "id": f"reviews-{key}",
-                "type": "review",
-                "title": "Hệ thống vừa ghi nhận phản hồi",
-                "description": f"{user_name} vừa ghi nhận {actual_count} phản hồi từ {source_name}.",
-                "created_at": group["created_at"],
-            })
- 
-        # ====== Gộp, sắp xếp theo thời gian mới nhất, và cắt theo limit ======
-        activities = sorted(
-            activities,
-            key=lambda item: item.get("created_at") or "",
-            reverse=True
-        )[:safe_limit]
- 
-        return {
-            "activities": activities
-        }
- 
-    except Exception as error:
-        raise FastAPIHTTPException(status_code=500, detail=str(error))
+
+            summary[user_id]["feedback_count"] += 1
+
+            created_at = row.get("created_at")
+            if created_at and (
+                not summary[user_id]["last_activity_at"]
+                or str(created_at) > str(summary[user_id]["last_activity_at"])
+            ):
+                summary[user_id]["last_activity_at"] = created_at
+
+        return {"summary": summary}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/users/{user_id}/activity-history")
+async def get_admin_user_activity_history(user_id: str, admin_id: str, limit: int = 20):
+    check_is_admin(admin_id)
+
+    try:
+        safe_limit = max(1, min(int(limit or 20), 50))
+
+        logs_res = (
+            supabase
+            .table("admin_activity_logs")
+            .select("id, admin_id, admin_name, action_type, target_type, target_id, description, created_at")
+            .eq("target_id", user_id)
+            .order("created_at", desc=True)
+            .limit(safe_limit)
+            .execute()
+        )
+
+        return {"logs": logs_res.data or []}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

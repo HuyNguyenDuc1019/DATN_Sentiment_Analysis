@@ -426,3 +426,708 @@
     scroll-padding-bottom: 7rem;
   }
 }
+
+/* =====================================================================
+   UNIFIED LAYOUT CSS - đồng bộ Admin/User shell, header, sidebar, footer
+   Dán cuối file CSS global hiện tại.
+   Mục tiêu: chuyển trang giữa Admin và User không bị nhảy layout.
+   ===================================================================== */
+
+:root {
+  --app-sidebar-width: 240px;
+  --app-header-height: 72px;
+  --app-content-x: 2rem;
+  --app-content-y: 2rem;
+  --app-bg-dark: #0f172a;
+  --app-panel-dark: rgba(15, 23, 42, 0.92);
+  --app-border-dark: rgba(51, 65, 85, 0.75);
+  --app-text-main-dark: #f8fafc;
+  --app-text-muted-dark: #94a3b8;
+  --app-bg-light: linear-gradient(135deg, #e8f0fb 0%, #f4f8fd 48%, #e9f1fb 100%);
+  --app-panel-light: rgba(248, 251, 255, 0.92);
+  --app-border-light: #cbd5e1;
+  --app-text-main-light: #0f172a;
+  --app-text-muted-light: #64748b;
+}
+
+/* Shell chung cho cả admin và user */
+.app-shell,
+.admin-shell,
+.customer-shell,
+.user-shell,
+[data-app-shell],
+[data-layout='admin'],
+[data-layout='user'],
+[data-layout='customer'] {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+  background: var(--app-bg-dark);
+  color: var(--app-text-main-dark);
+  overflow: hidden;
+}
+
+/* Sidebar chung */
+.app-sidebar,
+.admin-sidebar,
+.customer-sidebar,
+.user-sidebar,
+[data-sidebar],
+aside {
+  width: var(--app-sidebar-width);
+  min-width: var(--app-sidebar-width);
+  max-width: var(--app-sidebar-width);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--app-border-dark);
+  background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+}
+
+/* Nội dung bên phải: luôn cùng cơ chế scroll */
+.app-main,
+.admin-main,
+.customer-main,
+.user-main,
+[data-main],
+main {
+  min-width: 0;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 30%),
+    var(--app-bg-dark);
+}
+
+/* Header chung */
+.app-header,
+.admin-header,
+.customer-header,
+.user-header,
+[data-header],
+header {
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--app-border-dark);
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(18px);
+}
+
+/* Vùng content chung */
+.app-content,
+.admin-content,
+.customer-content,
+.user-content,
+[data-content] {
+  width: 100%;
+  max-width: none;
+  padding: var(--app-content-y) var(--app-content-x);
+}
+
+/* Footer chung nếu trang có dùng */
+.app-footer,
+.admin-footer,
+.customer-footer,
+.user-footer,
+[data-footer],
+footer {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--app-border-dark);
+  background: rgba(15, 23, 42, 0.65);
+  color: var(--app-text-muted-dark);
+  padding: 1rem var(--app-content-x);
+}
+
+/* Nav item chung: áp dụng được cho NavLink, button trong sidebar */
+.app-nav-item,
+.admin-nav-item,
+.customer-nav-item,
+.user-nav-item,
+[data-nav-item],
+aside nav a,
+aside nav button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  color: var(--app-text-muted-dark);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease;
+}
+
+.app-nav-item:hover,
+.admin-nav-item:hover,
+.customer-nav-item:hover,
+.user-nav-item:hover,
+[data-nav-item]:hover,
+aside nav a:hover,
+aside nav button:hover {
+  color: #ffffff;
+  background: rgba(99, 102, 241, 0.10);
+}
+
+.app-nav-item-active,
+.admin-nav-item-active,
+.customer-nav-item-active,
+.user-nav-item-active,
+[data-nav-active='true'],
+aside nav a.active,
+aside nav a[aria-current='page'] {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+  box-shadow: 0 14px 28px rgba(79, 70, 229, 0.26);
+}
+
+/* Header search/input chung */
+.app-header input,
+.admin-header input,
+.customer-header input,
+.user-header input,
+header input[type='text'],
+header input[type='search'] {
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--app-border-dark);
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--app-text-main-dark);
+}
+
+/* Card user/account dưới sidebar để admin/user giống kích thước */
+.sidebar-account-card,
+.app-account-card,
+.admin-account-card,
+.customer-account-card,
+.user-account-card,
+[data-account-card] {
+  min-height: 68px;
+  border-radius: 0.875rem;
+  border: 1px solid var(--app-border-dark);
+  background: rgba(15, 23, 42, 0.62);
+  padding: 0.75rem;
+}
+
+/* Giữ transition mượt khi đổi trang */
+.app-page,
+.admin-page,
+.customer-page,
+.user-page,
+[data-page] {
+  animation: appPageFade 180ms ease-out both;
+}
+
+@keyframes appPageFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Light mode đồng bộ cho shell */
+html.light .app-shell,
+html.light .admin-shell,
+html.light .customer-shell,
+html.light .user-shell,
+html.light [data-app-shell],
+html.light [data-layout='admin'],
+html.light [data-layout='user'],
+html.light [data-layout='customer'] {
+  background: var(--app-bg-light) !important;
+  color: var(--app-text-main-light) !important;
+}
+
+html.light .app-main,
+html.light .admin-main,
+html.light .customer-main,
+html.light .user-main,
+html.light [data-main],
+html.light main {
+  background: var(--app-bg-light) !important;
+  color: var(--app-text-main-light) !important;
+}
+
+html.light .app-sidebar,
+html.light .admin-sidebar,
+html.light .customer-sidebar,
+html.light .user-sidebar,
+html.light [data-sidebar],
+html.light aside {
+  border-right-color: var(--app-border-light) !important;
+  background: linear-gradient(180deg, #dceaff 0%, #eef5ff 100%) !important;
+  box-shadow: inset -1px 0 0 #b8c8dd, 10px 0 32px rgba(30, 41, 59, 0.08) !important;
+}
+
+html.light .app-header,
+html.light .admin-header,
+html.light .customer-header,
+html.light .user-header,
+html.light [data-header],
+html.light header {
+  border-bottom-color: var(--app-border-light) !important;
+  background: var(--app-panel-light) !important;
+  color: var(--app-text-main-light) !important;
+  box-shadow: 0 1px 0 #cbd5e1, 0 10px 28px rgba(30, 41, 59, 0.08) !important;
+}
+
+html.light .app-footer,
+html.light .admin-footer,
+html.light .customer-footer,
+html.light .user-footer,
+html.light [data-footer],
+html.light footer {
+  border-top-color: var(--app-border-light) !important;
+  background: rgba(248, 251, 255, 0.88) !important;
+  color: var(--app-text-muted-light) !important;
+}
+
+html.light .app-nav-item,
+html.light .admin-nav-item,
+html.light .customer-nav-item,
+html.light .user-nav-item,
+html.light [data-nav-item],
+html.light aside nav a,
+html.light aside nav button {
+  color: var(--app-text-muted-light) !important;
+}
+
+html.light .app-nav-item:hover,
+html.light .admin-nav-item:hover,
+html.light .customer-nav-item:hover,
+html.light .user-nav-item:hover,
+html.light [data-nav-item]:hover,
+html.light aside nav a:hover,
+html.light aside nav button:hover {
+  color: var(--app-text-main-light) !important;
+  background: #dbeafe !important;
+}
+
+html.light .app-nav-item-active,
+html.light .admin-nav-item-active,
+html.light .customer-nav-item-active,
+html.light .user-nav-item-active,
+html.light [data-nav-active='true'],
+html.light aside nav a.active,
+html.light aside nav a[aria-current='page'] {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+}
+
+html.light .sidebar-account-card,
+html.light .app-account-card,
+html.light .admin-account-card,
+html.light .customer-account-card,
+html.light .user-account-card,
+html.light [data-account-card] {
+  border-color: var(--app-border-light) !important;
+  background: rgba(248, 251, 255, 0.86) !important;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Responsive: mobile chuyển sidebar thành overlay/ẩn theo class của app nếu có */
+@media (max-width: 768px) {
+  :root {
+    --app-sidebar-width: 0px;
+    --app-content-x: 1rem;
+    --app-content-y: 1rem;
+  }
+
+  .app-shell,
+  .admin-shell,
+  .customer-shell,
+  .user-shell,
+  [data-app-shell],
+  [data-layout='admin'],
+  [data-layout='user'],
+  [data-layout='customer'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-sidebar,
+  .admin-sidebar,
+  .customer-sidebar,
+  .user-sidebar,
+  [data-sidebar],
+  aside {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 180ms ease;
+  }
+
+  .sidebar-open .app-sidebar,
+  .sidebar-open .admin-sidebar,
+  .sidebar-open .customer-sidebar,
+  .sidebar-open .user-sidebar,
+  .sidebar-open [data-sidebar],
+  .sidebar-open aside {
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
+    transform: translateX(0);
+  }
+}
+
+/* ========================================================================
+   SOFT LIGHT REDESIGN - trắng xanh dịu mắt, đồng bộ Admin/User
+   Dán ở CUỐI file CSS để override các rule cũ.
+   ======================================================================== */
+@layer base {
+  :root {
+    --almotion-light-bg: #eef5fc;
+    --almotion-light-bg-2: #f6f9fd;
+    --almotion-light-panel: rgba(255, 255, 255, 0.82);
+    --almotion-light-panel-solid: #ffffff;
+    --almotion-light-panel-soft: #f5f8fc;
+    --almotion-light-sidebar: rgba(247, 251, 255, 0.92);
+    --almotion-light-sidebar-2: rgba(232, 241, 252, 0.92);
+    --almotion-light-border: #d3dfec;
+    --almotion-light-border-strong: #b8c8db;
+    --almotion-light-text: #142033;
+    --almotion-light-muted: #607086;
+    --almotion-light-faint: #8a99ad;
+    --almotion-light-primary: #4f46e5;
+    --almotion-light-primary-2: #6366f1;
+    --almotion-light-primary-soft: #eef2ff;
+    --almotion-light-shadow: 0 18px 46px rgba(43, 64, 95, 0.10);
+    --almotion-light-shadow-soft: 0 10px 24px rgba(43, 64, 95, 0.07);
+  }
+
+  html.light,
+  html.light body,
+  html.light #root {
+    background:
+      radial-gradient(circle at 12% -10%, rgba(129, 140, 248, 0.18), transparent 34%),
+      radial-gradient(circle at 86% 8%, rgba(56, 189, 248, 0.13), transparent 32%),
+      linear-gradient(135deg, var(--almotion-light-bg) 0%, var(--almotion-light-bg-2) 52%, #edf4fb 100%) !important;
+    color: var(--almotion-light-text) !important;
+  }
+
+  html.light body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  /* Nền app: bớt trắng gắt, có lớp xanh sữa nhẹ */
+  html.light main,
+  html.light section,
+  html.light .app-shell,
+  html.light .admin-shell,
+  html.light .customer-shell,
+  html.light .user-shell,
+  html.light [data-app-shell],
+  html.light [data-layout='admin'],
+  html.light [data-layout='user'],
+  html.light [data-layout='customer'],
+  html.light .app-main,
+  html.light .admin-main,
+  html.light .customer-main,
+  html.light .user-main,
+  html.light [data-main] {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.10), transparent 28%),
+      linear-gradient(135deg, #edf5fc 0%, #f7fbff 55%, #eef5fc 100%) !important;
+    color: var(--almotion-light-text) !important;
+  }
+
+  /* Sidebar mềm hơn, không xanh quá đậm */
+  html.light aside,
+  html.light .app-sidebar,
+  html.light .admin-sidebar,
+  html.light .customer-sidebar,
+  html.light .user-sidebar,
+  html.light [data-sidebar] {
+    background:
+      linear-gradient(180deg, rgba(250, 253, 255, 0.96) 0%, rgba(232, 241, 252, 0.94) 100%) !important;
+    border-right: 1px solid var(--almotion-light-border) !important;
+    box-shadow: 8px 0 30px rgba(43, 64, 95, 0.08) !important;
+    color: var(--almotion-light-text) !important;
+  }
+
+  /* Header kính mờ nhẹ, giữ trắng xanh nhưng không chói */
+  html.light header,
+  html.light .app-header,
+  html.light .admin-header,
+  html.light .customer-header,
+  html.light .user-header,
+  html.light [data-header] {
+    background: rgba(247, 251, 255, 0.78) !important;
+    border-bottom: 1px solid var(--almotion-light-border) !important;
+    box-shadow: 0 8px 28px rgba(43, 64, 95, 0.08) !important;
+    backdrop-filter: blur(18px);
+    color: var(--almotion-light-text) !important;
+  }
+
+  html.light footer,
+  html.light .app-footer,
+  html.light .admin-footer,
+  html.light .customer-footer,
+  html.light .user-footer,
+  html.light [data-footer] {
+    background: rgba(247, 251, 255, 0.78) !important;
+    border-top: 1px solid var(--almotion-light-border) !important;
+    color: var(--almotion-light-muted) !important;
+  }
+
+  /* Card/panel: thay trắng phẳng bằng trắng ngọc có viền xanh xám */
+  html.light [class*="rounded-2xl"][class*="bg-slate"],
+  html.light [class*="rounded-xl"][class*="bg-slate"],
+  html.light [class*="rounded-lg"][class*="bg-slate"],
+  html.light [class*="bg-[#1e293b]"],
+  html.light [class*="bg-slate-800"],
+  html.light [class*="bg-slate-900"],
+  html.light [class*="bg-slate-950"] {
+    background: linear-gradient(180deg, rgba(255,255,255,0.90) 0%, rgba(247,250,255,0.84) 100%) !important;
+    border-color: var(--almotion-light-border) !important;
+    box-shadow: var(--almotion-light-shadow-soft) !important;
+  }
+
+  /* Những vùng có tint màu không bị biến thành trắng bệt */
+  html.light [class*="bg-indigo-500/5"],
+  html.light [class*="bg-indigo-500/10"],
+  html.light [class*="bg-indigo-500/15"] {
+    background-color: rgba(99, 102, 241, 0.10) !important;
+    border-color: rgba(99, 102, 241, 0.24) !important;
+  }
+
+  html.light [class*="bg-emerald-500/10"],
+  html.light [class*="bg-emerald-500/15"] {
+    background-color: rgba(16, 185, 129, 0.10) !important;
+    border-color: rgba(16, 185, 129, 0.22) !important;
+  }
+
+  html.light [class*="bg-rose-500/10"],
+  html.light [class*="bg-rose-500/15"] {
+    background-color: rgba(244, 63, 94, 0.10) !important;
+    border-color: rgba(244, 63, 94, 0.22) !important;
+  }
+
+  html.light [class*="bg-amber-500/10"],
+  html.light [class*="bg-amber-500/15"] {
+    background-color: rgba(245, 158, 11, 0.11) !important;
+    border-color: rgba(245, 158, 11, 0.24) !important;
+  }
+
+  /* Text dịu hơn, không đen gắt */
+  html.light [class*="text-white"],
+  html.light [class*="text-slate-50"],
+  html.light [class*="text-slate-100"],
+  html.light [class*="text-slate-200"],
+  html.light [class*="text-slate-300"] {
+    color: var(--almotion-light-text) !important;
+  }
+
+  html.light [class*="text-slate-400"],
+  html.light [class*="text-slate-500"],
+  html.light [class*="text-slate-600"] {
+    color: var(--almotion-light-muted) !important;
+  }
+
+  html.light [class*="font-mono"] {
+    color: #536278 !important;
+  }
+
+  /* Nav item: đồng bộ Admin/User, hover mịn hơn */
+  html.light nav a:not([class*="bg-indigo"]),
+  html.light aside button:not([class*="bg-indigo"]),
+  html.light .app-nav-item,
+  html.light .admin-nav-item,
+  html.light .customer-nav-item,
+  html.light .user-nav-item,
+  html.light [data-nav-item] {
+    color: #4f5f75 !important;
+    border: 1px solid transparent;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  }
+
+  html.light nav a:not([class*="bg-indigo"]):hover,
+  html.light aside button:not([class*="bg-indigo"]):hover,
+  html.light .app-nav-item:hover,
+  html.light .admin-nav-item:hover,
+  html.light .customer-nav-item:hover,
+  html.light .user-nav-item:hover,
+  html.light [data-nav-item]:hover {
+    background: rgba(238, 242, 255, 0.88) !important;
+    color: #273449 !important;
+    border-color: rgba(99, 102, 241, 0.18) !important;
+    transform: translateX(2px);
+  }
+
+  html.light nav a[class*="bg-indigo"],
+  html.light aside button[class*="bg-indigo"],
+  html.light .app-nav-item-active,
+  html.light .admin-nav-item-active,
+  html.light .customer-nav-item-active,
+  html.light .user-nav-item-active,
+  html.light [data-nav-active='true'],
+  html.light aside nav a.active,
+  html.light aside nav a[aria-current='page'] {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #4f46e5 0%, #6d5dfc 100%) !important;
+    box-shadow: 0 12px 28px rgba(79, 70, 229, 0.24) !important;
+    border-color: rgba(255,255,255,0.16) !important;
+  }
+
+  html.light nav a[class*="bg-indigo"] *,
+  html.light aside button[class*="bg-indigo"] *,
+  html.light [data-nav-active='true'] * {
+    color: inherit !important;
+  }
+
+  /* Input/search: nền xanh sữa thay vì trắng chói */
+  html.light input,
+  html.light select,
+  html.light textarea {
+    background: rgba(247, 251, 255, 0.92) !important;
+    border-color: var(--almotion-light-border-strong) !important;
+    color: var(--almotion-light-text) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.90), 0 1px 2px rgba(43, 64, 95, 0.04) !important;
+  }
+
+  html.light input:focus,
+  html.light select:focus,
+  html.light textarea:focus {
+    border-color: #818cf8 !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14) !important;
+  }
+
+  html.light input::placeholder,
+  html.light textarea::placeholder {
+    color: #91a0b2 !important;
+  }
+
+  /* Button primary giữ màu xanh tím chủ đạo nhưng dịu hơn */
+  html.light button[class*="bg-indigo"],
+  html.light a[class*="bg-indigo"],
+  html.light [class*="bg-indigo-600"] {
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 12px 28px rgba(79, 70, 229, 0.22) !important;
+  }
+
+  html.light button[class*="bg-indigo"]:hover,
+  html.light a[class*="bg-indigo"]:hover,
+  html.light [class*="hover:bg-indigo-500"]:hover,
+  html.light [class*="hover:bg-indigo-700"]:hover {
+    background: linear-gradient(135deg, #4338ca 0%, #5b5ef3 100%) !important;
+  }
+
+  html.light button[class*="bg-indigo"] *,
+  html.light a[class*="bg-indigo"] * {
+    color: inherit !important;
+  }
+
+  /* Table dễ đọc hơn */
+  html.light table {
+    color: #243149 !important;
+  }
+
+  html.light thead tr {
+    background: rgba(241, 246, 253, 0.86) !important;
+    color: #5b6a80 !important;
+    border-color: var(--almotion-light-border) !important;
+  }
+
+  html.light tbody tr {
+    transition: background 140ms ease;
+  }
+
+  html.light tbody tr:hover,
+  html.light [class*="hover:bg-slate-800"]:hover,
+  html.light [class*="hover:bg-slate-700"]:hover {
+    background: rgba(236, 242, 250, 0.86) !important;
+  }
+
+  html.light [class*="divide-slate"] > :not([hidden]) ~ :not([hidden]),
+  html.light [class*="border-b"][class*="border-slate"] {
+    border-color: #d9e3ef !important;
+  }
+
+  /* Account card dưới sidebar nhìn gọn và sang hơn */
+  html.light .sidebar-account-card,
+  html.light .app-account-card,
+  html.light .admin-account-card,
+  html.light .customer-account-card,
+  html.light .user-account-card,
+  html.light [data-account-card] {
+    background: rgba(255,255,255,0.78) !important;
+    border-color: var(--almotion-light-border) !important;
+    box-shadow: 0 16px 34px rgba(43,64,95,0.09) !important;
+  }
+
+  /* Modal/popover bớt tối, vẫn nổi rõ */
+  html.light .header-popover,
+  html.light .help-modal-shell,
+  html.light [role="dialog"] > div,
+  html.light .modal,
+  html.light .dialog {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border-color: var(--almotion-light-border) !important;
+    box-shadow: 0 24px 70px rgba(43,64,95,0.18) !important;
+  }
+
+  html.light .help-modal-overlay,
+  html.light [class*="bg-slate-950/70"],
+  html.light [class*="bg-slate-950/60"] {
+    background-color: rgba(224, 233, 246, 0.62) !important;
+    backdrop-filter: blur(10px);
+  }
+
+  /* Badge màu: rõ nhưng không loè */
+  html.light [class*="text-emerald"] { color: #047857 !important; }
+  html.light [class*="text-rose"] { color: #be123c !important; }
+  html.light [class*="text-amber"] { color: #b45309 !important; }
+  html.light [class*="text-indigo"] { color: #4f46e5 !important; }
+  html.light [class*="text-sky"] { color: #0369a1 !important; }
+  html.light [class*="text-violet"] { color: #6d28d9 !important; }
+
+  html.light [class*="bg-indigo-600"] [class*="text-indigo"],
+  html.light [class*="bg-indigo-600"] [class*="text-slate"],
+  html.light button[class*="bg-indigo"] [class*="text-indigo"],
+  html.light button[class*="bg-indigo"] [class*="text-slate"] {
+    color: inherit !important;
+  }
+
+  /* Scrollbar xanh xám nhẹ */
+  html.light ::-webkit-scrollbar-thumb {
+    background: #b9c8db !important;
+    border-radius: 999px;
+  }
+
+  html.light ::-webkit-scrollbar-thumb:hover {
+    background: #9fb1c8 !important;
+  }
+
+  html.light * {
+    scrollbar-color: #b9c8db transparent !important;
+  }
+
+  /* Chart chữ rõ hơn trong light mode */
+  html.light .recharts-cartesian-axis-tick-value,
+  html.light .recharts-legend-item-text {
+    fill: #5b6a80 !important;
+    color: #5b6a80 !important;
+  }
+}
