@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { Activity, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
+import { Activity, Download, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
 
-// ====== Chức năng dữ liệu giữ nguyên từ file Dashboard (Supabase) ======
-
+import AdminActivityLog from './AdminActivityLog';
 const emptyStats = {
   apiCalls: 0,
   users: 0,
@@ -35,93 +34,86 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString('vi-VN');
 }
 
-function getPositiveRate(reviews) {
-  if (!reviews.length) return 0;
-  const positive = reviews.filter((item) => Number(item.ai_label) === 1).length;
-  return Math.round((positive / reviews.length) * 100);
-}
-
 const AdminDashboard = () => {
   const { theme = fallbackTheme } = useOutletContext() || {};
 
   const [stats, setStats] = useState(emptyStats);
-  const [weeklyData, setWeeklyData] = useState([]); // { key, label, total }
+  const [weeklyData, setWeeklyData] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-// ====== HÀM LOAD DỮ LIỆU ĐÃ ĐƯỢC CHUYỂN QUA FASTAPI ======
   const loadData = useCallback(async () => {
-    setIsLoading(true);
+  setIsLoading(true);
 
-    try {
-// Lấy ID người dùng trực tiếp từ hệ thống bảo mật của Supabase
-const { data: authData, error: authError } = await supabase.auth.getUser();
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
 
-if (authError || !authData?.user) {
-  // Nếu chưa đăng nhập, đá văng ra trang login (tuỳ chọn) hoặc báo lỗi
-  throw new Error("Không tìm thấy thông tin đăng nhập (Supabase Session rỗng)!");
-}
-
-const adminId = authData.user.id;
-
-      // Gọi 3 API Backend cùng lúc để lấy dữ liệu (Nhanh và an toàn tuyệt đối)
-      const [metricsRes, chartRes, usersRes] = await Promise.all([
-        fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
-        fetch(`http://localhost:8000/api/admin/metrics/chart?admin_id=${adminId}&days=7`),
-        fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`)
-      ]);
-
-      if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
-        throw new Error('Lỗi server khi tải dữ liệu dashboard');
-      }
-
-      const metricsData = await metricsRes.json();
-      const chartDataResponse = await chartRes.json();
-      const usersData = await usersRes.json();
-
-      // 1. Cập nhật 4 thẻ thống kê (Lấy số liệu Backend đã tính sẵn)
-      setStats({
-        apiCalls: metricsData.total_api_calls || 0,
-        users: metricsData.total_users || 0,
-        pendingFeedback: metricsData.pending_feedbacks || 0,
-        positiveRate: metricsData.global_positive_ratio || 0,
-      });
-
-      // 2. Cập nhật Biểu đồ (Map lại data từ Backend cho khớp định dạng của Recharts)
-      const formattedChartData = (chartDataResponse.chart_data || []).map(item => ({
-        key: item.date,
-        label: item.date,
-        total: item.api_calls
-      }));
-      setWeeklyData(formattedChartData);
-
-      // 3. Cập nhật Danh sách người dùng mới (Lấy 6 người tạo gần nhất)
-      const recent = (usersData || [])
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 6);
-      setRecentUsers(recent);
-
-    } catch (error) {
-      console.error('Load admin dashboard failed:', error);
-      toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
-        id: 'admin-dashboard-load-error',
-      });
-    } finally {
-      setIsLoading(false);
+    if (authError || !authData?.user) {
+      throw new Error('Không tìm thấy thông tin đăng nhập.');
     }
-  }, []);
+
+    const adminId = authData.user.id;
+
+    const [metricsRes, chartRes, usersRes] = await Promise.all([
+      fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
+      fetch(`http://localhost:8000/api/admin/metrics/sentiment-chart?admin_id=${adminId}&days=7`),
+      fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`),
+    ]);
+
+    if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
+      throw new Error('Lỗi server khi tải dữ liệu dashboard.');
+    }
+
+    const metricsData = await metricsRes.json();
+    const chartDataResponse = await chartRes.json();
+    const usersData = await usersRes.json();
+
+    setStats({
+      apiCalls: metricsData.total_api_calls || 0,
+      users: metricsData.total_users || 0,
+      pendingFeedback: metricsData.pending_feedbacks || 0,
+      positiveRate: metricsData.global_positive_ratio || 0,
+    });
+
+    const formattedChartData = (chartDataResponse.chart_data || []).map((item) => ({
+      key: item.date,
+      label: item.date,
+      positive: Number(item.positive || item.positive_count || 0),
+      negative: Number(item.negative || item.negative_count || 0),
+      total: Number(item.total || item.api_calls || 0),
+    }));
+
+    setWeeklyData(formattedChartData);
+
+    const recent = (usersData || [])
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 6);
+
+    setRecentUsers(recent);
+  } catch (error) {
+    console.error('Load admin dashboard failed:', error);
+    toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
+      id: 'admin-dashboard-load-error',
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Chuyển weeklyData (key/label/total) sang định dạng chartData mà AreaChart của file 1 cần (date/api_calls)
   const chartData = useMemo(
-    () => weeklyData.map((item) => ({ date: item.key, api_calls: item.total })),
+    () =>
+      weeklyData.map((item) => ({
+        date: item.key,
+        positive: item.positive || 0,
+        negative: item.negative || 0,
+      })),
     [weeklyData]
   );
 
-  // ====== Cấu hình thẻ chỉ số - giữ nguyên 100% từ file 1 (cardConfig) ======
   const cardConfig = [
     {
       title: 'Tổng phản hồi đã xử lý',
@@ -148,45 +140,296 @@ const adminId = authData.user.id;
       formatter: (value) => `${Number(value || 0).toFixed(0)}%`,
     },
   ];
+const handleExportPdf = useCallback(() => {
+  const exportedAt = new Date().toLocaleString('vi-VN');
+
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+
+  const chartRows = chartData.length
+    ? chartData
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(item.date)}</td>
+              <td class="positive">${formatNumber(item.positive)}</td>
+              <td class="negative">${formatNumber(item.negative)}</td>
+              <td>${formatNumber(Number(item.positive || 0) + Number(item.negative || 0))}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `<tr><td colspan="4">Chưa có dữ liệu phân hóa phản hồi.</td></tr>`;
+
+  const userRows = recentUsers.length
+    ? recentUsers
+        .map(
+          (user, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(user.full_name || user.email || 'Người dùng')}</td>
+              <td>${escapeHtml(user.email || '-')}</td>
+              <td>${escapeHtml(user.role === 'admin' ? 'Quản trị viên' : 'Người dùng')}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `<tr><td colspan="4">Chưa có dữ liệu người dùng gần đây.</td></tr>`;
+
+  const reportWindow = window.open('', '_blank', 'width=1100,height=800');
+
+  if (!reportWindow) {
+    toast.error('Trình duyệt đang chặn cửa sổ xuất PDF. Vui lòng cho phép popup.');
+    return;
+  }
+
+  reportWindow.document.open();
+  reportWindow.document.write(`
+    <!doctype html>
+    <html lang="vi">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Báo cáo nhanh Almotion</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background: #020617;
+            color: #e5e7eb;
+          }
+          .page { padding: 32px; }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+          }
+          h1 { margin: 0 0 8px; font-size: 28px; }
+          p { margin: 0; color: #94a3b8; }
+          .badge {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #4f46e5;
+            color: #c7d2fe;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 700;
+          }
+          .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+          }
+          .card {
+            border: 1px solid #334155;
+            background: #0f172a;
+            border-radius: 16px;
+            padding: 18px;
+          }
+          .label {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+          }
+          .value {
+            margin-top: 14px;
+            font-size: 30px;
+            font-weight: 900;
+            color: #fff;
+          }
+          .section {
+            border: 1px solid #334155;
+            background: #0f172a;
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 22px;
+          }
+          .section h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+          th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #1f2937;
+          }
+          th {
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: .08em;
+          }
+          .positive { color: #34d399; font-weight: 800; }
+          .negative { color: #fb7185; font-weight: 800; }
+          .footer {
+            margin-top: 28px;
+            color: #64748b;
+            font-size: 12px;
+            text-align: right;
+          }
+          @media print {
+            body {
+              background: #020617 !important;
+              color: #e5e7eb !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="page">
+          <div class="header">
+            <div>
+              <h1>Báo cáo nhanh hệ thống Almotion</h1>
+              <p>Tổng hợp nhanh các chỉ số quản trị, phản hồi và người dùng gần đây.</p>
+            </div>
+            <div>
+              <span class="badge">Xuất lúc ${escapeHtml(exportedAt)}</span>
+            </div>
+          </div>
+
+          <section class="cards">
+            <div class="card">
+              <div class="label">Tổng phản hồi đã xử lý</div>
+              <div class="value">${formatNumber(stats.apiCalls)}</div>
+            </div>
+            <div class="card">
+              <div class="label">Tổng người dùng</div>
+              <div class="value">${formatNumber(stats.users)}</div>
+            </div>
+            <div class="card">
+              <div class="label">Phản hồi chờ xử lý</div>
+              <div class="value">${formatNumber(stats.pendingFeedback)}</div>
+            </div>
+            <div class="card">
+              <div class="label">Tỉ lệ tích cực</div>
+              <div class="value">${Number(stats.positiveRate || 0).toFixed(0)}%</div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Phân hóa phản hồi 7 ngày qua</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Tích cực</th>
+                  <th>Tiêu cực</th>
+                  <th>Tổng</th>
+                </tr>
+              </thead>
+              <tbody>${chartRows}</tbody>
+            </table>
+          </section>
+
+          <section class="section">
+            <h2>Người dùng mới gần đây</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Tên hiển thị</th>
+                  <th>Email</th>
+                  <th>Vai trò</th>
+                </tr>
+              </thead>
+              <tbody>${userRows}</tbody>
+            </table>
+          </section>
+
+          <div class="footer">Almotion Admin Dashboard</div>
+        </main>
+      </body>
+    </html>
+  `);
+  reportWindow.document.close();
+
+  setTimeout(() => {
+    reportWindow.focus();
+    reportWindow.print();
+  }, 400);
+
+  toast.success('Đã mở bản báo cáo. Chọn Save as PDF để lưu file.');
+}, [chartData, recentUsers, stats]);
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-wide text-white">Tổng quan hệ thống</h1>
-          <p className="text-sm text-slate-400">Theo dõi các chỉ số quan trọng của toàn bộ hệ thống.</p>
+          <p className="text-sm text-slate-400">
+            Theo dõi các chỉ số quan trọng của toàn bộ hệ thống.
+          </p>
         </div>
-        {/* Nút làm mới - giữ chức năng refresh từ file Dashboard (Supabase) */}
-        <button
-          type="button"
-          onClick={loadData}
-          disabled={isLoading}
-          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-60 md:mt-0"
-        >
-          <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Làm mới dữ liệu
-        </button>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 md:mt-0">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-black text-slate-200 shadow-lg transition hover:border-indigo-400 hover:text-white"
+          >
+            <Download className="h-4 w-4" />
+            Xuất Báo cáo PDF
+          </button>
+
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={isLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-60"
+          >
+            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Làm mới dữ liệu
+          </button>
+        </div>
       </div>
 
-      {/* ====== Thẻ chỉ số - giao diện giữ nguyên 100% từ file 1 ====== */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
-          Array(4).fill(0).map((_, index) => (
-            <div key={index} className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
-              <div className="flex items-center justify-between">
-                <div className="w-24 h-4 bg-slate-700 rounded animate-pulse" />
-                <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
+          Array(4)
+            .fill(0)
+            .map((_, index) => (
+              <div
+                key={index}
+                className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-24 h-4 bg-slate-700 rounded animate-pulse" />
+                  <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
+                </div>
+                <div className="mt-4">
+                  <div className="w-32 h-10 bg-slate-700 rounded animate-pulse" />
+                </div>
               </div>
-              <div className="mt-4">
-                <div className="w-32 h-10 bg-slate-700 rounded animate-pulse" />
-              </div>
-            </div>
-          ))
+            ))
         ) : (
           cardConfig.map((card, index) => (
-            <div key={index} className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md transition-colors hover:bg-slate-800">
+            <div
+              key={index}
+              className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md transition-colors hover:bg-slate-800"
+            >
               <div className="flex items-start justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{card.title}</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  {card.title}
+                </h3>
                 {card.icon}
               </div>
               <div className="mt-4 flex items-end justify-between">
@@ -196,19 +439,23 @@ const adminId = authData.user.id;
           ))
         )}
       </div>
-
-      {/* ====== Biểu đồ AreaChart - giao diện giữ nguyên 100% từ file 1 ====== */}
       <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
-        <h3 className="mb-2 text-sm font-medium text-slate-200">Lưu lượng phản hồi 7 ngày qua</h3>
-        <p className="mb-6 text-xs text-slate-500">Số phản hồi được ghi nhận theo từng ngày.</p>
+        <h3 className="mb-2 text-sm font-medium text-slate-200">
+          Phân hóa phản hồi 7 ngày qua
+        </h3>
+        <p className="mb-6 text-xs text-slate-500">
+          Đường xanh là phản hồi tích cực, đường đỏ là phản hồi tiêu cực.
+        </p>
 
         <div className="h-64 w-full">
           {isLoading ? (
             <div className="w-full h-full relative overflow-hidden flex items-end pb-8 px-8 gap-4 justify-between">
               <div className="absolute inset-0 flex flex-col justify-between py-8">
-                {Array(5).fill(0).map((_, index) => (
-                  <div key={index} className="w-full h-px bg-slate-700/50" />
-                ))}
+                {Array(5)
+                  .fill(0)
+                  .map((_, index) => (
+                    <div key={index} className="w-full h-px bg-slate-700/50" />
+                  ))}
               </div>
               {[40, 70, 45, 90, 65, 30, 80].map((height, index) => (
                 <div
@@ -220,13 +467,7 @@ const adminId = authData.user.id;
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="colorApiCalls" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
                 <CartesianGrid stroke="#334155" strokeDasharray="4 4" vertical={false} />
                 <XAxis
                   dataKey="date"
@@ -234,14 +475,16 @@ const adminId = authData.user.id;
                   tick={{ fontSize: 12 }}
                   tickFormatter={(value) => {
                     const date = new Date(value);
-                    return Number.isNaN(date.getTime()) ? value : `${date.getDate()}/${date.getMonth() + 1}`;
+                    return Number.isNaN(date.getTime())
+                      ? value
+                      : `${date.getDate()}/${date.getMonth() + 1}`;
                   }}
                 />
                 <YAxis
                   stroke="#94a3b8"
                   tick={{ fontSize: 12 }}
                   allowDecimals={false}
-                  tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
+                  tickFormatter={(value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value)}
                 />
                 <Tooltip
                   contentStyle={{
@@ -252,39 +495,52 @@ const adminId = authData.user.id;
                   }}
                   labelStyle={{ color: '#f8fafc' }}
                 />
-                <Area
+                <Line
                   type="monotone"
-                  dataKey="api_calls"
-                  name="Phản hồi"
-                  stroke="#818cf8"
+                  dataKey="positive"
+                  name="Tích cực"
+                  stroke="#10b981"
                   strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorApiCalls)"
-                  activeDot={{ r: 6, fill: '#818cf8', stroke: '#0f172a', strokeWidth: 2 }}
+                  dot={{ r: 4, fill: '#10b981' }}
+                  activeDot={{ r: 6, fill: '#10b981', stroke: '#0f172a', strokeWidth: 2 }}
                 />
-              </AreaChart>
+                <Line
+                  type="monotone"
+                  dataKey="negative"
+                  name="Tiêu cực"
+                  stroke="#f43f5e"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#f43f5e' }}
+                  activeDot={{ r: 6, fill: '#f43f5e', stroke: '#0f172a', strokeWidth: 2 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
-
-      {/* ====== Danh sách người dùng mới - chức năng giữ từ file Dashboard (Supabase), style theo file 1 ====== */}
+          <AdminActivityLog />
       <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
         <h3 className="mb-2 text-sm font-medium text-slate-200">Người dùng mới gần đây</h3>
-        <p className="mb-6 text-xs text-slate-500">6 tài khoản mới nhất trong bảng profiles.</p>
+        <p className="mb-6 text-xs text-slate-500">
+          6 tài khoản mới nhất trong bảng profiles.
+        </p>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {isLoading ? (
-            Array(6).fill(0).map((_, index) => (
-              <div key={index} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-                <div className="w-32 h-4 bg-slate-700 rounded animate-pulse" />
-                <div className="mt-2 w-24 h-3 bg-slate-700 rounded animate-pulse" />
-              </div>
-            ))
+            Array(6)
+              .fill(0)
+              .map((_, index) => (
+                <div key={index} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                  <div className="w-32 h-4 bg-slate-700 rounded animate-pulse" />
+                  <div className="mt-2 w-24 h-3 bg-slate-700 rounded animate-pulse" />
+                </div>
+              ))
           ) : recentUsers.length ? (
             recentUsers.map((item) => (
               <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-                <p className="truncate font-bold text-white">{item.full_name || item.email || 'Chưa có tên'}</p>
+                <p className="truncate font-bold text-white">
+                  {item.full_name || item.email || 'Chưa có tên'}
+                </p>
                 <p className="mt-1 truncate text-sm text-slate-400">{item.email || '-'}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span
