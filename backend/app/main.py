@@ -84,18 +84,45 @@ def extract_insights(text: str, ai_label: int, dynamic_aspects: dict, sensitive_
 @app.post("/predict", response_model=PredictResponse)
 async def predict_sentiment(request: PredictRequest):
     if predictor is None:
-        raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")
-    
+        raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng.")
     if not request.text.strip():
-        raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
+        raise HTTPException(status_code=400, detail="Văn bản không để trống.")
 
+    # --- TRẠM GÁC QUOTA (RATE LIMIT) ---
+    try:
+        # Lấy thông tin user (Giả sử bạn truyền thêm user_id vào PredictRequest, 
+        # nếu request hiện tại chưa có user_id thì bạn cân nhắc thêm vào nhé)
+        user_id = request.user_id 
+        profile_res = supabase.table('profiles').select('tier').eq('id', user_id).single().execute()
+        is_vip = profile_res.data and profile_res.data.get('tier') == 'vip'
+
+        if not is_vip:
+            # Đếm số lượng record đã tạo trong ngày hôm nay của user này
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0).isoformat()
+            
+            # Query đếm số dòng trong scraped_reviews tạo từ 0h sáng nay
+            count_res = supabase.table('scraped_reviews').select('id', count='exact') \
+                .eq('user_id', user_id) \
+                .gte('created_at', today_start) \
+                .execute()
+            
+            daily_usage = count_res.count if count_res.count else 0
+            
+            # Nếu vượt quá 100 lần, báo lỗi 429
+            if daily_usage >= 100:
+                raise HTTPException(status_code=429, detail="Bạn đã hết 100 lượt phân tích miễn phí hôm nay. Hãy nâng cấp VIP!")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        # Nếu lỗi logic (vd không có user_id), tạm thời cho qua để không chết API
+
+    # Phần dự đoán giữ nguyên
     try:
         result = predictor.predict(request.text)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình dự đoán: {str(e)}")
-
-
+        raise HTTPException(status_code=500, detail=f"Lỗi dự đoán: {str(e)}")
+    
 # =====================================================================
 # API 2: CUNG CẤP MỐC THỜI GIAN CHO BOT NODE.JS
 # =====================================================================
@@ -127,7 +154,13 @@ async def get_last_scraped(source_url: str, user_id: str):
 async def predict_batch(request: BatchPredictRequest):
     if predictor is None:
         raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")
-        
+    # 1. Trạm gác
+    profile = supabase.table('profiles').select('tier').eq('id', request.user_id).single().execute()
+    is_vip = profile.data and profile.data.get('tier') == 'vip'
+
+    # Chặn nếu file quá dài (Free max 50 dòng)
+    if not is_vip and len(request.reviews) > 50:
+        raise HTTPException(status_code=403, detail="Tài khoản Free chỉ phân tích tối đa 50 bình luận/lần. Vui lòng nâng cấp VIP!")
     # 1. NẠP CẤU HÌNH HỆ THỐNG TỪ DATABASE
     try:
         settings_res = supabase.table("system_settings").select("*").eq("id", 1).single().execute()
@@ -156,7 +189,12 @@ async def predict_batch(request: BatchPredictRequest):
         print(f"🧹 Đã dọn dẹp các dữ liệu cũ hơn {retention_days} ngày của user {request.user_id}.")
     except Exception as cleanup_error:
         print(f"⚠️ Lỗi khi dọn rác (không ảnh hưởng luồng chính): {cleanup_error}")
-
+    # 2. Xử lý logic bóc lột quyền lợi của User Free
+    if not is_vip:
+        dynamic_aspects = {}      # Tịch thu từ điển khía cạnh
+        sensitive_words_str = ""  # Tịch thu từ cấm
+        crisis_enabled = False    # Tắt cảnh báo đỏ
+        retention_days = 7        # Chỉ lưu data 7 ngày thay vì 30 ngày
     # ==========================================
     # QUÁ TRÌNH PHÂN TÍCH AI (Giữ nguyên như cũ)
     # ==========================================
@@ -253,6 +291,12 @@ async def save_feedback(request: FeedbackRequest):
 # ====================================================================
 @app.get("/api/dashboard/alerts")
 async def get_dashboard_alerts(source_url: str, user_id: str):
+    # 1. Trạm gác: Kiểm tra Tier
+    profile = supabase.table('profiles').select('tier').eq('id', user_id).single().execute()
+    is_vip = profile.data and profile.data.get('tier') == 'vip'
+
+    if not is_vip:
+        raise HTTPException(status_code=403, detail="Tính năng Cảnh báo Đỏ chỉ dành cho tài khoản VIP.")
     try:
         # Chỉ lấy những bình luận có cờ is_action_required = True, xếp mới nhất lên đầu
         response = supabase.table('scraped_reviews') \
@@ -274,6 +318,10 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
 @app.get("/api/dashboard/keyword-analytics")
 async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
     try:
+        # --- TRẠM GÁC: KIỂM TRA TIER TỪ DATABASE ---
+        profile_res = supabase.table('profiles').select('tier').eq('id', user_id).single().execute()
+        is_vip = profile_res.data and profile_res.data.get('tier') == 'vip'
+
         # 1. Query Database CHỈ 1 LẦN
         query = supabase.table('scraped_reviews').select('ai_label, keywords').eq('user_id', user_id)
         
@@ -300,7 +348,7 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
         neg_counts = Counter(neg_keywords)
         
         # ==========================================
-        # ĐÓNG GÓI DỮ LIỆU CHO LEADERBOARD (Lấy Top 5)
+        # ĐÓNG GÓI DỮ LIỆU CHO LEADERBOARD (Lấy Top 5 - Bất kỳ ai cũng xem được)
         # ==========================================
         leaderboard_data = {
             "top_positive": [{"keyword": k.capitalize(), "count": v} for k, v in pos_counts.most_common(5)],
@@ -308,23 +356,46 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
         }
         
         # ==========================================
-        # ĐÓNG GÓI DỮ LIỆU CHO WORD CLOUD (Lấy Top 20)
+        # ĐÓNG GÓI DỮ LIỆU CHO WORD CLOUD (Chỉ VIP mới có data)
         # ==========================================
         wordcloud_data = []
-        for kw, count in pos_counts.most_common(20):
-            wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "positive"})
-            
-        for kw, count in neg_counts.most_common(20):
-            wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "negative"})
-            
+        if is_vip:
+            for kw, count in pos_counts.most_common(20):
+                wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "positive"})
+                
+            for kw, count in neg_counts.most_common(20):
+                wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "negative"})
+                
         # 4. Trả về 1 gói JSON chứa cả 2 cục data
         return {
             "leaderboard": leaderboard_data,
-            "wordcloud": wordcloud_data
+            "wordcloud": wordcloud_data # Sẽ trả về mảng rỗng [] nếu là User Free
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    # Tạo model nhận dữ liệu
+class UpgradeRequest(BaseModel):
+    user_id: str
+
+@app.put("/api/user/upgrade")
+async def upgrade_to_vip(req: UpgradeRequest):
+    try:
+        # Cập nhật tier thành 'vip' trong bảng profiles
+        response = supabase.table('profiles').update({'tier': 'vip'}).eq('id', req.user_id).execute()
+        
+        # Nếu không có data trả về nghĩa là update thất bại (sai ID)
+        if not response.data:
+            raise HTTPException(status_code=400, detail="Không tìm thấy người dùng hoặc lỗi cập nhật.")
+            
+        return {
+            "status": "success", 
+            "message": "Nâng cấp VIP thành công!", 
+            "data": response.data[0]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi Server: {str(e)}")
 # =====================================================================
 # 1. DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
 # =====================================================================
