@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import HelpCenterModal from '../help/HelpCenterModal';
+import UpgradeModal from '../common/UpgradeModal';
 import {
   BarChart2,
   HelpCircle,
@@ -15,13 +16,16 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Crown // Đã bổ sung import icon Crown
 } from 'lucide-react';
 
 export default function Sidebar() {
   const location = useLocation();
   const { signOut } = useAuth();
   const { fullName, avatarUrl, initials, role, isAdmin } = useUserProfile();
+  
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
   const getLinkClass = (path) =>
     location.pathname === path
@@ -67,6 +71,18 @@ export default function Sidebar() {
           )}
         </nav>
 
+        {/* Nút nâng cấp VIP nằm tách biệt ngay trên khu vực Đăng xuất */}
+        <div className="px-4 mb-2 mt-auto">
+          <button
+            type="button"
+            onClick={() => setIsUpgradeModalOpen(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 text-white hover:border-indigo-400 hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] transition-all duration-300"
+          >
+            <Crown size={20} className="text-yellow-400" />
+            <span className="font-semibold text-sm">Nâng cấp VIP</span>
+          </button>
+        </div>
+        
         <div className="px-4 pb-4 space-y-1">
           <button
             type="button"
@@ -102,7 +118,9 @@ export default function Sidebar() {
         </Link>
       </aside>
 
+      {/* Render Modals ra ngoài màn hình */}
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
+      <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} />
     </>
   );
 }
