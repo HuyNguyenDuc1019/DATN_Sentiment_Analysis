@@ -1,21 +1,10 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  MessageSquare,
-  Users,
-  Settings,
-  Menu,
-  X,
-  Sparkles,
-  Home,
-  LogOut,
-} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { logAdminActivity } from '../../services/adminActivityLogger';
-import { LayoutDashboard, MessageSquare, Users, Settings, Menu, X, Sparkles, ArrowLeft, CreditCard} from 'lucide-react';
-import { getAdminRoleLabel, getDisplayInitials } from './adminHelpers';
+import { LayoutDashboard, MessageSquare, Users, Settings, Menu, X, Sparkles,  Home, LogOut, ArrowLeft, CreditCard } from 'lucide-react';
+import { getAdminRoleLabel, getDisplayInitials } from './adminHelpers'; 
 import Footer from '../../components/layout/Footer';
 
 const AdminLayout = () => {
@@ -158,7 +147,11 @@ const AdminLayout = () => {
             Quản lý Người dùng
           </NavLink>
 
-          <NavLink
+
+           <NavLink to="/admin/transactions" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
+            <CreditCard className="w-5 h-5" />Quản lý Giao dịch
+          </NavLink>
+                    <NavLink
             to="/admin/settings"
             className={getLinkClass}
             onClick={() => setIsMobileMenuOpen(false)}
@@ -166,10 +159,6 @@ const AdminLayout = () => {
             <Settings className="w-5 h-5" />
             Cài đặt hệ thống
           </NavLink>
-           <NavLink to="/admin/transactions" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
-            <CreditCard className="w-5 h-5" />Quản lý Giao dịch
-          </NavLink>
-
           <Link
             to="/dashboard"
             className={customerLinkClass}
