@@ -19,7 +19,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminFeedback from './pages/admin/AdminFeedback';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminSettings from './pages/admin/AdminSettings';
-
+import AdminTransactions from './pages/admin/AdminTransactions';
 function App() {
   return (
     <ErrorBoundary>
@@ -37,7 +37,8 @@ function App() {
     <Route path="feedback" element={<AdminFeedback />} />
     <Route path="users" element={<AdminUsers />} />
     <Route path="settings" element={<AdminSettings />} />
-    <Route path="profile" element={<Profile />} />  {/* 👈 thêm dòng này */}
+    <Route path="profile" element={<Profile />} />  
+    <Route path="transactions" element={<AdminTransactions />} />  
   </Route>
 </Route>
           <Route element={<ProtectedRoute />}>

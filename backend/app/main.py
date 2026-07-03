@@ -145,7 +145,6 @@ async def get_last_scraped(source_url: str, user_id: str):
         print("Lỗi truy vấn ngày cào:", e)
         return {"last_scraped_date": None}
 
-
 # =====================================================================
 # API 3: XỬ LÝ HÀNG LOẠT & LƯU DATABASE (CHUẨN SAAS)
 # =====================================================================
@@ -375,26 +374,31 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
     
     # Tạo model nhận dữ liệu
+
+
 class UpgradeRequest(BaseModel):
     user_id: str
+    amount: float = 99000 # Gắn cứng mặc định 99k
 
 @app.put("/api/user/upgrade")
 async def upgrade_to_vip(req: UpgradeRequest):
     try:
-        # Cập nhật tier thành 'vip' trong bảng profiles
-        response = supabase.table('profiles').update({'tier': 'vip'}).eq('id', req.user_id).execute()
-        
-        # Nếu không có data trả về nghĩa là update thất bại (sai ID)
-        if not response.data:
-            raise HTTPException(status_code=400, detail="Không tìm thấy người dùng hoặc lỗi cập nhật.")
+        # 1. Cập nhật tier thành 'vip'
+        update_res = supabase.table('profiles').update({'tier': 'vip'}).eq('id', req.user_id).execute()
+        if not update_res.data:
+            raise HTTPException(status_code=400, detail="Không tìm thấy người dùng.")
             
-        return {
-            "status": "success", 
-            "message": "Nâng cấp VIP thành công!", 
-            "data": response.data[0]
+        # 2. Ghi nhận giao dịch vào bảng transactions
+        transaction_data = {
+            "user_id": req.user_id,
+            "amount": req.amount,
+            "status": "paid"
         }
+        supabase.table('transactions').insert(transaction_data).execute()
+            
+        return {"status": "success", "message": "Nâng cấp VIP thành công!"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi Server: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 # =====================================================================
 # 1. DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
 # =====================================================================
@@ -636,5 +640,26 @@ async def get_admin_metrics_chart(admin_id: str, days: int = 7):
         ]
         
         return {"chart_data": chart_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+# =====================================================================
+# 5. NHÓM API Để Admin lấy danh sách Giao dịch
+# =====================================================================
+@app.get("/api/admin/transactions")
+async def get_admin_transactions(admin_id: str):
+    try:
+        # 1. Trạm gác: Kiểm tra quyền Admin
+        profile = supabase.table('profiles').select('role').eq('id', admin_id).single().execute()
+        if not profile.data or profile.data.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền xem giao dịch.")
+
+        # 2. Lấy dữ liệu giao dịch kèm thông tin người dùng
+        # Cú pháp profiles(...) giúp lấy chéo dữ liệu từ bảng profiles
+        res = supabase.table('transactions') \
+            .select('id, amount, status, created_at, profiles(email, full_name)') \
+            .order('created_at', desc=True) \
+            .execute()
+            
+        return res.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

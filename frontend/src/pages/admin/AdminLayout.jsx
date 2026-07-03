@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, MessageSquare, Users, Settings, Menu, X, Sparkles, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Settings, Menu, X, Sparkles, ArrowLeft, CreditCard} from 'lucide-react';
 import { getAdminRoleLabel, getDisplayInitials } from './adminHelpers';
 import Footer from '../../components/layout/Footer';
 
@@ -102,6 +102,9 @@ const AdminLayout = () => {
           </NavLink>
           <NavLink to="/admin/settings" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
             <Settings className="w-5 h-5" />Cài đặt hệ thống
+          </NavLink>
+           <NavLink to="/admin/transactions" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
+            <CreditCard className="w-5 h-5" />Quản lý Giao dịch
           </NavLink>
         </nav>
 
