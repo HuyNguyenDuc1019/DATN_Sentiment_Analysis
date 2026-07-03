@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
 import { logAdminActivity } from '../../services/adminActivityLogger';
 
-// ====== Chức năng dữ liệu giữ nguyên từ file Feedback (Supabase) ======
+
 
 const STATUS_LABEL = {
   pending: 'Chờ duyệt',
