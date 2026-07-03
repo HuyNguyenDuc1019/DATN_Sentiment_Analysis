@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CheckCircle2, Download, Filter, RefreshCw, Search, XCircle,
+  CheckCircle2, ChevronLeft, ChevronRight, Download, Filter, RefreshCw, Search, XCircle,
   // ====== MỚI: icon cho modal chi tiết, bulk actions, filter nâng cao ======
   X, Eye, Trash2, History, SlidersHorizontal, AlertTriangle, Edit3,
 } from 'lucide-react';
@@ -33,6 +33,95 @@ const MISMATCH_OPTIONS = {
   match: 'Hệ thống đúng (trùng nhãn admin)',
 };
 
+const ITEMS_PER_PAGE = 10;
+const WINDOW_SIZE = 3;
+
+const getPageItems = (currentPage, totalPages) => {
+  if (totalPages <= WINDOW_SIZE + 1) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  let start = currentPage;
+  let end = Math.min(start + WINDOW_SIZE - 1, totalPages);
+
+  if (end - start + 1 < WINDOW_SIZE) {
+    start = Math.max(1, end - WINDOW_SIZE + 1);
+  }
+
+  const items = [];
+  for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+    items.push(pageNumber);
+  }
+
+  if (end < totalPages - 1) {
+    items.push('dots-right');
+    items.push(totalPages);
+  } else if (end < totalPages) {
+    items.push(totalPages);
+  }
+
+  return items;
+};
+
+const PaginationControls = ({ page, totalPages, onPageChange }) => {
+  const safeTotalPages = Math.max(1, totalPages || 1);
+  const safePage = Math.min(Math.max(1, page || 1), safeTotalPages);
+  const pageItems = getPageItems(safePage, safeTotalPages);
+
+  const goToPage = (nextPage) => {
+    const boundedPage = Math.min(Math.max(1, nextPage), safeTotalPages);
+    if (boundedPage !== safePage) {
+      onPageChange(boundedPage);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={() => goToPage(safePage - 1)}
+        disabled={safePage <= 1}
+        className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-700 px-2 text-slate-300 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+        title="Trang trước"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+
+      {pageItems.map((item) =>
+        typeof item === 'string' ? (
+          <span key={item} className="flex h-9 min-w-9 items-center justify-center px-1 text-slate-500">
+            ...
+          </span>
+        ) : (
+          <button
+            key={item}
+            type="button"
+            onClick={() => goToPage(item)}
+            className={`flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors ${
+              item === safePage
+                ? 'border-indigo-500 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+            }`}
+            aria-current={item === safePage ? 'page' : undefined}
+          >
+            {item}
+          </button>
+        )
+      )}
+
+      <button
+        type="button"
+        onClick={() => goToPage(safePage + 1)}
+        disabled={safePage >= safeTotalPages}
+        className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-700 px-2 text-slate-300 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+        title="Trang sau"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+};
+
 const AdminFeedback = () => {
   const [items, setItems] = useState([]);
   const [profiles, setProfiles] = useState({});
@@ -41,6 +130,7 @@ const AdminFeedback = () => {
   const [updatingId, setUpdatingId] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [page, setPage] = useState(1);
 
   // ====== MỚI: state cho bộ lọc nâng cao ======
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -273,6 +363,23 @@ if (priorityFilter === 'duplicate') {
       return matchSearch && matchStatus && matchConfidence && matchMismatch && matchDate && matchPriority;
     });
   }, [items, profiles, search, statusFilter, confidenceFilter, mismatchFilter, dateFrom, dateTo, priorityFilter, priorityStats]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const paginatedItems = useMemo(() => {
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredItems, page]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds(new Set());
+  }, [search, statusFilter, confidenceFilter, mismatchFilter, dateFrom, dateTo, priorityFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   // ====== MỚI: reset toàn bộ filter về mặc định ======
  const resetFilters = () => {
@@ -528,17 +635,17 @@ const adminId = authData.user.id;
     });
   };
 
-  const isAllFilteredSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id));
+  const isAllFilteredSelected = paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id));
 
   const toggleSelectAll = () => {
     setSelectedIds((current) => {
       if (isAllFilteredSelected) {
         const next = new Set(current);
-        filteredItems.forEach((item) => next.delete(item.id));
+        paginatedItems.forEach((item) => next.delete(item.id));
         return next;
       }
       const next = new Set(current);
-      filteredItems.forEach((item) => next.add(item.id));
+      paginatedItems.forEach((item) => next.add(item.id));
       return next;
     });
   };
@@ -689,7 +796,11 @@ const toggleRetrainFlag = async (item) => {
       const res = await fetch(`http://localhost:8000/api/admin/feedback/${item.id}/detail?admin_id=${adminId}`);
       if (!res.ok) throw new Error('Không tải được chi tiết phản hồi');
       const detail = await res.json();
-      setModalItem(detail);
+      setModalItem({
+        ...item,
+        ...detail,
+        ai_confidence: detail.ai_confidence ?? item.ai_confidence,
+      });
       setModalNewLabel(String(detail.corrected_label ?? ''));
     } catch (error) {
       console.error('Lỗi tải chi tiết:', error);
@@ -1175,7 +1286,7 @@ const toggleRetrainFlag = async (item) => {
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item) => {
+                paginatedItems.map((item) => {
                   const profile = profiles[item.user_id] || {};
                   const disabled = updatingId === item.id;
 
@@ -1195,8 +1306,16 @@ const toggleRetrainFlag = async (item) => {
                         />
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-300">
-                        <p className="line-clamp-2" title={item.original_content}>
-                          {item.original_content}
+                        <p
+                          className="max-w-[520px] overflow-hidden text-ellipsis text-sm leading-6 text-slate-300"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                          }}
+                          title={item.original_content || ''}
+                        >
+                          {item.original_content || '—'}
                         </p>
                       </td>
                       <td className="px-5 py-4">{getLabelBadge(item.old_ai_label)}</td>
@@ -1235,7 +1354,7 @@ const toggleRetrainFlag = async (item) => {
                             className="flex items-center justify-center w-8 h-8 rounded text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Duyệt"
                           >
-                            <CheckCircle2 size={20} />
+                            {disabled ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={20} />}
                           </button>
                           <button
                             onClick={() => handleReview(item, 'reject')}
@@ -1243,7 +1362,7 @@ const toggleRetrainFlag = async (item) => {
                             className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Từ chối"
                           >
-                            <XCircle size={20} />
+                            {disabled ? <RefreshCw size={18} className="animate-spin" /> : <XCircle size={20} />}
                           </button>
                         </div>
                       </td>
@@ -1254,6 +1373,17 @@ const toggleRetrainFlag = async (item) => {
             </tbody>
           </table>
         </div>
+
+        {!isLoading && filteredItems.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-slate-700/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-400">
+              Hiển thị <span className="font-semibold text-slate-200">{(page - 1) * ITEMS_PER_PAGE + 1}</span> -{' '}
+              <span className="font-semibold text-slate-200">{Math.min(page * ITEMS_PER_PAGE, filteredItems.length)}</span> /{' '}
+              <span className="font-semibold text-slate-200">{filteredItems.length}</span> phản hồi
+            </p>
+            <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        )}
       </div>
 
       {/* ====================================================================

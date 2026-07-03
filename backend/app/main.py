@@ -1336,3 +1336,101 @@ async def export_advanced_dataset(request: AdminAdvancedDatasetExportRequest):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
+
+        # =====================================================================
+# API BỔ SUNG CHO TRANG ADMIN USERS
+# - Thống kê hoạt động dữ liệu theo từng user
+# - Lịch sử thao tác quản trị theo từng user
+# Thêm đoạn này vào CUỐI file main.py
+# =====================================================================
+
+@app.get("/api/admin/users/activity-summary")
+async def get_admin_users_activity_summary(admin_id: str):
+    check_is_admin(admin_id)
+
+    try:
+        summary = {}
+
+        reviews_res = (
+            supabase
+            .table("scraped_reviews")
+            .select("user_id, created_at")
+            .execute()
+        )
+
+        for row in reviews_res.data or []:
+            user_id = row.get("user_id")
+            if not user_id:
+                continue
+
+            if user_id not in summary:
+                summary[user_id] = {
+                    "review_count": 0,
+                    "feedback_count": 0,
+                    "last_activity_at": None,
+                }
+
+            summary[user_id]["review_count"] += 1
+
+            created_at = row.get("created_at")
+            if created_at and (
+                not summary[user_id]["last_activity_at"]
+                or str(created_at) > str(summary[user_id]["last_activity_at"])
+            ):
+                summary[user_id]["last_activity_at"] = created_at
+
+        feedback_res = (
+            supabase
+            .table("feedback_data")
+            .select("user_id, created_at")
+            .execute()
+        )
+
+        for row in feedback_res.data or []:
+            user_id = row.get("user_id")
+            if not user_id:
+                continue
+
+            if user_id not in summary:
+                summary[user_id] = {
+                    "review_count": 0,
+                    "feedback_count": 0,
+                    "last_activity_at": None,
+                }
+
+            summary[user_id]["feedback_count"] += 1
+
+            created_at = row.get("created_at")
+            if created_at and (
+                not summary[user_id]["last_activity_at"]
+                or str(created_at) > str(summary[user_id]["last_activity_at"])
+            ):
+                summary[user_id]["last_activity_at"] = created_at
+
+        return {"summary": summary}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/users/{user_id}/activity-history")
+async def get_admin_user_activity_history(user_id: str, admin_id: str, limit: int = 20):
+    check_is_admin(admin_id)
+
+    try:
+        safe_limit = max(1, min(int(limit or 20), 50))
+
+        logs_res = (
+            supabase
+            .table("admin_activity_logs")
+            .select("id, admin_id, admin_name, action_type, target_type, target_id, description, created_at")
+            .eq("target_id", user_id)
+            .order("created_at", desc=True)
+            .limit(safe_limit)
+            .execute()
+        )
+
+        return {"logs": logs_res.data or []}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
