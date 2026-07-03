@@ -12,6 +12,7 @@ import {
 import { Activity, Download, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
+
 import AdminActivityLog from './AdminActivityLog';
 const emptyStats = {
   apiCalls: 0,
@@ -42,62 +43,62 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
-    setIsLoading(true);
+  setIsLoading(true);
 
-    try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
 
-      if (authError || !authData?.user) {
-        throw new Error('Không tìm thấy thông tin đăng nhập.');
-      }
-
-      const adminId = authData.user.id;
-
-      const [metricsRes, chartRes, usersRes] = await Promise.all([
-        fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
-        fetch(`http://localhost:8000/api/admin/metrics/sentiment-chart?admin_id=${adminId}&days=7`),
-        fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`),
-      ]);
-
-      if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
-        throw new Error('Lỗi server khi tải dữ liệu dashboard.');
-      }
-
-      const metricsData = await metricsRes.json();
-      const chartDataResponse = await chartRes.json();
-      const usersData = await usersRes.json();
-
-      setStats({
-        apiCalls: metricsData.total_api_calls || 0,
-        users: metricsData.total_users || 0,
-        pendingFeedback: metricsData.pending_feedbacks || 0,
-        positiveRate: metricsData.global_positive_ratio || 0,
-      });
-
-      const formattedChartData = (chartDataResponse.chart_data || []).map((item) => ({
-        key: item.date,
-        label: item.date,
-        positive: Number(item.positive || item.positive_count || 0),
-        negative: Number(item.negative || item.negative_count || 0),
-        total: Number(item.total || item.api_calls || 0),
-      }));
-
-      setWeeklyData(formattedChartData);
-
-      const recent = (usersData || [])
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 6);
-
-      setRecentUsers(recent);
-    } catch (error) {
-      console.error('Load admin dashboard failed:', error);
-      toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
-        id: 'admin-dashboard-load-error',
-      });
-    } finally {
-      setIsLoading(false);
+    if (authError || !authData?.user) {
+      throw new Error('Không tìm thấy thông tin đăng nhập.');
     }
-  }, []);
+
+    const adminId = authData.user.id;
+
+    const [metricsRes, chartRes, usersRes] = await Promise.all([
+      fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
+      fetch(`http://localhost:8000/api/admin/metrics/sentiment-chart?admin_id=${adminId}&days=7`),
+      fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`),
+    ]);
+
+    if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
+      throw new Error('Lỗi server khi tải dữ liệu dashboard.');
+    }
+
+    const metricsData = await metricsRes.json();
+    const chartDataResponse = await chartRes.json();
+    const usersData = await usersRes.json();
+
+    setStats({
+      apiCalls: metricsData.total_api_calls || 0,
+      users: metricsData.total_users || 0,
+      pendingFeedback: metricsData.pending_feedbacks || 0,
+      positiveRate: metricsData.global_positive_ratio || 0,
+    });
+
+    const formattedChartData = (chartDataResponse.chart_data || []).map((item) => ({
+      key: item.date,
+      label: item.date,
+      positive: Number(item.positive || item.positive_count || 0),
+      negative: Number(item.negative || item.negative_count || 0),
+      total: Number(item.total || item.api_calls || 0),
+    }));
+
+    setWeeklyData(formattedChartData);
+
+    const recent = (usersData || [])
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 6);
+
+    setRecentUsers(recent);
+  } catch (error) {
+    console.error('Load admin dashboard failed:', error);
+    toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
+      id: 'admin-dashboard-load-error',
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     loadData();

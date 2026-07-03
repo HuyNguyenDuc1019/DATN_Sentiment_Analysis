@@ -406,28 +406,76 @@ async def update_user_action(request: AdminActionRequest):
 @app.get("/api/admin/feedback")
 async def get_admin_feedbacks(admin_id: str):
     check_is_admin(admin_id)
+
     try:
-        # 1. Lấy toàn bộ phản hồi
-        feedback_res = supabase.table('feedback_data').select('*').order('created_at', desc=True).execute()
-        
-        # 2. Lấy toàn bộ user để lấy Email và Tên
-        profiles_res = supabase.table('profiles').select('id, email, full_name').execute()
-        
-        # 3. Biến danh sách user thành một cuốn từ điển để tìm kiếm cho nhanh
-        profiles_dict = {p['id']: p for p in profiles_res.data} if profiles_res.data else {}
-        
-        # 4. Gắn thông tin profile vào từng cái feedback
+        # 1. Lấy toàn bộ feedback
+        feedback_res = (
+            supabase
+            .table("feedback_data")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        feedback_rows = feedback_res.data or []
+
+        # 2. Lấy toàn bộ user để lấy email và tên
+        profiles_res = (
+            supabase
+            .table("profiles")
+            .select("id, email, full_name")
+            .execute()
+        )
+
+        profiles_dict = {
+            p["id"]: p
+            for p in (profiles_res.data or [])
+        }
+
+        # 3. Lấy toàn bộ review có confidence
+        reviews_res = (
+            supabase
+            .table("scraped_reviews")
+            .select("id, user_id, content, ai_label, confidence, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        reviews = reviews_res.data or []
+
+        # 4. Tạo lookup theo user_id + content + ai_label
+        review_lookup = {}
+
+        for review in reviews:
+            key = (
+                review.get("user_id"),
+                (review.get("content") or "").strip().lower(),
+                str(review.get("ai_label"))
+            )
+
+            if key not in review_lookup:
+                review_lookup[key] = review.get("confidence")
+
+        # 5. Gắn profiles + ai_confidence vào từng feedback
         result = []
-        if feedback_res.data:
-            for item in feedback_res.data:
-                # Tạo ra một trường 'profiles' ảo để Frontend đọc được
-                item['profiles'] = profiles_dict.get(item.get('user_id'))
-                result.append(item)
-                
+
+        for item in feedback_rows:
+            item["profiles"] = profiles_dict.get(item.get("user_id"))
+
+            key = (
+                item.get("user_id"),
+                (item.get("original_content") or "").strip().lower(),
+                str(item.get("old_ai_label"))
+            )
+
+            item["ai_confidence"] = review_lookup.get(key)
+
+            result.append(item)
+
         return result
+
     except Exception as e:
-        # In lỗi ra Terminal để nếu có sai sót mình còn dễ bắt bệnh
-        print(f"⚠️ LỖI API FEEDBACK: {str(e)}") 
+        print(f"⚠️ LỖI API FEEDBACK: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # API: Duyệt hoặc từ chối nhãn hiệu chỉnh dữ liệu từ người dùng
@@ -817,3 +865,474 @@ async def get_admin_activity_logs(admin_id: str, limit: int = 8):
  
     except Exception as error:
         raise FastAPIHTTPException(status_code=500, detail=str(error))
+
+        # =====================================================================
+# 7. NHÓM API MỞ RỘNG CHO "QUẢN LÝ PHẢN HỒI":
+#    Modal chi tiết, Hành động hàng loạt, Xuất CSV theo lựa chọn,
+#    và liên kết Confidence (Cách A: join qua scraped_review_id).
+#    -> TOÀN BỘ PHẦN NÀY LÀ THÊM MỚI, KHÔNG ĐỤNG CODE CŨ Ở TRÊN.
+#
+#    Yêu cầu Supabase (chạy 1 lần trong SQL Editor):
+#    ALTER TABLE feedback_data ADD COLUMN IF NOT EXISTS review_history jsonb DEFAULT '[]'::jsonb;
+#    ALTER TABLE feedback_data ADD COLUMN IF NOT EXISTS scraped_review_id uuid REFERENCES scraped_reviews(id);
+# =====================================================================
+
+class AdminFeedbackDetailReview(BaseModel):
+    admin_id: str
+    feedback_id: str
+    action: str                        # "approve" | "reject" | "edit_label"
+    reason: Optional[str] = None       # bắt buộc khi reject/edit_label
+    new_label: Optional[int] = None    # dùng khi action = "edit_label"
+
+
+class AdminFeedbackBulkReview(BaseModel):
+    admin_id: str
+    feedback_ids: list[str]
+    action: str                        # "approve" | "reject" | "edit_label" | "delete"
+    reason: Optional[str] = None
+    new_label: Optional[int] = None
+
+
+class AdminFeedbackExportSelected(BaseModel):
+    admin_id: str
+    feedback_ids: list[str]
+
+
+# ====== MỚI (Cách A): model cho việc FE gắn scraped_review_id sau khi tạo feedback ======
+class FeedbackLinkSource(BaseModel):
+    user_id: str
+    scraped_review_id: str
+
+
+def _append_review_history(feedback_id: str, entry: dict):
+    """Đọc review_history hiện có rồi nối thêm entry mới.
+    Nếu cột review_history chưa được tạo trên Supabase, hàm bỏ qua êm
+    để không làm vỡ luồng duyệt/từ chối chính."""
+    try:
+        current = supabase.table('feedback_data').select('review_history').eq('id', feedback_id).single().execute()
+        history = (current.data or {}).get('review_history') or []
+        history.append(entry)
+        supabase.table('feedback_data').update({"review_history": history}).eq('id', feedback_id).execute()
+    except Exception as e:
+        print(f"⚠️ Không thể ghi review_history (có thể cột chưa tồn tại trên Supabase): {e}")
+
+
+# ====== MỚI (Cách A): API để FE gọi ngay sau khi POST /feedback thành công,
+#         gắn scraped_review_id vào dòng feedback vừa tạo -> cho phép join confidence sau này.
+#         Không đụng gì tới endpoint /feedback cũ. ======
+@app.put("/api/feedback/{feedback_id}/link-source")
+async def link_feedback_source(feedback_id: str, request: FeedbackLinkSource):
+    try:
+        current = supabase.table('feedback_data').select('user_id').eq('id', feedback_id).single().execute()
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi này.")
+
+        # Chỉ cho phép chính chủ phản hồi gắn nguồn cho dòng của mình (không phải admin-only)
+        if current.data.get('user_id') != request.user_id:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền cập nhật phản hồi này.")
+
+        supabase.table('feedback_data').update({
+            "scraped_review_id": request.scraped_review_id
+        }).eq('id', feedback_id).execute()
+
+        return {"status": "success", "message": "Đã liên kết nguồn gốc phản hồi thành công."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ====== MỚI (Cách A): trả về map { feedback_id: confidence } cho toàn bộ phản hồi có scraped_review_id
+#         -> FE dùng để hiển thị cột "Độ tin cậy" cho cả bảng, không cần sửa loadFeedback cũ. ======
+@app.get("/api/admin/feedback/confidence-map")
+async def get_feedback_confidence_map(admin_id: str):
+    check_is_admin(admin_id)
+    try:
+        feedback_res = (
+            supabase.table('feedback_data')
+            .select('id, scraped_review_id')
+            .not_.is_('scraped_review_id', 'null')
+            .execute()
+        )
+        rows = feedback_res.data or []
+        review_ids = list({row['scraped_review_id'] for row in rows if row.get('scraped_review_id')})
+
+        if not review_ids:
+            return {}
+
+        reviews_res = supabase.table('scraped_reviews').select('id, confidence').in_('id', review_ids).execute()
+        confidence_by_review = {r['id']: r.get('confidence') for r in (reviews_res.data or [])}
+
+        result = {}
+        for row in rows:
+            rid = row.get('scraped_review_id')
+            if rid and rid in confidence_by_review:
+                result[row['id']] = confidence_by_review[rid]
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# API: Lấy chi tiết đầy đủ 1 phản hồi cho Modal (kèm review_history + confidence join qua scraped_review_id)
+@app.get("/api/admin/feedback/{feedback_id}/detail")
+async def get_admin_feedback_detail(feedback_id: str, admin_id: str):
+    check_is_admin(admin_id)
+
+    try:
+        res = (
+            supabase
+            .table("feedback_data")
+            .select("*")
+            .eq("id", feedback_id)
+            .single()
+            .execute()
+        )
+
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi này.")
+
+        item = res.data
+
+        profile_res = (
+            supabase
+            .table("profiles")
+            .select("id, email, full_name")
+            .eq("id", item.get("user_id"))
+            .execute()
+        )
+
+        item["profiles"] = profile_res.data[0] if profile_res.data else None
+        item["review_history"] = item.get("review_history") or []
+        item["ai_confidence"] = None
+
+        # Cách 1: lấy theo scraped_review_id nếu có
+        if item.get("scraped_review_id"):
+            review_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("confidence")
+                .eq("id", item.get("scraped_review_id"))
+                .execute()
+            )
+
+            if review_res.data:
+                item["ai_confidence"] = review_res.data[0].get("confidence")
+
+        # Cách 2: fallback theo user_id + nội dung + nhãn AI cũ
+        if item["ai_confidence"] is None:
+            review_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("confidence, created_at")
+                .eq("user_id", item.get("user_id"))
+                .eq("content", item.get("original_content"))
+                .eq("ai_label", item.get("old_ai_label"))
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+
+            if review_res.data:
+                item["ai_confidence"] = review_res.data[0].get("confidence")
+
+        # Cách 3: fallback cuối nếu label không khớp kiểu dữ liệu
+        if item["ai_confidence"] is None:
+            review_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("confidence, created_at")
+                .eq("user_id", item.get("user_id"))
+                .eq("content", item.get("original_content"))
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+
+            if review_res.data:
+                item["ai_confidence"] = review_res.data[0].get("confidence")
+
+        return item
+
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+# API: Duyệt / Từ chối / Sửa nhãn có lý do (dùng cho Modal chi tiết) + ghi lịch sử
+@app.put("/api/admin/feedback/review-detailed")
+async def review_feedback_detailed(request: AdminFeedbackDetailReview):
+    check_is_admin(request.admin_id)
+
+    if request.action in ("reject", "edit_label") and not (request.reason and request.reason.strip()):
+        raise HTTPException(status_code=400, detail="Vui lòng nhập lý do trước khi từ chối hoặc sửa nhãn.")
+
+    try:
+        current = supabase.table('feedback_data').select('corrected_label, status').eq('id', request.feedback_id).single().execute()
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi này.")
+
+        previous_label = current.data.get('corrected_label')
+        previous_status = current.data.get('status')
+
+        update_payload = {}
+        if request.action == "approve":
+            update_payload["status"] = "approved"
+        elif request.action == "reject":
+            update_payload["status"] = "rejected"
+        elif request.action == "edit_label":
+            if request.new_label is None:
+                raise HTTPException(status_code=400, detail="Thiếu nhãn mới (new_label).")
+            update_payload["corrected_label"] = request.new_label
+        else:
+            raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
+
+        supabase.table('feedback_data').update(update_payload).eq('id', request.feedback_id).execute()
+
+        _append_review_history(request.feedback_id, {
+            "admin_id": request.admin_id,
+            "action": request.action,
+            "reason": request.reason,
+            "previous_label": previous_label,
+            "previous_status": previous_status,
+            "new_label": request.new_label,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return {"status": "success", "message": "Đã cập nhật phản hồi thành công."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# API: Hành động hàng loạt (duyệt / từ chối / sửa nhãn / xóa nhiều mục cùng lúc)
+@app.put("/api/admin/feedback/bulk-review")
+async def bulk_review_feedback(request: AdminFeedbackBulkReview):
+    check_is_admin(request.admin_id)
+
+    if not request.feedback_ids:
+        raise HTTPException(status_code=400, detail="Chưa chọn phản hồi nào.")
+
+    if request.action in ("reject", "edit_label") and not (request.reason and request.reason.strip()):
+        raise HTTPException(status_code=400, detail="Vui lòng nhập lý do trước khi từ chối/sửa nhãn hàng loạt.")
+
+    try:
+        if request.action == "delete":
+            supabase.table('feedback_data').delete().in_('id', request.feedback_ids).execute()
+            return {"status": "success", "message": f"Đã xóa {len(request.feedback_ids)} phản hồi."}
+
+        update_payload = {}
+        if request.action == "approve":
+            update_payload["status"] = "approved"
+        elif request.action == "reject":
+            update_payload["status"] = "rejected"
+        elif request.action == "edit_label":
+            if request.new_label is None:
+                raise HTTPException(status_code=400, detail="Thiếu nhãn mới (new_label).")
+            update_payload["corrected_label"] = request.new_label
+        else:
+            raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
+
+        supabase.table('feedback_data').update(update_payload).in_('id', request.feedback_ids).execute()
+
+        for fid in request.feedback_ids:
+            _append_review_history(fid, {
+                "admin_id": request.admin_id,
+                "action": f"bulk_{request.action}",
+                "reason": request.reason,
+                "new_label": request.new_label,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+        return {"status": "success", "message": f"Đã xử lý {len(request.feedback_ids)} phản hồi ({request.action})."}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# API: Xuất CSV chỉ những phản hồi được chọn tick (khác export dataset retrain vốn chỉ lấy approved)
+@app.post("/api/admin/feedback/export-selected")
+async def export_selected_feedback(request: AdminFeedbackExportSelected):
+    check_is_admin(request.admin_id)
+    try:
+        if not request.feedback_ids:
+            raise HTTPException(status_code=400, detail="Chưa chọn phản hồi nào để xuất.")
+
+        response = supabase.table('feedback_data').select('*').in_('id', request.feedback_ids).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu để xuất.")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['id', 'original_content', 'old_ai_label', 'corrected_label', 'status', 'user_id', 'created_at'])
+        for item in response.data:
+            writer.writerow([
+                item.get('id'), item.get('original_content'), item.get('old_ai_label'),
+                item.get('corrected_label'), item.get('status'), item.get('user_id'), item.get('created_at'),
+            ])
+        output.seek(0)
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=selected_feedback_export.csv"}
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    # =====================================================================
+# API BỔ SUNG: LẤY ĐỘ TIN CẬY CHO ADMIN FEEDBACK
+# Chỉ thêm mới, không đổi UI / logic cũ
+# =====================================================================
+
+# =====================================================================
+# API BỔ SUNG: RETRAIN FLAG + EXPORT DATASET NÂNG CAO
+# =====================================================================
+
+class AdminRetrainFlagRequest(BaseModel):
+    admin_id: str
+    feedback_id: str
+    include_retrain: bool
+
+
+class AdminAdvancedDatasetExportRequest(BaseModel):
+    admin_id: str
+    mode: str = "all"  # all | mismatch | low_confidence
+    low_confidence_threshold: float = 0.5
+
+
+@app.put("/api/admin/feedback/retrain-flag")
+async def update_feedback_retrain_flag(request: AdminRetrainFlagRequest):
+    check_is_admin(request.admin_id)
+
+    try:
+        supabase.table("feedback_data").update({
+            "include_retrain": request.include_retrain
+        }).eq("id", request.feedback_id).execute()
+
+        return {
+            "status": "success",
+            "message": "Đã cập nhật cờ retrain."
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/dataset/export-advanced")
+async def export_advanced_dataset(request: AdminAdvancedDatasetExportRequest):
+    check_is_admin(request.admin_id)
+
+    try:
+        feedback_res = (
+            supabase
+            .table("feedback_data")
+            .select("id, user_id, original_content, old_ai_label, corrected_label, status, include_retrain, scraped_review_id, created_at")
+            .eq("status", "approved")
+            .eq("include_retrain", True)
+            .execute()
+        )
+
+        feedback_rows = feedback_res.data or []
+
+        if not feedback_rows:
+            raise HTTPException(status_code=404, detail="Không có dữ liệu phù hợp để xuất.")
+
+        # Lấy confidence từ scraped_reviews
+        review_ids = list({
+            row.get("scraped_review_id")
+            for row in feedback_rows
+            if row.get("scraped_review_id")
+        })
+
+        confidence_by_review_id = {}
+
+        if review_ids:
+            reviews_res = (
+                supabase
+                .table("scraped_reviews")
+                .select("id, confidence")
+                .in_("id", review_ids)
+                .execute()
+            )
+
+            confidence_by_review_id = {
+                row.get("id"): row.get("confidence")
+                for row in (reviews_res.data or [])
+            }
+
+        export_rows = []
+
+        for item in feedback_rows:
+            old_label = item.get("old_ai_label")
+            corrected_label = item.get("corrected_label")
+            confidence = confidence_by_review_id.get(item.get("scraped_review_id"))
+
+            if request.mode == "mismatch":
+                if str(old_label) == str(corrected_label):
+                    continue
+
+            if request.mode == "low_confidence":
+                if confidence is None:
+                    continue
+
+                confidence_value = float(confidence)
+                if confidence_value > 1:
+                    confidence_value = confidence_value / 100
+
+                if confidence_value >= request.low_confidence_threshold:
+                    continue
+
+            export_rows.append({
+                "text": item.get("original_content"),
+                "label": corrected_label,
+                "old_ai_label": old_label,
+                "confidence": confidence,
+                "feedback_id": item.get("id"),
+                "mode": request.mode
+            })
+
+        if not export_rows:
+            raise HTTPException(status_code=404, detail="Không có dữ liệu phù hợp với bộ lọc xuất.")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow([
+            "text",
+            "label",
+            "old_ai_label",
+            "confidence",
+            "feedback_id",
+            "mode"
+        ])
+
+        for row in export_rows:
+            writer.writerow([
+                row["text"],
+                row["label"],
+                row["old_ai_label"],
+                row["confidence"],
+                row["feedback_id"],
+                row["mode"]
+            ])
+
+        output.seek(0)
+
+        filename = f"phobert_retrain_{request.mode}_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))

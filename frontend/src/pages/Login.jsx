@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
 import toast from 'react-hot-toast';
-
+import { logAdminActivity } from '../services/adminActivityLogger';
 function getLoginError(error) {
   const message = String(error?.message || error?.error_description || '').toLowerCase();
 
@@ -49,19 +49,32 @@ export default function LoginScreen() {
     }
 
     const userId = data?.user?.id || data?.session?.user?.id;
-    if (userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle();
 
-      const role = profile?.role || 'user';
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('user_role', role);
-    }
+if (userId) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
 
-    navigate('/dashboard');
+  const role = profile?.role || 'user';
+
+  localStorage.setItem('userId', userId);
+  localStorage.setItem('user_id', userId);
+  localStorage.setItem('userRole', role);
+  localStorage.setItem('user_role', role);
+
+  if (role === 'admin') {
+    await logAdminActivity({
+      actionType: 'admin_login',
+      targetType: 'admin',
+      targetId: userId,
+      description: 'đăng nhập vào khu vực quản trị',
+    });
+  }
+}
+
+navigate('/dashboard');
   };
 
   return (
