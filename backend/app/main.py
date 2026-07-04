@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import os
 import time
 from collections import Counter  # Thêm thư viện để đếm từ khóa cho Leaderboard
-from typing import Optional
+from typing import Optional,Dict, Any
 # Import cấu trúc dữ liệu từ file schemas.py
 from .schemas import PredictRequest, PredictResponse, BatchPredictRequest, FeedbackRequest 
 from .database import supabase
@@ -146,123 +146,139 @@ async def get_last_scraped(source_url: str, user_id: str):
         print("Lỗi truy vấn ngày cào:", e)
         return {"last_scraped_date": None}
 
+
 # =====================================================================
-# API 3: XỬ LÝ HÀNG LOẠT & LƯU DATABASE (CHUẨN SAAS)
+# API 3: XỬ LÝ HÀNG LOẠT & LƯU DATABASE (CHUẨN SAAS CÓ MERGE LOGIC)
 # =====================================================================
 @app.post("/predict/batch")
 async def predict_batch(request: BatchPredictRequest):
     if predictor is None:
         raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")
-    # 1. Trạm gác
+        
+    # 1. Trạm gác phân quyền
     profile = supabase.table('profiles').select('tier').eq('id', request.user_id).single().execute()
     is_vip = profile.data and profile.data.get('tier') == 'vip'
 
-    # Chặn nếu file quá dài (Free max 50 dòng)
     if not is_vip and len(request.reviews) > 50:
         raise HTTPException(status_code=403, detail="Tài khoản Free chỉ phân tích tối đa 50 bình luận/lần. Vui lòng nâng cấp VIP!")
-    # 1. NẠP CẤU HÌNH HỆ THỐNG TỪ DATABASE
+
+    # ==========================================
+    # 2. KIẾN TRÚC ĐA NGƯỜI THUÊ: GỘP CẤU HÌNH ADMIN + USER VIP
+    # ==========================================
     try:
+        # A. Lấy cấu hình gốc của Admin (Global)
         settings_res = supabase.table("system_settings").select("*").eq("id", 1).single().execute()
         sys_settings = settings_res.data
-        dynamic_aspects = sys_settings.get("aspect_dictionary", {})
-        sensitive_words_str = sys_settings.get("custom_dictionary", "")
+        admin_aspects = sys_settings.get("aspect_dictionary", {})
+        admin_sensitive = sys_settings.get("custom_dictionary", "")
         crisis_enabled = sys_settings.get("crisis_alert_enabled", True)
-        retention_days = sys_settings.get("data_retention_days", 30) # Lấy cấu hình số ngày dọn rác
+        
+        # Biến chuẩn bị đưa vào AI
+        dynamic_aspects = admin_aspects.copy()
+        sensitive_words_str = admin_sensitive
+        retention_days = 7 # Mặc định Free là 7
+
+        # B. Lấy cấu hình riêng của User VIP (Tenant) và GỘP lại
+        if is_vip:
+            user_res = supabase.table('user_settings').select('*').eq('user_id', request.user_id).execute()
+            
+            if user_res.data and len(user_res.data) > 0:
+                user_settings = user_res.data[0]
+                
+                # Gộp Từ cấm: Nối chuỗi Admin và User lại với nhau
+                user_sensitive = user_settings.get("custom_sensitive_words", "")
+                if user_sensitive:
+                    sensitive_words_str = f"{admin_sensitive}, {user_sensitive}"
+                
+                # Gộp Khía cạnh: Duyệt qua từng ngành hàng của User
+                user_aspects = user_settings.get("custom_aspects", {})
+                if isinstance(user_aspects, dict):
+                    for aspect, keywords in user_aspects.items():
+                        if aspect in dynamic_aspects:
+                            dynamic_aspects[aspect] = f"{dynamic_aspects[aspect]}, {keywords}" # Nối thêm từ
+                        else:
+                            dynamic_aspects[aspect] = keywords # Thêm khía cạnh mới tinh
+                
+                # Ghi đè thời gian lưu trữ
+                retention_days = user_settings.get("retention_days", 30)
+                
+                # MỞ RỘNG: Lấy Ngưỡng độ nhạy tự chỉnh (Custom Threshold)
+                user_threshold = user_settings.get("custom_threshold", 50) / 100.0
+
+        else:
+            # Xử lý tước quyền User Free
+            dynamic_aspects = {}      # Tịch thu từ điển khía cạnh
+            sensitive_words_str = ""  # Tịch thu từ cấm
+            crisis_enabled = False    # Tắt cảnh báo đỏ
+            
     except Exception as e:
         print(f"⚠️ Lỗi khi tải cấu hình từ DB, dùng mặc định. Chi tiết: {e}")
         dynamic_aspects = {}
         sensitive_words_str = ""
-        crisis_enabled = True
-        retention_days = 30
+        crisis_enabled = is_vip
+        retention_days = 7
 
     # ==========================================
-    # 🧹 TÍNH NĂNG DỌN RÁC TỰ ĐỘNG (DATA RETENTION)
+    # 3. 🧹 TÍNH NĂNG DỌN RÁC TỰ ĐỘNG (DATA RETENTION)
     # ==========================================
     try:
         from datetime import datetime, timedelta
-        # Tính ra mốc thời gian quá khứ (Ví dụ: Ngày hiện tại trừ đi 30 ngày)
         cutoff_date = (datetime.now() - timedelta(days=retention_days)).isoformat()
-        
-        # Lệnh dọn dẹp: Tìm những dòng của user này có ngày tạo nhỏ hơn mốc thời gian và xóa sạch
         supabase.table("scraped_reviews").delete().eq("user_id", request.user_id).lt("created_at", cutoff_date).execute()
         print(f"🧹 Đã dọn dẹp các dữ liệu cũ hơn {retention_days} ngày của user {request.user_id}.")
     except Exception as cleanup_error:
-        print(f"⚠️ Lỗi khi dọn rác (không ảnh hưởng luồng chính): {cleanup_error}")
-    # 2. Xử lý logic bóc lột quyền lợi của User Free
-    if not is_vip:
-        dynamic_aspects = {}      # Tịch thu từ điển khía cạnh
-        sensitive_words_str = ""  # Tịch thu từ cấm
-        crisis_enabled = False    # Tắt cảnh báo đỏ
-        retention_days = 7        # Chỉ lưu data 7 ngày thay vì 30 ngày
+        print(f"⚠️ Lỗi khi dọn rác: {cleanup_error}")
+
     # ==========================================
-    # QUÁ TRÌNH PHÂN TÍCH AI (Giữ nguyên như cũ)
+    # 4. QUÁ TRÌNH PHÂN TÍCH AI
     # ==========================================
+    import time
     start_time = time.time()
-    all_reviews = request.reviews
-    total_reviews = len(all_reviews)
     results = []
     db_records = []
-    CHUNK_SIZE = 10 
 
     try:
-        for i in range(0, total_reviews, CHUNK_SIZE):
-            chunk_reviews = all_reviews[i : i + CHUNK_SIZE]
+        for item in request.reviews:
+            if not item.content.strip():
+                continue
+                
+            # Gọi AI dự đoán
+            pred_result = predictor.predict(item.content)
+            label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
+            confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
             
-            for item in chunk_reviews:
-                if not item.content.strip():
-                    continue
-                    
-                # Gọi AI dự đoán
-                pred_result = predictor.predict(item.content)
-                label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
-                confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
-                
-                # Bóc tách thông tin truyền cấu hình động vào
-                aspects, keywords, is_action = extract_insights(
-                    item.content, label, dynamic_aspects, sensitive_words_str, crisis_enabled
-                )
-                
-                results.append({
-                    "text": item.content,
-                    "label": label,
-                    "confidence": confidence
-                })
-                
-                # Gom dữ liệu vào Record
-                db_records.append({
-                    "content": item.content, 
-                    "review_date": item.review_date,
-                    "ai_label": label, 
-                    "confidence": confidence,
-                    "aspects": aspects,
-                    "keywords": keywords,
-                    "is_action_required": is_action,
-                    "user_id": request.user_id,
-                    "source_url": request.source_url 
-                })
+            # (Tùy chọn) Ghi đè Label dựa trên Custom Threshold của VIP
+            if is_vip and 'user_threshold' in locals():
+                if confidence < user_threshold and label == "Tích cực":
+                    label = "Tiêu cực" # AI tự tin thấp hơn mức User yêu cầu -> Đẩy xuống Tiêu cực
 
-        # Bắn hàng loạt vào bảng scraped_reviews
+            # Bóc tách thông tin truyền cấu hình ĐÃ GỘP vào
+            aspects, keywords, is_action = extract_insights(
+                item.content, label, dynamic_aspects, sensitive_words_str, crisis_enabled
+            )
+            
+            results.append({"text": item.content, "label": label, "confidence": confidence})
+            db_records.append({
+                "content": item.content, "review_date": item.review_date,
+                "ai_label": label, "confidence": confidence,
+                "aspects": aspects, "keywords": keywords,
+                "is_action_required": is_action,
+                "user_id": request.user_id, "source_url": request.source_url 
+            })
+
+        # Bắn hàng loạt vào bảng
         if db_records:
-            try:
-                supabase.table("scraped_reviews").insert(db_records).execute()
-                print(f"✅ Đã lưu thành công {len(db_records)} bình luận vào Database!")
-            except Exception as db_error:
-                print(f"❌ Lỗi khi lưu vào Supabase: {str(db_error)}")
-                raise HTTPException(status_code=400, detail=f"Lỗi Database: {str(db_error)}")
-                
+            supabase.table("scraped_reviews").insert(db_records).execute()
+            
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=f"Lỗi trong quá trình xử lý mảng: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi phân tích AI: {str(e)}")
 
     end_time = time.time()
-    processing_time = round(end_time - start_time, 2)
-
     return {
         "results": results,
         "total_processed": len(results),
-        "processing_time": f"{processing_time}s",
-        "message": "Phân tích và bóc tách dữ liệu thành công với cấu hình động!"
+        "processing_time": f"{round(end_time - start_time, 2)}s",
+        "message": "Phân tích và bóc tách dữ liệu thành công với cấu hình động cá nhân hóa!"
     }
 # =====================================================================
 # API 4: VÒNG LẶP PHẢN HỒI (HUMAN-IN-THE-LOOP)
@@ -416,6 +432,87 @@ async def upgrade_to_vip(req: UpgradeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    
+# ==========================================
+# 1. MODEL HỨNG DỮ LIỆU TỪ FRONTEND
+# ==========================================
+class UserSettingsUpdate(BaseModel):
+    user_id: str
+    custom_aspects: Optional[Dict[str, Any]] = None
+    custom_sensitive_words: Optional[str] = None
+    custom_threshold: Optional[float] = None
+    use_custom_threshold: Optional[bool] = None
+    alert_email: Optional[bool] = None
+    weekly_report: Optional[bool] = None
+    retention_days: Optional[int] = None
+
+# ==========================================
+# 2. API ĐỌC CẤU HÌNH (GET) - Chạy khi mở trang
+# ==========================================
+@app.get("/api/user/settings")
+async def get_user_settings(user_id: str):
+    try:
+        # Lấy dữ liệu dưới dạng list
+        res = supabase.table('user_settings').select('*').eq('user_id', user_id).execute()
+        
+        # Nếu mảng rỗng (User chưa từng lưu cài đặt bao giờ) -> Trả về mặc định
+        if not res.data or len(res.data) == 0:
+            return {
+                "user_id": user_id, 
+                "custom_threshold": 50,
+                "custom_sensitive_words": "",
+                "custom_aspects": {}, # Quan trọng: Tránh lỗi map() ở Frontend
+                "alert_email": False,
+                "weekly_report": True,
+                "retention_days": 7
+            }
+            
+        # Nếu đã có dữ liệu, trả về object đầu tiên trong mảng
+        return res.data[0]
+        
+    except Exception as e:
+        print(f"Lỗi API get_user_settings: {e}") 
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# 3. API LƯU CẤU HÌNH (PUT) - Chạy khi bấm nút Lưu
+# ==========================================
+@app.put("/api/user/settings")
+async def update_user_settings(req: UserSettingsUpdate):
+    try:
+        # Lọc bỏ các trường None để chỉ update những gì được gửi lên
+        # Dùng model_dump() nếu xài Pydantic V2, hoặc dict() cho bản cũ
+        update_data = {k: v for k, v in req.dict().items() if v is not None and k != "user_id"}
+        
+        # SỬA LỖI: Cập nhật thời gian bằng Python thay vì string "now()"
+        update_data['updated_at'] = datetime.utcnow().isoformat()
+        
+        # Upsert: Có rồi thì update, chưa có thì tạo mới
+        res = supabase.table('user_settings').upsert({**update_data, "user_id": req.user_id}).execute()
+        
+        return {"status": "success", "message": "Đã lưu cài đặt thành công!"}
+    except Exception as e:
+        print(f"Lỗi API update_user_settings: {e}") 
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# 4. API XÓA TOÀN BỘ DỮ LIỆU (DELETE) - Chạy khi bấm nút Danger
+# ==========================================
+@app.delete("/api/user/data/clear")
+async def clear_user_data(user_id: str):
+    try:
+        # Lệnh 1: Xóa toàn bộ bình luận đã cào của user này
+        # (Thay 'scraped_reviews' bằng đúng tên bảng chứa data của bạn)
+        res_reviews = supabase.table('scraped_reviews').delete().eq('user_id', user_id).execute()
+        
+        # Lệnh 2 (Tùy chọn): Xóa các bản ghi đính chính tay trong bảng feedback (nếu có)
+        # res_feedback = supabase.table('feedback').delete().eq('user_id', user_id).execute()
+
+        return {"status": "success", "message": "Toàn bộ dữ liệu phân tích đã được dọn dẹp vĩnh viễn."}
+    
+    except Exception as e:
+        print(f"Lỗi API clear_user_data: {e}")
+        raise HTTPException(status_code=500, detail="Không thể xóa dữ liệu. Vui lòng thử lại sau.")
 # =====================================================================
 # 1. DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
 # =====================================================================
