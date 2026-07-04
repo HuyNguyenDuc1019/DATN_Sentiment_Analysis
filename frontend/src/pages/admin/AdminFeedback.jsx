@@ -539,12 +539,16 @@ const adminId = authData.user.id;
   // ====== Giao diện badge nhãn - giữ nguyên 100% từ file 1 ======
   const getLabelBadge = (labelValue) => {
     if (labelValue === null || labelValue === undefined) {
-      return <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-slate-500/10 text-slate-400 border-slate-500/20">Chưa có nhãn</span>;
+      return (
+        <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 text-xs rounded-full font-medium leading-none border bg-slate-500/10 text-slate-400 border-slate-500/20">
+          Chưa có nhãn
+        </span>
+      );
     }
 
     if (Number(labelValue) === 1) {
       return (
-        <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+        <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 text-xs rounded-full font-medium leading-none border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
           Tích cực (1)
         </span>
       );
@@ -552,14 +556,14 @@ const adminId = authData.user.id;
 
     if (Number(labelValue) === 0) {
       return (
-        <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-rose-500/10 text-rose-400 border-rose-500/20">
+        <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 text-xs rounded-full font-medium leading-none border bg-rose-500/10 text-rose-400 border-rose-500/20">
           Tiêu cực (0)
         </span>
       );
     }
 
     return (
-      <span className="px-2.5 py-1 text-xs rounded-full font-medium border bg-orange-500/10 text-orange-400 border-orange-500/20">
+      <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 text-xs rounded-full font-medium leading-none border bg-orange-500/10 text-orange-400 border-orange-500/20">
         Khác ({labelValue})
       </span>
     );
@@ -1229,7 +1233,7 @@ const toggleRetrainFlag = async (item) => {
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[1280px] text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-700/50 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 {/* ====== MỚI: cột checkbox chọn tất cả ====== */}
@@ -1242,10 +1246,10 @@ const toggleRetrainFlag = async (item) => {
                   />
                 </th>
                 <th className="px-5 py-4 w-[28%]">Nội dung gốc</th>
-                <th className="px-5 py-4">Nhãn hệ thống</th>
+                <th className="px-5 py-4 min-w-[130px]">Nhãn hệ thống</th>
                 {/* ====== MỚI: cột Độ tin cậy ====== */}
                 <th className="px-5 py-4">Độ tin cậy</th>
-                <th className="px-5 py-4">Nhãn người dùng sửa</th>
+                <th className="px-5 py-4 min-w-[150px]">Nhãn người dùng sửa</th>
                 {/* ====== MỚI: cột Sai khác ====== */}
                 <th className="px-5 py-4">Sai khác</th>
                 <th className="px-5 py-4">Người gửi</th>
@@ -1318,11 +1322,13 @@ const toggleRetrainFlag = async (item) => {
                           {item.original_content || '—'}
                         </p>
                       </td>
-                      <td className="px-5 py-4">{getLabelBadge(item.old_ai_label)}</td>
+                      <td className="px-5 py-4 min-w-[130px]">
+                        {getLabelBadge(item.old_ai_label)}
+                      </td>
                       {/* ====== MỚI ====== */}
                       <td className="px-5 py-4">{getConfidenceDisplay(item)}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="px-5 py-4 min-w-[150px]">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
                           {item.old_ai_label !== item.corrected_label && (
                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500" title="Người dùng đã sửa nhãn" />
                           )}

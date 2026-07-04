@@ -16,16 +16,17 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
-  Crown // Đã bổ sung import icon Crown
+  Crown,
 } from 'lucide-react';
 
 export default function Sidebar() {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, userProfile, refreshUserProfile } = useAuth();
   const { fullName, avatarUrl, initials, role, isAdmin } = useUserProfile();
-  
+
   const [helpOpen, setHelpOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const isVip = userProfile?.tier === 'vip';
 
   const getLinkClass = (path) =>
     location.pathname === path
@@ -71,18 +72,27 @@ export default function Sidebar() {
           )}
         </nav>
 
-        {/* Nút nâng cấp VIP nằm tách biệt ngay trên khu vực Đăng xuất */}
         <div className="px-4 mb-2 mt-auto">
-          <button
-            type="button"
-            onClick={() => setIsUpgradeModalOpen(true)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 text-white hover:border-indigo-400 hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] transition-all duration-300"
-          >
-            <Crown size={20} className="text-yellow-400" />
-            <span className="font-semibold text-sm">Nâng cấp VIP</span>
-          </button>
+          {isVip ? (
+            <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-indigo-500/15 border border-amber-400/30 text-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.12)]">
+              <Crown size={20} className="text-yellow-400" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-5">Tài khoản VIP</p>
+                <p className="text-[11px] text-amber-100/70">Đã mở khóa toàn bộ tính năng</p>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsUpgradeModalOpen(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 text-white hover:border-indigo-400 hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] transition-all duration-300"
+            >
+              <Crown size={20} className="text-yellow-400" />
+              <span className="font-semibold text-sm">Nâng cấp VIP</span>
+            </button>
+          )}
         </div>
-        
+
         <div className="px-4 pb-4 space-y-1">
           <button
             type="button"
@@ -104,7 +114,7 @@ export default function Sidebar() {
           to="/profile"
           className="m-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4 flex items-center gap-3 hover:border-indigo-500/50 transition-colors"
         >
-          <div className="w-10 h-10 rounded-full bg-indigo-600 overflow-hidden flex items-center justify-center text-white font-semibold">
+          <div className="relative w-10 h-10 rounded-full bg-indigo-600 overflow-hidden flex items-center justify-center text-white font-semibold">
             {avatarUrl ? (
               <img src={avatarUrl} alt={`Ảnh đại diện của ${fullName}`} className="w-full h-full object-cover" />
             ) : (
@@ -112,15 +122,21 @@ export default function Sidebar() {
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-white text-sm font-semibold truncate">{fullName}</p>
-            <p className="text-slate-500 text-xs">{role}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-white text-sm font-semibold truncate">{fullName}</p>
+              {isVip && <Crown size={13} className="shrink-0 text-yellow-400" fill="currentColor" />}
+            </div>
+            <p className="text-slate-500 text-xs">{isVip ? 'VIP' : role}</p>
           </div>
         </Link>
       </aside>
 
-      {/* Render Modals ra ngoài màn hình */}
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
-      <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} />
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        onUpgraded={refreshUserProfile}
+      />
     </>
   );
 }

@@ -1,10 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 const AuthContext = createContext({
   user: null,
   session: null,
+  userProfile: null,
   loading: true,
+  profileLoading: true,
+  refreshUserProfile: async () => null,
   signIn: async () => ({ data: null, error: null }),
   signUp: async () => ({ data: null, error: null }),
   signOut: async () => ({ error: null }),
@@ -13,30 +16,102 @@ const AuthContext = createContext({
 function clearStoredAccountState() {
   localStorage.removeItem('userRole');
   localStorage.removeItem('user_role');
+  localStorage.removeItem('userTier');
+  localStorage.removeItem('user_tier');
+}
+
+function storeProfileState(profile) {
+  if (!profile) return;
+
+  if (profile.role) {
+    localStorage.setItem('userRole', profile.role);
+    localStorage.setItem('user_role', profile.role);
+  }
+
+  if (profile.tier) {
+    localStorage.setItem('userTier', profile.tier);
+    localStorage.setItem('user_tier', profile.tier);
+  }
 }
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  const fetchUserProfile = useCallback(async (targetUserId) => {
+    if (!targetUserId) {
+      setUserProfile(null);
+      setProfileLoading(false);
+      return null;
+    }
+
+    setProfileLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url, role, status, tier, created_at')
+        .eq('id', targetUserId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const profile = data || null;
+      setUserProfile(profile);
+      storeProfileState(profile);
+      return profile;
+    } catch (error) {
+      console.error('Không thể tải hồ sơ người dùng:', error);
+      setUserProfile(null);
+      return null;
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
+
+  const refreshUserProfile = useCallback(async () => {
+    const currentUserId = user?.id || session?.user?.id;
+    return fetchUserProfile(currentUserId);
+  }, [fetchUserProfile, session?.user?.id, user?.id]);
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
-      setSession(data.session ?? null);
-      setUser(data.session?.user ?? null);
+
+      const nextSession = data.session ?? null;
+      const nextUser = nextSession?.user ?? null;
+
+      setSession(nextSession);
+      setUser(nextUser);
       setLoading(false);
+
+      if (nextUser?.id) {
+        await fetchUserProfile(nextUser.id);
+      } else {
+        clearStoredAccountState();
+        setUserProfile(null);
+        setProfileLoading(false);
+      }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      const nextUser = nextSession?.user ?? null;
+
       setSession(nextSession ?? null);
-      setUser(nextSession?.user ?? null);
+      setUser(nextUser);
       setLoading(false);
 
-      if (!nextSession?.user) {
+      if (nextUser?.id) {
+        await fetchUserProfile(nextUser.id);
+      } else {
         clearStoredAccountState();
+        setUserProfile(null);
+        setProfileLoading(false);
       }
     });
 
@@ -44,13 +119,16 @@ export function AuthProvider({ children }) {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchUserProfile]);
 
   const value = useMemo(
     () => ({
       session,
       user,
+      userProfile,
       loading,
+      profileLoading,
+      refreshUserProfile,
       signIn: (email, password) =>
         supabase.auth.signInWithPassword({
           email: String(email || '').trim().toLowerCase(),
@@ -67,10 +145,11 @@ export function AuthProvider({ children }) {
         }),
       signOut: async () => {
         clearStoredAccountState();
+        setUserProfile(null);
         return supabase.auth.signOut();
       },
     }),
-    [session, user, loading],
+    [session, user, userProfile, loading, profileLoading, refreshUserProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

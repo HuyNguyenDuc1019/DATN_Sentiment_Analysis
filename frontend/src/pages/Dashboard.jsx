@@ -23,14 +23,17 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchDashboardAlerts, fetchKeywordAnalytics } from '../services/api';
+import UpgradeModal from '../components/common/UpgradeModal';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
 
 export default function DashboardContent() {
-  const { user } = useAuth();
+  const { user, userProfile, refreshUserProfile } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [keywordAnalytics, setKeywordAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const isVip = userProfile?.tier === 'vip';
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -118,7 +121,7 @@ export default function DashboardContent() {
       ) : (
         <>
 
-      <AlertsSection alerts={visibleAlerts} loading={loading} />
+      <AlertsSection alerts={visibleAlerts} loading={loading} isVip={isVip} onUpgrade={() => setIsUpgradeModalOpen(true)} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <StatCard
@@ -152,6 +155,12 @@ export default function DashboardContent() {
       <RecentReviews reviews={reviews} />
         </>
       )}
+
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        onUpgraded={refreshUserProfile}
+      />
     </div>
   );
 }
@@ -196,11 +205,11 @@ function EmptyDashboardState() {
   );
 }
 
-function AlertsSection({ alerts, loading }) {
+function AlertsSection({ alerts, loading, isVip, onUpgrade }) {
   const isSingleAlert = alerts.length === 1;
 
   return (
-    <section className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-5 shadow-lg shadow-rose-950/10">
+    <section className="relative overflow-hidden rounded-2xl border border-rose-500/25 bg-rose-500/10 p-5 shadow-lg shadow-rose-950/10">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/20 text-rose-300">
@@ -218,6 +227,7 @@ function AlertsSection({ alerts, loading }) {
         </span>
       </div>
 
+      <div className={!isVip ? 'pointer-events-none blur-sm select-none' : ''}>
       {alerts.length ? (
         <div className={`grid grid-cols-1 gap-3 ${isSingleAlert ? '' : 'lg:grid-cols-2'}`}>
           {alerts.map((alert, index) => (
@@ -238,6 +248,19 @@ function AlertsSection({ alerts, loading }) {
       ) : (
         <div className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4 text-sm text-slate-400">
           Chưa có phản hồi cần cảnh báo.
+        </div>
+      )}
+      </div>
+
+      {!isVip && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/45 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="rounded-xl border border-amber-400/30 bg-slate-950/80 px-5 py-3 text-sm font-semibold text-amber-200 shadow-lg shadow-rose-950/30 transition-colors hover:bg-slate-900"
+          >
+            👑 Nâng cấp VIP để xem cảnh báo khủng hoảng
+          </button>
         </div>
       )}
     </section>

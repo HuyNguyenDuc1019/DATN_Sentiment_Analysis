@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 import io
 import csv
 from fastapi import HTTPException as FastAPIHTTPException
+
 app = FastAPI(
     title="Foody Sentiment Analysis API",
     description="API phân loại cảm xúc bình luận tiếng Việt sử dụng PhoBERT",
@@ -379,26 +380,42 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
 class UpgradeRequest(BaseModel):
     user_id: str
     amount: float = 99000 # Gắn cứng mặc định 99k
-
 @app.put("/api/user/upgrade")
 async def upgrade_to_vip(req: UpgradeRequest):
     try:
-        # 1. Cập nhật tier thành 'vip'
-        update_res = supabase.table('profiles').update({'tier': 'vip'}).eq('id', req.user_id).execute()
+        update_res = (
+            supabase
+            .table('profiles')
+            .update({'tier': 'vip'})
+            .eq('id', req.user_id)
+            .execute()
+        )
+
         if not update_res.data:
             raise HTTPException(status_code=400, detail="Không tìm thấy người dùng.")
-            
-        # 2. Ghi nhận giao dịch vào bảng transactions
+
         transaction_data = {
             "user_id": req.user_id,
             "amount": req.amount,
-            "status": "paid"
+            "status": "paid",
         }
-        supabase.table('transactions').insert(transaction_data).execute()
-            
-        return {"status": "success", "message": "Nâng cấp VIP thành công!"}
+
+        try:
+            supabase.table('transactions').insert(transaction_data).execute()
+        except Exception as transaction_error:
+            print(f"⚠️ Không thể ghi giao dịch VIP: {transaction_error}")
+
+        return {
+            "status": "success",
+            "message": "Nâng cấp VIP thành công!",
+            "profile": update_res.data[0],
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 # =====================================================================
 # 1. DATA MODELS (KHUÔN DỮ LIỆU) CHO CÁC API ADMIN
 # =====================================================================

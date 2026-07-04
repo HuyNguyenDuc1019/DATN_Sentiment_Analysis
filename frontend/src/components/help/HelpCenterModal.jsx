@@ -50,13 +50,13 @@ export default function HelpCenterModal({ onClose }) {
   };
 
   return (
-    <div className="help-modal-overlay fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 px-4 py-4 backdrop-blur-sm">
-      <div className="help-modal-shell flex h-[calc(100dvh-48px)] max-h-[860px] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-[#111827] shadow-2xl shadow-black/40">
-        <div className="help-modal-head flex-shrink-0 border-b border-slate-800 px-6 py-5">
+    <div className="help-modal-overlay fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm">
+      <div className="help-modal-shell flex h-[min(860px,calc(100dvh-24px))] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-[#111827] shadow-2xl shadow-black/40 sm:h-[min(860px,calc(100dvh-32px))]">
+        <div className="help-modal-head flex-shrink-0 border-b border-slate-800 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="help-modal-kicker text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">Trung tâm trợ giúp</p>
-              <h2 className="help-modal-title mt-2 text-2xl font-bold text-white">Almotion có thể giúp gì cho bạn?</h2>
+              <h2 className="help-modal-title mt-2 text-xl font-bold text-white sm:text-2xl">Almotion có thể giúp gì cho bạn?</h2>
               <p className="help-modal-subtitle mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                 Tìm nhanh cách đọc bình luận để biết một quán ăn có đáng thử, nên cân nhắc điểm nào và nên xem kết quả ở đâu.
               </p>
@@ -71,7 +71,7 @@ export default function HelpCenterModal({ onClose }) {
             </button>
           </div>
 
-          <div className="relative mt-5 max-w-2xl">
+          <div className="relative mt-4 max-w-2xl sm:mt-5">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={keyword}
@@ -82,8 +82,8 @@ export default function HelpCenterModal({ onClose }) {
           </div>
         </div>
 
-        <div className="help-modal-body min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28">
-          <div className="grid gap-4 md:grid-cols-4">
+        <div className="help-modal-body min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {helpTopics.map((topic) => {
               const Icon = iconMap[topic.icon] || HelpCircle;
               const active = topic.id === activeTopic;
@@ -115,7 +115,7 @@ export default function HelpCenterModal({ onClose }) {
             })}
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+          <div className="mt-5 grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
             <section className="help-modal-section rounded-2xl border border-slate-700 bg-slate-900/50 p-5">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="help-modal-section-title font-semibold text-white">Câu hỏi phổ biến</h3>
@@ -185,7 +185,7 @@ export default function HelpCenterModal({ onClose }) {
               <FileText className="h-4 w-4 text-indigo-300" />
               <h3 className="help-modal-section-title text-sm font-semibold text-white">Đi nhanh đến chức năng</h3>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {helpQuickLinks.map((item) => (
                 <Link
                   key={item.to}

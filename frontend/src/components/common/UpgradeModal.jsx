@@ -3,7 +3,7 @@ import { Crown, CheckCircle2, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
 
-const UpgradeModal = ({ isOpen, onClose }) => {
+const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Nếu không mở thì không render gì cả
@@ -29,17 +29,25 @@ const UpgradeModal = ({ isOpen, onClose }) => {
       const res = await fetch('http://localhost:8000/api/user/upgrade', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
+        body: JSON.stringify({ user_id: userId, amount: 99000 })
       });
 
-      if (!res.ok) throw new Error("Lỗi từ máy chủ Backend");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.detail || "Lỗi từ máy chủ Backend");
+      }
+
+      // Cập nhật tức thì AuthContext / UI khóa VIP nếu component cha truyền vào.
+      if (typeof onUpgraded === 'function') {
+        await onUpgraded();
+      }
 
       toast.success('🎉 Chúc mừng! Bạn đã trở thành thành viên VIP.', { duration: 4000 });
-      setTimeout(() => window.location.reload(), 1500);
+      onClose?.();
 
     } catch (error) {
       console.error(error);
-      toast.error("Có lỗi xảy ra trong quá trình nâng cấp.");
+      toast.error(error.message || "Có lỗi xảy ra trong quá trình nâng cấp.");
     } finally {
       setIsProcessing(false);
     }

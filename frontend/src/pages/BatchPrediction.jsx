@@ -12,14 +12,19 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTasks } from '../contexts/TaskContext';
+import { useAuth } from '../contexts/AuthContext';
 import Pagination from '../components/ui/Pagination';
+import UpgradeModal from '../components/common/UpgradeModal';
 
 export default function BatchPredictionContent() {
   const inputRef = useRef(null);
+  const { userProfile, refreshUserProfile } = useAuth();
   const { batch } = useTasks();
   const { file, texts, column, columns, results, loading, selectFile, setColumn, analyze } = batch;
   const [page, setPage] = useState(1);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const pageSize = 8;
+  const isVip = userProfile?.tier === 'vip';
 
   useEffect(() => {
     setPage(1);
@@ -35,6 +40,40 @@ export default function BatchPredictionContent() {
   const totalPages = Math.max(1, Math.ceil(tableData.length / pageSize));
   const visibleRows = tableData.slice((page - 1) * pageSize, page * pageSize);
 
+  const handleFileSelect = (selectedFile) => {
+    if (!selectedFile) {
+      selectFile(selectedFile);
+      return;
+    }
+
+    if (!isVip && selectedFile.size > 5 * 1024 * 1024) {
+      toast.error('Gói Free chỉ hỗ trợ file tối đa 5MB.');
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+
+    selectFile(selectedFile);
+  };
+
+  const handleAnalyze = async () => {
+    if (!isVip && texts.length > 50) {
+      toast.error('Gói Free chỉ hỗ trợ tối đa 50 bình luận/lần.');
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+
+    try {
+      await analyze();
+    } catch (error) {
+      const status = error?.status || error?.response?.status;
+      if (status === 403 || String(error?.message || '').includes('403')) {
+        setIsUpgradeModalOpen(true);
+        return;
+      }
+      throw error;
+    }
+  };
+
   return (
     <div className="p-8 animate-in fade-in duration-500 font-sans h-full flex flex-col">
       <div className="mb-6">
@@ -46,14 +85,14 @@ export default function BatchPredictionContent() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         <div className="flex flex-col gap-6 lg:col-span-1">
-          <UploadCard file={file} count={texts.length} inputRef={inputRef} onFile={selectFile} />
+          <UploadCard file={file} count={texts.length} inputRef={inputRef} onFile={handleFileSelect} />
           <ConfigCard
             columns={columns}
             column={column}
             setColumn={setColumn}
             disabled={!texts.length || loading}
             loading={loading}
-            onAnalyze={analyze}
+            onAnalyze={handleAnalyze}
           />
         </div>
 
@@ -66,9 +105,17 @@ export default function BatchPredictionContent() {
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
+            isVip={isVip}
+            onUpgrade={() => setIsUpgradeModalOpen(true)}
           />
         </div>
       </div>
+
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        onUpgraded={refreshUserProfile}
+      />
     </div>
   );
 }
@@ -106,6 +153,8 @@ function UploadCard({ file, count, inputRef, onFile }) {
       >
         Chọn tệp
       </button>
+
+      <p className="mt-3 text-[11px] text-slate-500">Gói Free hỗ trợ tối đa 5MB và 50 bình luận/lần</p>
     </div>
   );
 }
@@ -182,7 +231,7 @@ function ConfigCard({ columns, column, setColumn, disabled, loading, onAnalyze }
   );
 }
 
-function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, onPageChange }) {
+function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, onPageChange, isVip, onUpgrade }) {
   if (loading) {
     return (
       <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col h-full">
@@ -242,8 +291,12 @@ function PreviewTable({ tableData, total, loading, hasFile, page, totalPages, on
           <button
             type="button"
             title="Tải kết quả"
-            onClick={() => downloadResults(tableData)}
-            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-400 transition-colors"
+            onClick={() => (isVip ? downloadResults(tableData) : onUpgrade())}
+            className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${
+              isVip
+                ? 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-400'
+                : 'bg-slate-800/60 border-slate-700 text-slate-600 cursor-pointer'
+            }`}
           >
             <Download className="w-4 h-4" />
           </button>

@@ -23,18 +23,21 @@ import {
 import cloud from 'd3-cloud';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchKeywordAnalytics } from '../services/api';
+import UpgradeModal from '../components/common/UpgradeModal';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
 
 const SOURCE_OPTIONS = ['Tất cả', 'CSV', 'Foody', 'Shopee'];
 
 export default function ReportContent() {
-  const { user } = useAuth();
+  const { user, userProfile, refreshUserProfile } = useAuth();
   const reportRef = useRef(null);
   const [reviews, setReviews] = useState([]);
   const [keywordAnalytics, setKeywordAnalytics] = useState(null);
   const [filters, setFilters] = useState({ startDate: '', endDate: '', source: 'Tất cả' });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const isVip = userProfile?.tier === 'vip';
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -96,6 +99,11 @@ export default function ReportContent() {
   }, [filters.endDate, filters.startDate, keywordAnalytics, reviews]);
 
   const exportPdf = async () => {
+    if (!isVip) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+
     if (!reportRef.current || exporting) return;
     setExporting(true);
     try {
@@ -136,10 +144,14 @@ export default function ReportContent() {
           type="button"
           onClick={exportPdf}
           disabled={exporting || loading}
-          className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 font-medium text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-60"
+          className={`flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 font-medium shadow-lg transition-colors disabled:opacity-60 ${
+            isVip
+              ? 'bg-indigo-600 text-white shadow-indigo-600/20 hover:bg-indigo-700'
+              : 'bg-slate-700 text-slate-300 shadow-slate-950/20 hover:bg-slate-600'
+          }`}
         >
           <Download className="h-4 w-4" />
-          {exporting ? 'Đang tạo PDF...' : 'Xuất PDF'}
+          {exporting ? 'Đang tạo PDF...' : isVip ? 'Xuất PDF' : '🔒 Xuất PDF'}
         </button>
       </div>
 
@@ -153,7 +165,7 @@ export default function ReportContent() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <ComparisonChartCard groups={report.groups} />
-          <WordCloudCard words={report.words} />
+          <WordCloudCard words={report.words} isVip={isVip} onUpgrade={() => setIsUpgradeModalOpen(true)} />
         </div>
 
         <PerformanceSummaryCard
@@ -163,6 +175,12 @@ export default function ReportContent() {
           confidence={report.confidence}
         />
       </div>
+
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        onUpgraded={refreshUserProfile}
+      />
     </div>
   );
 }
@@ -280,8 +298,9 @@ function ComparisonChartCard({ groups }) {
   );
 }
 
-function WordCloudCard({ words }) {
+function WordCloudCard({ words, isVip, onUpgrade }) {
   const [layoutWords, setLayoutWords] = useState([]);
+  const isLocked = !isVip || !words.length;
   const cloudWords = useMemo(() => {
     const normalized = words.map((word) => ({
       text: word.text,
@@ -323,7 +342,16 @@ function WordCloudCard({ words }) {
       <p className="mb-4 text-xs text-slate-500">Từ càng lớn nghĩa là khách nhắc càng nhiều.</p>
 
       <div className="flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50 p-5">
-        {layoutWords.length ? (
+        {isLocked ? (
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="flex min-h-[220px] w-full flex-col items-center justify-center rounded-xl border border-amber-400/25 bg-slate-950/40 px-6 text-center text-sm text-slate-300 transition-colors hover:bg-slate-950/60"
+          >
+            <span className="mb-3 text-3xl">🔒</span>
+            <span className="font-semibold text-amber-200">Mở khóa biểu đồ Đám mây từ khóa trực quan với gói VIP</span>
+          </button>
+        ) : layoutWords.length ? (
           <div className="relative h-[300px] w-full max-w-[440px]">
             {layoutWords.map((word) => (
               <span

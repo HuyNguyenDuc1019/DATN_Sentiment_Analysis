@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Palette, 
   BrainCircuit, 
@@ -9,10 +9,16 @@ import {
   Copy, 
   Save 
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import UpgradeModal from '../components/common/UpgradeModal';
 
 // --- MAIN COMPONENT ---
 
 export default function SettingsContent() {
+  const { userProfile, refreshUserProfile } = useAuth();
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const isVip = userProfile?.tier === 'vip';
+
   return (
     <div className="p-8 h-full flex flex-col font-sans animate-in fade-in duration-500 overflow-y-auto">
       
@@ -29,7 +35,7 @@ export default function SettingsContent() {
       {/* Settings Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
         <UiUxCard />
-        <AiLogicCard />
+        <AiLogicCard isVip={isVip} onUpgrade={() => setIsUpgradeModalOpen(true)} />
         <DataManagementCard />
         <ApiCard />
       </div>
@@ -42,6 +48,11 @@ export default function SettingsContent() {
         </button>
       </div>
 
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        onUpgraded={refreshUserProfile}
+      />
     </div>
   );
 }
@@ -91,9 +102,9 @@ function UiUxCard() {
 }
 
 // 2. Cài đặt cấu hình AI (AI Logic) - Có viền active
-function AiLogicCard() {
+function AiLogicCard({ isVip, onUpgrade }) {
   return (
-    <div className="bg-slate-800/60 backdrop-blur-md border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.05)] rounded-2xl p-6 flex flex-col">
+    <div className="relative overflow-hidden bg-slate-800/60 backdrop-blur-md border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.05)] rounded-2xl p-6 flex flex-col">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-8 h-8 rounded-lg bg-slate-900/50 flex items-center justify-center border border-slate-700/50">
           <BrainCircuit className="w-4 h-4 text-indigo-400" />
@@ -101,7 +112,7 @@ function AiLogicCard() {
         <h2 className="text-base font-medium text-white">Cài đặt cấu hình AI (AI Logic)</h2>
       </div>
 
-      <div className="space-y-6 flex-1 flex flex-col justify-center">
+      <div className={`space-y-6 flex-1 flex flex-col justify-center ${!isVip ? 'pointer-events-none blur-sm select-none' : ''}`}>
         <div>
           <label className="block text-xs font-medium text-slate-300 mb-8">
             Điều chỉnh độ nhạy phân tích (Thresholds)
@@ -129,6 +140,18 @@ function AiLogicCard() {
           </div>
         </div>
       </div>
+
+      {!isVip && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/45 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="rounded-xl border border-amber-400/30 bg-slate-950/80 px-5 py-3 text-sm font-semibold text-amber-200 shadow-lg transition-colors hover:bg-slate-900"
+          >
+            🔒 Nâng cấp VIP để dùng Từ điển tùy chỉnh & Khía cạnh
+          </button>
+        </div>
+      )}
     </div>
   );
 }

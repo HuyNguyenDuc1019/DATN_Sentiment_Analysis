@@ -96,7 +96,10 @@ const post = async (url, body) => {
   }
 
   if (!response.ok || data?.success === false) {
-    throw new Error(getErrorMessage(data, 'Máy chủ trả về lỗi.'));
+    const error = new Error(getErrorMessage(data, 'Máy chủ trả về lỗi.'));
+    error.status = response.status;
+    error.data = data;
+    throw error;
   }
 
   return data;
@@ -122,7 +125,10 @@ const get = async (url, params = {}) => {
   }
 
   if (!response.ok || data?.success === false) {
-    throw new Error(getErrorMessage(data, 'Không tải được dữ liệu.'));
+    const error = new Error(getErrorMessage(data, 'Không tải được dữ liệu.'));
+    error.status = response.status;
+    error.data = data;
+    throw error;
   }
 
   return data;

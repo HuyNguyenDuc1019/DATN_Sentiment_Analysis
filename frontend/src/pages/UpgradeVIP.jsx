@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Crown, CheckCircle2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../services/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 
 const UpgradeVIP = () => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const { refreshUserProfile } = useAuth();
 
   const handleMockPayment = async () => {
     setIsProcessing(true);
@@ -31,10 +33,17 @@ const UpgradeVIP = () => {
       const res = await fetch('http://localhost:8000/api/user/upgrade', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
+        body: JSON.stringify({ user_id: userId, amount: 99000 })
       });
 
-      if (!res.ok) throw new Error("Lỗi từ máy chủ Backend");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.detail || "Lỗi từ máy chủ Backend");
+      }
+
+      if (typeof refreshUserProfile === 'function') {
+        await refreshUserProfile();
+      }
 
       toast.success('🎉 Chúc mừng! Bạn đã trở thành thành viên VIP.', { duration: 4000 });
       
@@ -43,7 +52,7 @@ const UpgradeVIP = () => {
 
     } catch (error) {
       console.error(error);
-      toast.error("Có lỗi xảy ra trong quá trình nâng cấp.");
+      toast.error(error.message || "Có lỗi xảy ra trong quá trình nâng cấp.");
     } finally {
       setIsProcessing(false);
     }

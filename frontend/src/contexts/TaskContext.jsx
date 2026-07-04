@@ -110,6 +110,10 @@ export function TaskProvider({ children }) {
       );
     } catch (error) {
       toast.error(error.message || 'Không thể xử lý file CSV.', { id: loadingToast });
+
+      // Quan trọng: ném lỗi ra ngoài để BatchPrediction.jsx bắt được status 403
+      // và mở UpgradeModal khi gói Free vượt giới hạn.
+      throw error;
     } finally {
       setBatchLoading(false);
     }

@@ -1131,3 +1131,47 @@ html.light [data-account-card] {
     color: #5b6a80 !important;
   }
 }
+
+
+/* =====================================================================
+   HELP CENTER MODAL RESPONSIVE FIX
+   Giữ UI cũ, chỉ chống tràn/cắt khi zoom trình duyệt.
+   ===================================================================== */
+.help-modal-overlay {
+  z-index: 9999 !important;
+}
+
+.help-modal-shell {
+  width: min(72rem, calc(100vw - 1.5rem));
+  height: min(860px, calc(100dvh - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+}
+
+.help-modal-head {
+  flex-shrink: 0;
+}
+
+.help-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: 2rem;
+}
+
+@media (max-width: 900px), (max-height: 720px) {
+  .help-modal-shell {
+    width: calc(100vw - 1rem);
+    height: calc(100dvh - 1rem);
+    border-radius: 1rem;
+  }
+
+  .help-modal-title {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  .help-modal-subtitle {
+    font-size: 0.8125rem;
+    line-height: 1.35rem;
+  }
+}
