@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Palette, 
   BrainCircuit, 
@@ -61,6 +61,32 @@ export default function SettingsContent() {
 
 // 1. Cài đặt Giao diện (UI/UX)
 function UiUxCard() {
+  const getInitialDarkMode = () => {
+    if (typeof window === 'undefined') return true;
+
+    const savedTheme = localStorage.getItem('almotion-theme');
+    if (savedTheme === 'light') return false;
+    if (savedTheme === 'dark') return true;
+
+    return document.documentElement.classList.contains('dark');
+  };
+
+  const [darkMode, setDarkMode] = useState(getInitialDarkMode);
+
+  useEffect(() => {
+    const theme = darkMode ? 'dark' : 'light';
+
+    localStorage.setItem('almotion-theme', theme);
+    document.documentElement.classList.toggle('dark', darkMode);
+    document.documentElement.classList.toggle('light', !darkMode);
+
+    window.dispatchEvent(new Event('almotion-theme-change'));
+  }, [darkMode]);
+
+  const toggleTheme = () => {
+    setDarkMode((current) => !current);
+  };
+
   return (
     <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col">
       <div className="flex items-center gap-3 mb-6">
@@ -75,11 +101,25 @@ function UiUxCard() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium text-slate-300">Chế độ màn hình</div>
-            <div className="text-xs text-slate-500 mt-0.5">Sáng / Tối</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {darkMode ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
+            </div>
           </div>
           {/* Custom Toggle (Active) */}
-          <button className="w-11 h-6 bg-indigo-500 rounded-full flex items-center px-1 transition-colors relative cursor-pointer focus:outline-none">
-            <div className="w-4 h-4 bg-white rounded-full shadow-md transform translate-x-5 transition-transform"></div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={darkMode}
+            className={`w-11 h-6 rounded-full flex items-center px-1 transition-colors relative cursor-pointer focus:outline-none ${
+              darkMode ? 'bg-indigo-500' : 'bg-slate-300'
+            }`}
+            title={darkMode ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          >
+            <div
+              className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform ${
+                darkMode ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
           </button>
         </div>
 

@@ -1175,3 +1175,157 @@ html.light [data-account-card] {
     line-height: 1.35rem;
   }
 }
+/* Dán cuối src/index.css để làm sáng riêng trang Quản lý Giao dịch.
+   Không ảnh hưởng dark mode, chỉ chạy khi html.light đang bật. */
+
+html.light .admin-transactions-page {
+  color: #142033 !important;
+}
+
+html.light .admin-transactions-page h1 {
+  color: #142033 !important;
+}
+
+html.light .admin-transactions-page p {
+  color: #5f7087 !important;
+}
+
+/* 3 ô tổng quan: bớt xanh bệt, nhìn sạch hơn */
+html.light .admin-transactions-summary .admin-transactions-mini-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.92)) !important;
+  border-color: #cfdbeb !important;
+  box-shadow: 0 14px 32px rgba(43, 64, 95, 0.08) !important;
+}
+
+html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(2) {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.95), rgba(240, 253, 250, 0.9)) !important;
+  border-color: rgba(16, 185, 129, 0.26) !important;
+}
+
+html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(3) {
+  background: linear-gradient(180deg, rgba(238, 242, 255, 0.96), rgba(245, 243, 255, 0.9)) !important;
+  border-color: rgba(99, 102, 241, 0.24) !important;
+}
+
+html.light .admin-transactions-mini-card p:first-child {
+  color: #64748b !important;
+}
+
+html.light .admin-transactions-mini-card p:last-child {
+  color: #142033 !important;
+}
+
+html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(2) p:last-child {
+  color: #047857 !important;
+}
+
+html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(3) p:last-child {
+  color: #4f46e5 !important;
+}
+
+/* Khung bảng */
+html.light .admin-transactions-table-card {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: #cad7e8 !important;
+  box-shadow: 0 18px 42px rgba(43, 64, 95, 0.10) !important;
+}
+
+html.light .admin-transactions-toolbar,
+html.light .admin-transactions-pagination {
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(240, 246, 253, 0.92)) !important;
+  border-color: #d7e1ee !important;
+}
+
+/* Input ngày + search */
+html.light .admin-transactions-page input {
+  background: #ffffff !important;
+  border-color: #c6d4e6 !important;
+  color: #142033 !important;
+  box-shadow: 0 1px 2px rgba(43, 64, 95, 0.04) !important;
+}
+
+html.light .admin-transactions-page input::placeholder {
+  color: #91a0b2 !important;
+}
+
+/* Header bảng */
+html.light .admin-transactions-thead {
+  background: #f1f6fd !important;
+  color: #607086 !important;
+}
+
+html.light .admin-transactions-thead th {
+  color: #607086 !important;
+  border-color: #d9e3ef !important;
+}
+
+/* Body bảng: bỏ nền xanh đậm bệt */
+html.light .admin-transactions-tbody tr {
+  background: #ffffff !important;
+  border-color: #edf2f7 !important;
+}
+
+html.light .admin-transactions-tbody tr:nth-child(even) {
+  background: #f7fbff !important;
+}
+
+html.light .admin-transactions-tbody tr:hover {
+  background: #eef4ff !important;
+}
+
+html.light .admin-transactions-tbody td {
+  color: #334155 !important;
+  border-color: #e5edf7 !important;
+}
+
+html.light .admin-transactions-tbody .text-white {
+  color: #142033 !important;
+}
+
+html.light .admin-transactions-tbody .text-slate-400 {
+  color: #64748b !important;
+}
+
+html.light .admin-transactions-tbody .text-emerald-400 {
+  color: #047857 !important;
+}
+
+/* Badge thành công */
+html.light .admin-transactions-tbody span[class*="bg-emerald"] {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  color: #047857 !important;
+}
+
+/* Nút action */
+html.light .admin-transactions-export-btn {
+  background: #ffffff !important;
+  border-color: #c6d4e6 !important;
+  color: #334155 !important;
+  box-shadow: 0 8px 18px rgba(43, 64, 95, 0.06) !important;
+}
+
+html.light .admin-transactions-export-btn:hover {
+  background: #eef4ff !important;
+  color: #1e293b !important;
+  border-color: #9fb2ce !important;
+}
+
+html.light .admin-transactions-refresh-btn {
+  background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.22) !important;
+}
+
+/* Nút mắt chi tiết */
+html.light .admin-transactions-tbody button {
+  background: #ffffff !important;
+  border-color: #d5e0ef !important;
+  color: #64748b !important;
+}
+
+html.light .admin-transactions-tbody button:hover {
+  background: #eef2ff !important;
+  border-color: #818cf8 !important;
+  color: #4f46e5 !important;
+}
