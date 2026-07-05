@@ -25,6 +25,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { fetchDashboardAlerts, fetchKeywordAnalytics } from '../services/api';
 import UpgradeModal from '../components/common/UpgradeModal';
 import { confidenceRatio, fetchUserReviews } from '../services/reviews';
+import QuickConclusionCard from '../components/dashboard/QuickConclusionCard';
 
 export default function DashboardContent() {
   const { user, userProfile, refreshUserProfile } = useAuth();
@@ -142,12 +143,11 @@ export default function DashboardContent() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <TrendCard data={trendData} />
-        <DecisionCard
-          positive={stats.positive}
-          negative={stats.negative}
-          rate={stats.positiveRate}
+        <QuickConclusionCard
+          totalFeedback={stats.total}
+          positiveCount={stats.positive}
+          negativeCount={stats.negative}
           alertCount={visibleAlerts.length}
-          total={stats.total}
         />
       </div>
 
@@ -329,116 +329,6 @@ function TrendCard({ data }) {
         </ResponsiveContainer>
       </div>
     </div>
-  );
-}
-
-function DecisionCard({ positive, negative, rate, alertCount, total }) {
-  const positivePercent = Math.round(rate * 100);
-  const negativePercent = Math.max(0, 100 - positivePercent);
-  const negativeRate = total ? negative / total : 0;
-
-  let status = 'try';
-  if (alertCount >= 4 || negativeRate >= 0.55) {
-    status = 'avoid';
-  } else if (alertCount >= 2 || positivePercent < 60) {
-    status = 'consider';
-  }
-
-  const content = {
-    try: {
-      title: 'Nên thử',
-      badge: 'Tín hiệu tốt',
-      icon: <Smile className="h-5 w-5" />,
-      box: 'border-emerald-400/30 bg-emerald-500/10',
-      iconBox: 'bg-emerald-500/15 text-emerald-300',
-      badgeBox: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300',
-      titleColor: 'text-emerald-300',
-      summary: 'Phần lớn phản hồi đang nghiêng về trải nghiệm hài lòng.',
-      action: 'Có thể ưu tiên quán này, nhưng vẫn nên xem nhanh các cảnh báo trước khi quyết định.',
-    },
-    consider: {
-      title: 'Nên cân nhắc',
-      badge: 'Cần xem kỹ',
-      icon: <AlertTriangle className="h-5 w-5" />,
-      box: 'border-amber-400/30 bg-amber-500/10',
-      iconBox: 'bg-amber-500/15 text-amber-300',
-      badgeBox: 'border-amber-400/30 bg-amber-500/10 text-amber-300',
-      titleColor: 'text-amber-300',
-      summary: 'Phản hồi khen và chê đang khá gần nhau hoặc có một số cảnh báo cần chú ý.',
-      action: 'Nên đọc thêm các phản hồi gần đây, đặc biệt là phần cảnh báo và các vấn đề bị nhắc lại nhiều lần.',
-    },
-    avoid: {
-      title: 'Không nên vội thử',
-      badge: 'Rủi ro cao',
-      icon: <Frown className="h-5 w-5" />,
-      box: 'border-rose-400/30 bg-rose-500/10',
-      iconBox: 'bg-rose-500/15 text-rose-300',
-      badgeBox: 'border-rose-400/30 bg-rose-500/10 text-rose-300',
-      titleColor: 'text-rose-300',
-      summary: 'Tỷ lệ chưa hài lòng hoặc số cảnh báo đang cao hơn mức nên bỏ qua.',
-      action: 'Nên cân nhắc quán khác hoặc kiểm tra kỹ các vấn đề lặp lại trước khi đến.',
-    },
-  }[status];
-
-  const reasonRows = [
-    {
-      label: 'Khách hài lòng',
-      value: positive.toLocaleString('vi-VN'),
-      detail: `${positivePercent}%`,
-      className: 'text-emerald-300',
-      icon: <TrendingUp className="h-4 w-4" />,
-    },
-    {
-      label: 'Khách chưa hài lòng',
-      value: negative.toLocaleString('vi-VN'),
-      detail: `${negativePercent}%`,
-      className: 'text-rose-300',
-      icon: <TrendingDown className="h-4 w-4" />,
-    },
-    {
-      label: 'Cảnh báo cần xem',
-      value: alertCount.toLocaleString('vi-VN'),
-      detail: alertCount ? 'Có vấn đề nổi bật' : 'Chưa có',
-      className: alertCount ? 'text-amber-300' : 'text-emerald-300',
-      icon: <AlertTriangle className="h-4 w-4" />,
-    },
-  ];
-
-  return (
-    <section className={`rounded-2xl border p-6 backdrop-blur-md ${content.box}`}>
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${content.iconBox}`}>
-            {content.icon}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Kết luận nhanh</p>
-            <h3 className={`mt-1 text-2xl font-bold ${content.titleColor}`}>{content.title}</h3>
-          </div>
-        </div>
-        <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${content.badgeBox}`}>
-          {content.badge}
-        </span>
-      </div>
-
-      <p className="text-sm leading-6 text-slate-200">{content.summary}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{content.action}</p>
-
-      <div className="mt-5 space-y-3">
-        {reasonRows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-950/30 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className={row.className}>{row.icon}</span>
-              <span className="truncate text-sm font-medium text-slate-200">{row.label}</span>
-            </div>
-            <div className="text-right">
-              <div className={`text-sm font-bold ${row.className}`}>{row.value}</div>
-              <div className="text-[11px] text-slate-500">{row.detail}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 

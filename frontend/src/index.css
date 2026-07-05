@@ -2,417 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================================
+   ALMOTION GLOBAL CSS - CLEAN LIGHT/DARK VERSION
+   - Dark mode giữ mặc định.
+   - Light mode tông lạnh xanh xám, không trắng xóa.
+   - Đã gộp các patch modal/light trùng nhau thành 1 bản sạch.
+   ===================================================================== */
+
 @layer base {
+  :root {
+    --app-sidebar-width: 240px;
+    --app-header-height: 72px;
+    --app-content-x: 2rem;
+    --app-content-y: 2rem;
+
+    --dark-bg: #0f172a;
+    --dark-border: rgba(51, 65, 85, 0.86);
+    --dark-text: #f8fafc;
+    --dark-muted: #94a3b8;
+
+    --light-bg: #d3deea;
+    --light-bg-2: #e2e9f2;
+    --light-bg-3: #c9d5e2;
+    --light-sidebar: #d3deeb;
+    --light-sidebar-2: #e2e9f2;
+    --light-header: rgba(226, 233, 242, 0.88);
+    --light-panel: #edf3fa;
+    --light-panel-2: #dce6f1;
+    --light-border: #adbed2;
+    --light-border-2: #9fb2c8;
+    --light-text: #102033;
+    --light-muted: #5f6f85;
+    --light-faint: #8090a5;
+
+    --primary: #4f46e5;
+    --primary-2: #5b6df6;
+    --success: #059669;
+    --danger: #be123c;
+    --warning: #b45309;
+    --info: #0284c7;
+
+    --shadow-soft: 0 10px 28px rgba(20, 32, 51, 0.075);
+    --shadow-modal: 0 26px 80px rgba(20, 32, 51, 0.28);
+  }
+
   html,
   body,
   #root {
     min-height: 100%;
-    background: #0f172a;
+    background: var(--dark-bg);
   }
 
   body {
     margin: 0;
-    color: #f8fafc;
+    color: var(--dark-text);
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
   }
 
   #root {
     isolation: isolate;
   }
 
-  /* Custom Scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: transparent; 
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #334155; /* slate-700 */
-    border-radius: 10px;
+    background: #334155;
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #475569; /* slate-600 */
-  }
-
-  /* Firefox scrollbar */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: #334155 transparent;
+    background: #475569;
   }
 
   html.light,
   html.light body,
   html.light #root {
     background:
-      radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 30%),
-      linear-gradient(135deg, #e8f0fb 0%, #f4f8fd 48%, #e9f1fb 100%);
-    color: #0f172a;
-  }
-
-  html.light [class*="bg-[#0f172a]"],
-  html.light [class*="bg-slate-950"] {
-    background:
-      radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.12), transparent 32%),
-      linear-gradient(135deg, #e8f0fb 0%, #f7fbff 55%, #eef4fb 100%) !important;
-  }
-
-  html.light [class*="bg-[#1e293b]"],
-  html.light [class*="bg-slate-800"] {
-    background-color: #f8fbff !important;
-  }
-
-  html.light [class*="bg-slate-900"] {
-    background-color: #edf4fc !important;
-  }
-
-  html.light [class*="bg-slate-700"] {
-    background-color: #dbeafe !important;
-  }
-
-  html.light [class*="bg-slate-800/"] {
-    background-color: rgba(248, 251, 255, 0.96) !important;
-  }
-
-  html.light [class*="bg-slate-900/"] {
-    background-color: rgba(237, 244, 252, 0.96) !important;
-  }
-
-  html.light [class*="border-slate-900"],
-  html.light [class*="border-slate-800"],
-  html.light [class*="border-slate-700"],
-  html.light [class*="border-slate-600"] {
-    border-color: #b7c5d8 !important;
-  }
-
-  html.light [class*="border-slate"][class*="rounded"] {
-    box-shadow: 0 18px 42px rgba(30, 41, 59, 0.10);
-  }
-
-  html.light aside {
-    background: linear-gradient(180deg, #dceaff 0%, #eef5ff 100%) !important;
-    box-shadow: inset -1px 0 0 #b8c8dd, 10px 0 32px rgba(30, 41, 59, 0.08);
-  }
-
-  html.light header {
-    background-color: rgba(248, 251, 255, 0.92) !important;
-    box-shadow: 0 1px 0 #cbd5e1, 0 10px 28px rgba(30, 41, 59, 0.08);
-    backdrop-filter: blur(18px);
-  }
-
-  html.light nav a:not([class*="bg-indigo"]),
-  html.light aside button:not([class*="bg-indigo"]) {
-    color: #475569 !important;
-  }
-
-  html.light nav a:not([class*="bg-indigo"]):hover,
-  html.light aside button:not([class*="bg-indigo"]):hover {
-    background-color: #dbeafe !important;
-    color: #1e293b !important;
-  }
-
-  html.light [class*="text-white"],
-  html.light [class*="text-slate-100"],
-  html.light [class*="text-slate-200"],
-  html.light [class*="text-slate-300"] {
-    color: #0f172a !important;
-  }
-
-  html.light [class*="bg-indigo"][class*="text-white"],
-  html.light [class*="bg-rose"][class*="text-white"],
-  html.light [class*="bg-emerald"][class*="text-white"],
-  html.light [class*="bg-violet"][class*="text-white"],
-  html.light button[class*="bg-indigo"],
-  html.light a[class*="bg-indigo"] {
-    color: #ffffff !important;
-  }
-
-  html.light [class*="text-slate-400"],
-  html.light [class*="text-slate-500"] {
-    color: #64748b !important;
-  }
-
-  html.light input,
-  html.light select,
-  html.light textarea {
-    background-color: #f8fbff !important;
-    border-color: #b7c5d8 !important;
-    color: #0f172a;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  }
-
-  html.light input::placeholder,
-  html.light textarea::placeholder {
-    color: #94a3b8;
-  }
-
-  html.light .recharts-cartesian-axis-tick-value,
-  html.light .recharts-legend-item-text {
-    fill: #475569 !important;
-    color: #475569 !important;
-  }
-
-  html.light ::-webkit-scrollbar-thumb {
-    background: #b7c5d8;
+      radial-gradient(circle at 12% -10%, rgba(79, 70, 229, 0.10), transparent 30%),
+      radial-gradient(circle at 90% 0%, rgba(14, 165, 233, 0.11), transparent 28%),
+      linear-gradient(135deg, var(--light-bg) 0%, var(--light-bg-2) 52%, var(--light-bg-3) 100%) !important;
+    color: var(--light-text) !important;
   }
 
   html.light * {
-    scrollbar-color: #b7c5d8 transparent;
+    scrollbar-color: #a6b6c9 transparent !important;
   }
 
-  html.light [class*="shadow-indigo"] {
-    box-shadow: 0 16px 34px rgba(79, 70, 229, 0.24) !important;
+  html.light ::-webkit-scrollbar-thumb {
+    background: #a6b6c9 !important;
   }
 
-  html.light [class*="bg-indigo-600"] {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-  }
-
-  html.light [class*="hover:bg-indigo-700"]:hover,
-  html.light [class*="hover:bg-indigo-500"]:hover {
-    background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%) !important;
-  }
-
-  html.light [class*="bg-white"] {
-    background-color: #f8fbff !important;
-    border-color: #c2cede !important;
-  }
-
-  html.light main,
-  html.light section {
-    color: #0f172a;
-  }
-
-  html.light table {
-    color: #1e293b;
-  }
-
-  html.light thead tr,
-  html.light [class*="border-b"][class*="border-slate"] {
-    border-color: #c7d3e3 !important;
-  }
-
-  html.light tbody tr:hover,
-  html.light [class*="hover:bg-slate-800"]:hover,
-  html.light [class*="hover:bg-slate-700"]:hover {
-    background-color: #e8f1fb !important;
-  }
-
-  html.light [class*="divide-slate"] > :not([hidden]) ~ :not([hidden]) {
-    border-color: #d7e1ee !important;
-  }
-
-  html.light [class*="bg-emerald-500/10"],
-  html.light [class*="bg-emerald-500/15"] {
-    background-color: rgba(16, 185, 129, 0.12) !important;
-  }
-
-  html.light [class*="bg-rose-500/10"],
-  html.light [class*="bg-rose-500/15"] {
-    background-color: rgba(244, 63, 94, 0.12) !important;
-  }
-
-  html.light [class*="bg-indigo-500/5"],
-  html.light [class*="bg-indigo-500/10"],
-  html.light [class*="bg-indigo-500/15"] {
-    background-color: rgba(99, 102, 241, 0.12) !important;
-  }
-
-  html.light [class*="text-emerald"] {
-    color: #047857 !important;
-  }
-
-  html.light [class*="text-rose"] {
-    color: #be123c !important;
-  }
-
-  html.light [class*="text-indigo"] {
-    color: #4f46e5 !important;
-  }
-
-  html.light [class*="bg-indigo-600"] [class*="text-indigo"],
-  html.light [class*="bg-indigo-600"] [class*="text-slate"],
-  html.light button[class*="bg-indigo"] * {
-    color: inherit !important;
-  }
-
-  html.light [class*="rounded-2xl"][class*="bg-slate"],
-  html.light [class*="rounded-xl"][class*="bg-slate"] {
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.96)) !important;
-  }
-
-  html.light [class*="border-dashed"] {
-    border-color: #9db0c9 !important;
-    background-color: rgba(248, 251, 255, 0.72) !important;
-  }
-
-  html.light [class*="border-dashed"]:hover {
-    border-color: #6366f1 !important;
-    background-color: rgba(238, 242, 255, 0.92) !important;
-  }
-
-  html.light [class*="rounded-full"][class*="bg-slate"] {
-    background-color: #e5eef9 !important;
-    box-shadow: inset 0 0 0 1px #c5d1e3;
-  }
-
-  html.light [class*="font-mono"] {
-    color: #475569 !important;
-  }
-
-  html.light [class*="bg-gradient-to-br"] {
-    background-image: linear-gradient(135deg, #312e81 0%, #4f46e5 52%, #172554 100%) !important;
-  }
-
-  html.light .header-popover {
-    background-color: #f8fbff !important;
-    border-color: #b6c4d8 !important;
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18) !important;
-  }
-
-  html.light .header-popover-head {
-    border-color: #d5deeb !important;
-  }
-
-  html.light .header-popover-title,
-  html.light .header-popover-item-title {
-    color: #0f172a !important;
-  }
-
-  html.light .header-popover-desc,
-  html.light .header-popover-item-desc {
-    color: #64748b !important;
-  }
-
-  html.light .header-popover-close {
-    color: #64748b !important;
-    background-color: #e8eef7 !important;
-  }
-
-  html.light .header-popover-close:hover {
-    color: #0f172a !important;
-    background-color: #dbeafe !important;
-  }
-
-  html.light .header-popover-item {
-    background-color: #ffffff !important;
-    border-color: #d0d9e8 !important;
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
-  }
-
-  html.light .header-popover-item-info .header-popover-icon {
-    color: #4f46e5 !important;
-  }
-
-  html.light .header-popover-item-success .header-popover-icon {
-    color: #059669 !important;
-  }
-
-  html.light .header-popover-item-muted .header-popover-icon {
-    color: #475569 !important;
-  }
-
-  html.light .help-modal-overlay {
-    background-color: rgba(226, 232, 240, 0.74) !important;
-  }
-
-  html.light .help-modal-shell {
-    background-color: #f8fbff !important;
-    border-color: #b6c4d8 !important;
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18) !important;
-  }
-
-  html.light .help-modal-head {
-    background: linear-gradient(180deg, #ffffff 0%, #f1f6fd 100%) !important;
-    border-color: #d5deeb !important;
-  }
-
-  html.light .help-modal-kicker {
-    color: #4f46e5 !important;
-  }
-
-  html.light .help-modal-title,
-  html.light .help-modal-section-title,
-  html.light .help-modal-card-title {
-    color: #0f172a !important;
-  }
-
-  html.light .help-modal-subtitle,
-  html.light .help-modal-card-desc {
-    color: #64748b !important;
-  }
-
-  html.light .help-modal-close {
-    color: #64748b !important;
-    background-color: #e8eef7 !important;
-  }
-
-  html.light .help-modal-close:hover {
-    color: #0f172a !important;
-    background-color: #dbeafe !important;
-  }
-
-  html.light .help-modal-body {
-    background-color: #eef4fb !important;
-  }
-
-  html.light .help-modal-section {
-    background-color: #ffffff !important;
-    border-color: #c8d4e6 !important;
-    box-shadow: 0 14px 38px rgba(15, 23, 42, 0.08) !important;
-  }
-
-  html.light .help-modal-card {
-    background-color: #f3f8ff !important;
-    border-color: #b9c8dd !important;
-    box-shadow: none !important;
-  }
-
-  html.light .help-topic-card,
-  html.light .help-question-row {
-    background-color: #f3f8ff !important;
-    border-color: #b9c8dd !important;
-    box-shadow: none !important;
-  }
-
-  html.light .help-topic-card:hover,
-  html.light .help-question-row:hover {
-    border-color: #818cf8 !important;
-    background-color: #eef2ff !important;
-  }
-
-  html.light .help-topic-card-active,
-  html.light .help-question-row-active {
-    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
-    border-color: #6366f1 !important;
-    box-shadow: 0 14px 34px rgba(79, 70, 229, 0.18) !important;
-  }
-
-  html.light .help-topic-card-active .help-modal-card-title,
-  html.light .help-question-row-active .help-modal-card-title {
-    color: #312e81 !important;
-  }
-
-  html.light .help-topic-icon,
-  html.light .help-question-icon {
-    background-color: #e0e7ff !important;
-    color: #4f46e5 !important;
-  }
-
-  html.light .help-topic-card-active .help-topic-icon,
-  html.light .help-question-row-active .help-question-icon {
-    background-color: #4f46e5 !important;
-    color: #ffffff !important;
-    box-shadow: 0 10px 24px rgba(79, 70, 229, 0.28) !important;
-  }
-
-  html.light .help-modal-icon {
-    background-color: #dfe7ff !important;
-    color: #4f46e5 !important;
+  html.light ::-webkit-scrollbar-thumb:hover {
+    background: #93a8bf !important;
   }
 }
 
@@ -421,231 +116,210 @@
     @apply w-full rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 transition-all focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500;
   }
 
+  .app-shell,
+  .admin-shell,
+  .customer-shell,
+  .user-shell,
+  [data-app-shell],
+  [data-layout='admin'],
+  [data-layout='user'],
+  [data-layout='customer'] {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+    background: var(--dark-bg);
+    color: var(--dark-text);
+    overflow: hidden;
+  }
+
+  .app-sidebar,
+  .admin-sidebar,
+  .customer-sidebar,
+  .user-sidebar,
+  [data-sidebar],
+  aside {
+    width: var(--app-sidebar-width);
+    min-width: var(--app-sidebar-width);
+    max-width: var(--app-sidebar-width);
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--dark-border);
+    background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+  }
+
+  .app-main,
+  .admin-main,
+  .customer-main,
+  .user-main,
+  [data-main],
+  main {
+    min-width: 0;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background:
+      radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 30%),
+      var(--dark-bg);
+  }
+
+  .app-header,
+  .admin-header,
+  .customer-header,
+  .user-header,
+  [data-header],
+  header {
+    height: var(--app-header-height);
+    min-height: var(--app-header-height);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--dark-border);
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(18px);
+  }
+
+  .app-content,
+  .admin-content,
+  .customer-content,
+  .user-content,
+  [data-content] {
+    width: 100%;
+    max-width: none;
+    padding: var(--app-content-y) var(--app-content-x);
+  }
+
+  .app-footer,
+  .admin-footer,
+  .customer-footer,
+  .user-footer,
+  [data-footer],
+  footer {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-top: 1px solid var(--dark-border);
+    background: rgba(15, 23, 42, 0.65);
+    color: var(--dark-muted);
+    padding: 1rem var(--app-content-x);
+  }
+
+  aside nav a,
+  aside nav button,
+  [data-nav-item] {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    color: var(--dark-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  aside nav a:hover,
+  aside nav button:hover,
+  [data-nav-item]:hover {
+    color: #ffffff;
+    background: rgba(99, 102, 241, 0.10);
+  }
+
+  aside nav a.active,
+  aside nav a[aria-current='page'],
+  [data-nav-active='true'] {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+    box-shadow: 0 14px 28px rgba(79, 70, 229, 0.26);
+  }
+
+  [data-account-card],
+  .sidebar-account-card,
+  .app-account-card,
+  .admin-account-card,
+  .customer-account-card,
+  .user-account-card {
+    min-height: 68px;
+    border-radius: 0.875rem;
+    border: 1px solid var(--dark-border);
+    background: rgba(15, 23, 42, 0.62);
+    padding: 0.75rem;
+  }
+
+  .app-page,
+  .admin-page,
+  .customer-page,
+  .user-page,
+  [data-page] {
+    animation: appPageFade 180ms ease-out both;
+  }
+
+  @keyframes appPageFade {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .help-modal-overlay {
+    z-index: 9999 !important;
+  }
+
+  .help-modal-shell {
+    width: min(72rem, calc(100vw - 1.5rem));
+    height: min(860px, calc(100dvh - 1.5rem));
+    max-height: calc(100dvh - 1.5rem);
+  }
+
+  .help-modal-head {
+    flex-shrink: 0;
+  }
+
   .help-modal-body {
+    min-height: 0;
+    overflow-y: auto;
     overscroll-behavior: contain;
-    scroll-padding-bottom: 7rem;
+    scroll-padding-bottom: 2rem;
+  }
+
+  @media (max-width: 900px), (max-height: 720px) {
+    .help-modal-shell {
+      width: calc(100vw - 1rem);
+      height: calc(100dvh - 1rem);
+      border-radius: 1rem;
+    }
+
+    .help-modal-title {
+      font-size: 1.25rem;
+      line-height: 1.75rem;
+    }
+
+    .help-modal-subtitle {
+      font-size: 0.8125rem;
+      line-height: 1.35rem;
+    }
   }
 }
 
 /* =====================================================================
-   UNIFIED LAYOUT CSS - đồng bộ Admin/User shell, header, sidebar, footer
-   Dán cuối file CSS global hiện tại.
-   Mục tiêu: chuyển trang giữa Admin và User không bị nhảy layout.
+   LIGHT MODE OVERRIDES
    ===================================================================== */
 
-:root {
-  --app-sidebar-width: 240px;
-  --app-header-height: 72px;
-  --app-content-x: 2rem;
-  --app-content-y: 2rem;
-  --app-bg-dark: #0f172a;
-  --app-panel-dark: rgba(15, 23, 42, 0.92);
-  --app-border-dark: rgba(51, 65, 85, 0.75);
-  --app-text-main-dark: #f8fafc;
-  --app-text-muted-dark: #94a3b8;
-  --app-bg-light: linear-gradient(135deg, #e8f0fb 0%, #f4f8fd 48%, #e9f1fb 100%);
-  --app-panel-light: rgba(248, 251, 255, 0.92);
-  --app-border-light: #cbd5e1;
-  --app-text-main-light: #0f172a;
-  --app-text-muted-light: #64748b;
-}
-
-/* Shell chung cho cả admin và user */
-.app-shell,
-.admin-shell,
-.customer-shell,
-.user-shell,
-[data-app-shell],
-[data-layout='admin'],
-[data-layout='user'],
-[data-layout='customer'] {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
-  background: var(--app-bg-dark);
-  color: var(--app-text-main-dark);
-  overflow: hidden;
-}
-
-/* Sidebar chung */
-.app-sidebar,
-.admin-sidebar,
-.customer-sidebar,
-.user-sidebar,
-[data-sidebar],
-aside {
-  width: var(--app-sidebar-width);
-  min-width: var(--app-sidebar-width);
-  max-width: var(--app-sidebar-width);
-  height: 100vh;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-right: 1px solid var(--app-border-dark);
-  background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
-}
-
-/* Nội dung bên phải: luôn cùng cơ chế scroll */
-.app-main,
-.admin-main,
-.customer-main,
-.user-main,
-[data-main],
-main {
-  min-width: 0;
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 30%),
-    var(--app-bg-dark);
-}
-
-/* Header chung */
-.app-header,
-.admin-header,
-.customer-header,
-.user-header,
-[data-header],
-header {
-  height: var(--app-header-height);
-  min-height: var(--app-header-height);
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 1px solid var(--app-border-dark);
-  background: rgba(15, 23, 42, 0.82);
-  backdrop-filter: blur(18px);
-}
-
-/* Vùng content chung */
-.app-content,
-.admin-content,
-.customer-content,
-.user-content,
-[data-content] {
-  width: 100%;
-  max-width: none;
-  padding: var(--app-content-y) var(--app-content-x);
-}
-
-/* Footer chung nếu trang có dùng */
-.app-footer,
-.admin-footer,
-.customer-footer,
-.user-footer,
-[data-footer],
-footer {
-  min-height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-top: 1px solid var(--app-border-dark);
-  background: rgba(15, 23, 42, 0.65);
-  color: var(--app-text-muted-dark);
-  padding: 1rem var(--app-content-x);
-}
-
-/* Nav item chung: áp dụng được cho NavLink, button trong sidebar */
-.app-nav-item,
-.admin-nav-item,
-.customer-nav-item,
-.user-nav-item,
-[data-nav-item],
-aside nav a,
-aside nav button {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 0.75rem;
-  padding: 0.75rem 0.875rem;
-  color: var(--app-text-muted-dark);
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease;
-}
-
-.app-nav-item:hover,
-.admin-nav-item:hover,
-.customer-nav-item:hover,
-.user-nav-item:hover,
-[data-nav-item]:hover,
-aside nav a:hover,
-aside nav button:hover {
-  color: #ffffff;
-  background: rgba(99, 102, 241, 0.10);
-}
-
-.app-nav-item-active,
-.admin-nav-item-active,
-.customer-nav-item-active,
-.user-nav-item-active,
-[data-nav-active='true'],
-aside nav a.active,
-aside nav a[aria-current='page'] {
-  color: #ffffff !important;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-  box-shadow: 0 14px 28px rgba(79, 70, 229, 0.26);
-}
-
-/* Header search/input chung */
-.app-header input,
-.admin-header input,
-.customer-header input,
-.user-header input,
-header input[type='text'],
-header input[type='search'] {
-  height: 44px;
-  border-radius: 999px;
-  border: 1px solid var(--app-border-dark);
-  background: rgba(15, 23, 42, 0.62);
-  color: var(--app-text-main-dark);
-}
-
-/* Card user/account dưới sidebar để admin/user giống kích thước */
-.sidebar-account-card,
-.app-account-card,
-.admin-account-card,
-.customer-account-card,
-.user-account-card,
-[data-account-card] {
-  min-height: 68px;
-  border-radius: 0.875rem;
-  border: 1px solid var(--app-border-dark);
-  background: rgba(15, 23, 42, 0.62);
-  padding: 0.75rem;
-}
-
-/* Giữ transition mượt khi đổi trang */
-.app-page,
-.admin-page,
-.customer-page,
-.user-page,
-[data-page] {
-  animation: appPageFade 180ms ease-out both;
-}
-
-@keyframes appPageFade {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Light mode đồng bộ cho shell */
 html.light .app-shell,
 html.light .admin-shell,
 html.light .customer-shell,
@@ -653,99 +327,326 @@ html.light .user-shell,
 html.light [data-app-shell],
 html.light [data-layout='admin'],
 html.light [data-layout='user'],
-html.light [data-layout='customer'] {
-  background: var(--app-bg-light) !important;
-  color: var(--app-text-main-light) !important;
-}
-
+html.light [data-layout='customer'],
+html.light main,
+html.light section,
 html.light .app-main,
 html.light .admin-main,
 html.light .customer-main,
 html.light .user-main,
-html.light [data-main],
-html.light main {
-  background: var(--app-bg-light) !important;
-  color: var(--app-text-main-light) !important;
+html.light [data-main] {
+  background:
+    radial-gradient(circle at 22% 0%, rgba(14, 165, 233, 0.09), transparent 28%),
+    linear-gradient(135deg, var(--light-bg) 0%, var(--light-bg-2) 54%, var(--light-bg-3) 100%) !important;
+  color: var(--light-text) !important;
 }
 
+html.light aside,
 html.light .app-sidebar,
 html.light .admin-sidebar,
 html.light .customer-sidebar,
 html.light .user-sidebar,
-html.light [data-sidebar],
-html.light aside {
-  border-right-color: var(--app-border-light) !important;
-  background: linear-gradient(180deg, #dceaff 0%, #eef5ff 100%) !important;
-  box-shadow: inset -1px 0 0 #b8c8dd, 10px 0 32px rgba(30, 41, 59, 0.08) !important;
+html.light [data-sidebar] {
+  background: linear-gradient(180deg, var(--light-sidebar) 0%, var(--light-sidebar-2) 100%) !important;
+  border-right-color: var(--light-border-2) !important;
+  box-shadow: 8px 0 30px rgba(20, 32, 51, 0.08) !important;
+  color: var(--light-text) !important;
 }
 
+html.light header,
 html.light .app-header,
 html.light .admin-header,
 html.light .customer-header,
 html.light .user-header,
-html.light [data-header],
-html.light header {
-  border-bottom-color: var(--app-border-light) !important;
-  background: var(--app-panel-light) !important;
-  color: var(--app-text-main-light) !important;
-  box-shadow: 0 1px 0 #cbd5e1, 0 10px 28px rgba(30, 41, 59, 0.08) !important;
+html.light [data-header] {
+  background: var(--light-header) !important;
+  border-bottom-color: var(--light-border) !important;
+  box-shadow: 0 8px 26px rgba(20, 32, 51, 0.065) !important;
+  color: var(--light-text) !important;
 }
 
+html.light footer,
 html.light .app-footer,
 html.light .admin-footer,
 html.light .customer-footer,
 html.light .user-footer,
-html.light [data-footer],
-html.light footer {
-  border-top-color: var(--app-border-light) !important;
-  background: rgba(248, 251, 255, 0.88) !important;
-  color: var(--app-text-muted-light) !important;
+html.light [data-footer] {
+  background: rgba(228, 237, 247, 0.82) !important;
+  border-top-color: var(--light-border) !important;
+  color: var(--light-muted) !important;
 }
 
-html.light .app-nav-item,
-html.light .admin-nav-item,
-html.light .customer-nav-item,
-html.light .user-nav-item,
-html.light [data-nav-item],
-html.light aside nav a,
-html.light aside nav button {
-  color: var(--app-text-muted-light) !important;
+/* Sidebar nav */
+html.light aside nav a:not([class*='bg-indigo']),
+html.light aside nav button:not([class*='bg-indigo']),
+html.light [data-nav-item] {
+  color: #4f5f75 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
 }
 
-html.light .app-nav-item:hover,
-html.light .admin-nav-item:hover,
-html.light .customer-nav-item:hover,
-html.light .user-nav-item:hover,
-html.light [data-nav-item]:hover,
-html.light aside nav a:hover,
-html.light aside nav button:hover {
-  color: var(--app-text-main-light) !important;
-  background: #dbeafe !important;
+html.light aside nav a:not([class*='bg-indigo']):hover,
+html.light aside nav button:not([class*='bg-indigo']):hover,
+html.light [data-nav-item]:hover {
+  background: #c5d3e1 !important;
+  color: var(--light-text) !important;
+  border-color: #a6b6c9 !important;
 }
 
-html.light .app-nav-item-active,
-html.light .admin-nav-item-active,
-html.light .customer-nav-item-active,
-html.light .user-nav-item-active,
-html.light [data-nav-active='true'],
+html.light aside nav a[class*='bg-indigo'],
+html.light aside button[class*='bg-indigo'],
 html.light aside nav a.active,
-html.light aside nav a[aria-current='page'] {
+html.light aside nav a[aria-current='page'],
+html.light [data-nav-active='true'] {
   color: #ffffff !important;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.22) !important;
 }
 
-html.light .sidebar-account-card,
-html.light .app-account-card,
-html.light .admin-account-card,
-html.light .customer-account-card,
-html.light .user-account-card,
+/* Text */
+html.light aside .text-white,
+html.light [class*='text-white'],
+html.light [class*='text-slate-50'],
+html.light [class*='text-slate-100'],
+html.light [class*='text-slate-200'],
+html.light [class*='text-slate-300'] {
+  color: var(--light-text) !important;
+}
+
+html.light [class*='text-slate-400'],
+html.light [class*='text-slate-500'],
+html.light [class*='text-slate-600'] {
+  color: var(--light-muted) !important;
+}
+
+html.light [class*='text-indigo'] { color: var(--primary) !important; }
+html.light [class*='text-emerald'] { color: var(--success) !important; }
+html.light [class*='text-rose'] { color: var(--danger) !important; }
+html.light [class*='text-amber'] { color: var(--warning) !important; }
+html.light [class*='text-sky'],
+html.light [class*='text-cyan'] { color: var(--info) !important; }
+
+/* Surfaces */
+html.light [class*='rounded-3xl'][class*='bg-slate'],
+html.light [class*='rounded-2xl'][class*='bg-slate'],
+html.light [class*='rounded-xl'][class*='bg-slate'],
+html.light [class*='rounded-lg'][class*='bg-slate'],
+html.light [class*='bg-[#111827]'],
+html.light [class*='bg-[#0f172a]'],
+html.light [class*='bg-[#1e293b]'],
+html.light [class*='bg-slate-950'],
+html.light [class*='bg-slate-900'],
+html.light [class*='bg-slate-800'] {
+  background: linear-gradient(180deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
+  border-color: var(--light-border) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+html.light [class*='bg-indigo-500/'],
+html.light [class*='bg-emerald-500/'],
+html.light [class*='bg-rose-500/'],
+html.light [class*='bg-amber-500/'] {
+  border-color: rgba(99, 102, 241, 0.22) !important;
+}
+
+html.light [class*='bg-gradient-to-br']:not(button):not(a),
+html.light [class*='bg-gradient-to-r']:not(button):not(a) {
+  background-image:
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 34%),
+    linear-gradient(135deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
+}
+
+/* Buttons */
+html.light button[class*='bg-indigo'],
+html.light a[class*='bg-indigo'],
+html.light [class*='bg-indigo-600'] {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(79, 70, 229, 0.22) !important;
+}
+
+html.light button[class*='bg-indigo'] *,
+html.light a[class*='bg-indigo'] *,
+html.light [class*='bg-indigo-600'] * {
+  color: inherit !important;
+}
+
+/* Forms */
+html.light input,
+html.light select,
+html.light textarea,
+html.light .input-auth {
+  background: #f0f6fc !important;
+  border-color: var(--light-border-2) !important;
+  color: var(--light-text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65) !important;
+}
+
+html.light input:focus,
+html.light select:focus,
+html.light textarea:focus {
+  border-color: #7c8cff !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.13) !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: var(--light-faint) !important;
+}
+
+/* Tables */
+html.light table {
+  color: var(--light-text) !important;
+}
+
+html.light thead,
+html.light thead tr,
+html.light [class*='bg-slate-900/50'] {
+  background: #cdd9e5 !important;
+  color: var(--light-muted) !important;
+  border-color: var(--light-border) !important;
+}
+
+html.light tbody tr {
+  background: #e1e8ef !important;
+}
+
+html.light tbody tr:nth-child(even) {
+  background: #d8e1eb !important;
+}
+
+html.light tbody tr:hover,
+html.light [class*='hover:bg-slate-800']:hover,
+html.light [class*='hover:bg-slate-700']:hover {
+  background: #ccd9e8 !important;
+}
+
+html.light [class*='divide-slate'] > :not([hidden]) ~ :not([hidden]),
+html.light [class*='border-b'][class*='border-slate'],
+html.light [class*='border-t'][class*='border-slate'],
+html.light [class*='border-slate'] {
+  border-color: var(--light-border) !important;
+}
+
+/* Account / upgrade boxes */
+html.light aside > a[href*='profile'],
 html.light [data-account-card] {
-  border-color: var(--app-border-light) !important;
-  background: rgba(248, 251, 255, 0.86) !important;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08) !important;
+  background: linear-gradient(180deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
+  border-color: var(--light-border) !important;
+  box-shadow: var(--shadow-soft) !important;
 }
 
-/* Responsive: mobile chuyển sidebar thành overlay/ẩn theo class của app nếu có */
+html.light aside [class*='from-amber'],
+html.light aside [class*='to-indigo'],
+html.light aside button[class*='from-indigo'],
+html.light aside button[class*='to-purple'] {
+  background: linear-gradient(135deg, #dde1eb 0%, #d0dbe9 100%) !important;
+  border-color: var(--light-border) !important;
+  color: var(--light-text) !important;
+}
+
+/* Modals / overlays */
+html.light .header-popover,
+html.light .help-modal-shell,
+html.light [role='dialog'] > div,
+html.light .modal,
+html.light .dialog {
+  background: var(--light-panel) !important;
+  border-color: var(--light-border) !important;
+  box-shadow: 0 24px 70px rgba(20, 32, 51, 0.16) !important;
+}
+
+html.light .help-modal-overlay,
+html.light [class*='bg-black/60'],
+html.light [class*='bg-slate-950/70'],
+html.light [class*='bg-slate-950/60'],
+html.light div.fixed.inset-0[class*='bg-black'],
+html.light div.fixed.inset-0[class*='backdrop-blur'],
+html.light div.fixed.inset-0.z-\[9999\],
+html.light div.fixed.inset-0.z-\[100\] {
+  background: rgba(15, 23, 42, 0.32) !important;
+  backdrop-filter: blur(7px) !important;
+}
+
+html.light div.fixed.inset-0 > div {
+  background: linear-gradient(180deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
+  border-color: var(--light-border) !important;
+  color: var(--light-text) !important;
+  box-shadow: var(--shadow-modal) !important;
+}
+
+html.light div.fixed.inset-0 [class*='bg-slate-900'],
+html.light div.fixed.inset-0 [class*='bg-slate-800'],
+html.light div.fixed.inset-0 [class*='bg-slate-700'],
+html.light div.fixed.inset-0 [class*='bg-slate-950'] {
+  background: #ecf0f4 !important;
+  border-color: var(--light-border-2) !important;
+}
+
+html.light div.fixed.inset-0 [class*='text-white'],
+html.light div.fixed.inset-0 [class*='text-slate-50'],
+html.light div.fixed.inset-0 [class*='text-slate-100'],
+html.light div.fixed.inset-0 [class*='text-slate-200'],
+html.light div.fixed.inset-0 [class*='text-slate-300'] {
+  color: var(--light-text) !important;
+}
+
+html.light div.fixed.inset-0 [class*='text-slate-400'],
+html.light div.fixed.inset-0 [class*='text-slate-500'] {
+  color: var(--light-muted) !important;
+}
+
+html.light div.fixed.inset-0 input,
+html.light div.fixed.inset-0 select,
+html.light div.fixed.inset-0 textarea {
+  background: #ecf0f4 !important;
+  border-color: var(--light-border-2) !important;
+  color: var(--light-text) !important;
+}
+
+/* Pagination / charts */
+html.light button[aria-current='page'] {
+  background: linear-gradient(135deg, var(--primary), var(--primary-2)) !important;
+  color: #ffffff !important;
+  border-color: var(--primary-2) !important;
+}
+
+html.light .recharts-cartesian-grid line {
+  stroke: var(--light-border) !important;
+}
+
+html.light .recharts-cartesian-axis-tick-value,
+html.light .recharts-legend-item-text {
+  fill: var(--light-muted) !important;
+  color: var(--light-muted) !important;
+}
+
+/* Admin transactions */
+html.light .admin-transactions-page {
+  color: var(--light-text) !important;
+}
+
+html.light .admin-transactions-table-card,
+html.light .admin-transactions-toolbar,
+html.light .admin-transactions-pagination {
+  background: linear-gradient(180deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
+  border-color: var(--light-border) !important;
+}
+
+html.light .admin-transactions-tbody tr {
+  background: #e1e8ef !important;
+}
+
+html.light .admin-transactions-tbody tr:nth-child(even) {
+  background: #d8e1eb !important;
+}
+
+html.light .admin-transactions-tbody tr:hover {
+  background: #ccd9e8 !important;
+}
+
+/* Responsive shell */
 @media (max-width: 768px) {
   :root {
     --app-sidebar-width: 0px;
@@ -790,542 +691,256 @@ html.light [data-account-card] {
   }
 }
 
-/* ========================================================================
-   SOFT LIGHT REDESIGN - trắng xanh dịu mắt, đồng bộ Admin/User
-   Dán ở CUỐI file CSS để override các rule cũ.
-   ======================================================================== */
-@layer base {
-  :root {
-    --almotion-light-bg: #eef5fc;
-    --almotion-light-bg-2: #f6f9fd;
-    --almotion-light-panel: rgba(255, 255, 255, 0.82);
-    --almotion-light-panel-solid: #ffffff;
-    --almotion-light-panel-soft: #f5f8fc;
-    --almotion-light-sidebar: rgba(247, 251, 255, 0.92);
-    --almotion-light-sidebar-2: rgba(232, 241, 252, 0.92);
-    --almotion-light-border: #d3dfec;
-    --almotion-light-border-strong: #b8c8db;
-    --almotion-light-text: #142033;
-    --almotion-light-muted: #607086;
-    --almotion-light-faint: #8a99ad;
-    --almotion-light-primary: #4f46e5;
-    --almotion-light-primary-2: #6366f1;
-    --almotion-light-primary-soft: #eef2ff;
-    --almotion-light-shadow: 0 18px 46px rgba(43, 64, 95, 0.10);
-    --almotion-light-shadow-soft: 0 10px 24px rgba(43, 64, 95, 0.07);
-  }
-
-  html.light,
-  html.light body,
-  html.light #root {
-    background:
-      radial-gradient(circle at 12% -10%, rgba(129, 140, 248, 0.18), transparent 34%),
-      radial-gradient(circle at 86% 8%, rgba(56, 189, 248, 0.13), transparent 32%),
-      linear-gradient(135deg, var(--almotion-light-bg) 0%, var(--almotion-light-bg-2) 52%, #edf4fb 100%) !important;
-    color: var(--almotion-light-text) !important;
-  }
-
-  html.light body {
-    -webkit-font-smoothing: antialiased;
-    text-rendering: geometricPrecision;
-  }
-
-  /* Nền app: bớt trắng gắt, có lớp xanh sữa nhẹ */
-  html.light main,
-  html.light section,
-  html.light .app-shell,
-  html.light .admin-shell,
-  html.light .customer-shell,
-  html.light .user-shell,
-  html.light [data-app-shell],
-  html.light [data-layout='admin'],
-  html.light [data-layout='user'],
-  html.light [data-layout='customer'],
-  html.light .app-main,
-  html.light .admin-main,
-  html.light .customer-main,
-  html.light .user-main,
-  html.light [data-main] {
-    background:
-      radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.10), transparent 28%),
-      linear-gradient(135deg, #edf5fc 0%, #f7fbff 55%, #eef5fc 100%) !important;
-    color: var(--almotion-light-text) !important;
-  }
-
-  /* Sidebar mềm hơn, không xanh quá đậm */
-  html.light aside,
-  html.light .app-sidebar,
-  html.light .admin-sidebar,
-  html.light .customer-sidebar,
-  html.light .user-sidebar,
-  html.light [data-sidebar] {
-    background:
-      linear-gradient(180deg, rgba(250, 253, 255, 0.96) 0%, rgba(232, 241, 252, 0.94) 100%) !important;
-    border-right: 1px solid var(--almotion-light-border) !important;
-    box-shadow: 8px 0 30px rgba(43, 64, 95, 0.08) !important;
-    color: var(--almotion-light-text) !important;
-  }
-
-  /* Header kính mờ nhẹ, giữ trắng xanh nhưng không chói */
-  html.light header,
-  html.light .app-header,
-  html.light .admin-header,
-  html.light .customer-header,
-  html.light .user-header,
-  html.light [data-header] {
-    background: rgba(247, 251, 255, 0.78) !important;
-    border-bottom: 1px solid var(--almotion-light-border) !important;
-    box-shadow: 0 8px 28px rgba(43, 64, 95, 0.08) !important;
-    backdrop-filter: blur(18px);
-    color: var(--almotion-light-text) !important;
-  }
-
-  html.light footer,
-  html.light .app-footer,
-  html.light .admin-footer,
-  html.light .customer-footer,
-  html.light .user-footer,
-  html.light [data-footer] {
-    background: rgba(247, 251, 255, 0.78) !important;
-    border-top: 1px solid var(--almotion-light-border) !important;
-    color: var(--almotion-light-muted) !important;
-  }
-
-  /* Card/panel: thay trắng phẳng bằng trắng ngọc có viền xanh xám */
-  html.light [class*="rounded-2xl"][class*="bg-slate"],
-  html.light [class*="rounded-xl"][class*="bg-slate"],
-  html.light [class*="rounded-lg"][class*="bg-slate"],
-  html.light [class*="bg-[#1e293b]"],
-  html.light [class*="bg-slate-800"],
-  html.light [class*="bg-slate-900"],
-  html.light [class*="bg-slate-950"] {
-    background: linear-gradient(180deg, rgba(255,255,255,0.90) 0%, rgba(247,250,255,0.84) 100%) !important;
-    border-color: var(--almotion-light-border) !important;
-    box-shadow: var(--almotion-light-shadow-soft) !important;
-  }
-
-  /* Những vùng có tint màu không bị biến thành trắng bệt */
-  html.light [class*="bg-indigo-500/5"],
-  html.light [class*="bg-indigo-500/10"],
-  html.light [class*="bg-indigo-500/15"] {
-    background-color: rgba(99, 102, 241, 0.10) !important;
-    border-color: rgba(99, 102, 241, 0.24) !important;
-  }
-
-  html.light [class*="bg-emerald-500/10"],
-  html.light [class*="bg-emerald-500/15"] {
-    background-color: rgba(16, 185, 129, 0.10) !important;
-    border-color: rgba(16, 185, 129, 0.22) !important;
-  }
-
-  html.light [class*="bg-rose-500/10"],
-  html.light [class*="bg-rose-500/15"] {
-    background-color: rgba(244, 63, 94, 0.10) !important;
-    border-color: rgba(244, 63, 94, 0.22) !important;
-  }
-
-  html.light [class*="bg-amber-500/10"],
-  html.light [class*="bg-amber-500/15"] {
-    background-color: rgba(245, 158, 11, 0.11) !important;
-    border-color: rgba(245, 158, 11, 0.24) !important;
-  }
-
-  /* Text dịu hơn, không đen gắt */
-  html.light [class*="text-white"],
-  html.light [class*="text-slate-50"],
-  html.light [class*="text-slate-100"],
-  html.light [class*="text-slate-200"],
-  html.light [class*="text-slate-300"] {
-    color: var(--almotion-light-text) !important;
-  }
-
-  html.light [class*="text-slate-400"],
-  html.light [class*="text-slate-500"],
-  html.light [class*="text-slate-600"] {
-    color: var(--almotion-light-muted) !important;
-  }
-
-  html.light [class*="font-mono"] {
-    color: #536278 !important;
-  }
-
-  /* Nav item: đồng bộ Admin/User, hover mịn hơn */
-  html.light nav a:not([class*="bg-indigo"]),
-  html.light aside button:not([class*="bg-indigo"]),
-  html.light .app-nav-item,
-  html.light .admin-nav-item,
-  html.light .customer-nav-item,
-  html.light .user-nav-item,
-  html.light [data-nav-item] {
-    color: #4f5f75 !important;
-    border: 1px solid transparent;
-    transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
-  }
-
-  html.light nav a:not([class*="bg-indigo"]):hover,
-  html.light aside button:not([class*="bg-indigo"]):hover,
-  html.light .app-nav-item:hover,
-  html.light .admin-nav-item:hover,
-  html.light .customer-nav-item:hover,
-  html.light .user-nav-item:hover,
-  html.light [data-nav-item]:hover {
-    background: rgba(238, 242, 255, 0.88) !important;
-    color: #273449 !important;
-    border-color: rgba(99, 102, 241, 0.18) !important;
-    transform: translateX(2px);
-  }
-
-  html.light nav a[class*="bg-indigo"],
-  html.light aside button[class*="bg-indigo"],
-  html.light .app-nav-item-active,
-  html.light .admin-nav-item-active,
-  html.light .customer-nav-item-active,
-  html.light .user-nav-item-active,
-  html.light [data-nav-active='true'],
-  html.light aside nav a.active,
-  html.light aside nav a[aria-current='page'] {
-    color: #ffffff !important;
-    background: linear-gradient(135deg, #4f46e5 0%, #6d5dfc 100%) !important;
-    box-shadow: 0 12px 28px rgba(79, 70, 229, 0.24) !important;
-    border-color: rgba(255,255,255,0.16) !important;
-  }
-
-  html.light nav a[class*="bg-indigo"] *,
-  html.light aside button[class*="bg-indigo"] *,
-  html.light [data-nav-active='true'] * {
-    color: inherit !important;
-  }
-
-  /* Input/search: nền xanh sữa thay vì trắng chói */
-  html.light input,
-  html.light select,
-  html.light textarea {
-    background: rgba(247, 251, 255, 0.92) !important;
-    border-color: var(--almotion-light-border-strong) !important;
-    color: var(--almotion-light-text) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.90), 0 1px 2px rgba(43, 64, 95, 0.04) !important;
-  }
-
-  html.light input:focus,
-  html.light select:focus,
-  html.light textarea:focus {
-    border-color: #818cf8 !important;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14) !important;
-  }
-
-  html.light input::placeholder,
-  html.light textarea::placeholder {
-    color: #91a0b2 !important;
-  }
-
-  /* Button primary giữ màu xanh tím chủ đạo nhưng dịu hơn */
-  html.light button[class*="bg-indigo"],
-  html.light a[class*="bg-indigo"],
-  html.light [class*="bg-indigo-600"] {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-    color: #ffffff !important;
-    box-shadow: 0 12px 28px rgba(79, 70, 229, 0.22) !important;
-  }
-
-  html.light button[class*="bg-indigo"]:hover,
-  html.light a[class*="bg-indigo"]:hover,
-  html.light [class*="hover:bg-indigo-500"]:hover,
-  html.light [class*="hover:bg-indigo-700"]:hover {
-    background: linear-gradient(135deg, #4338ca 0%, #5b5ef3 100%) !important;
-  }
-
-  html.light button[class*="bg-indigo"] *,
-  html.light a[class*="bg-indigo"] * {
-    color: inherit !important;
-  }
-
-  /* Table dễ đọc hơn */
-  html.light table {
-    color: #243149 !important;
-  }
-
-  html.light thead tr {
-    background: rgba(241, 246, 253, 0.86) !important;
-    color: #5b6a80 !important;
-    border-color: var(--almotion-light-border) !important;
-  }
-
-  html.light tbody tr {
-    transition: background 140ms ease;
-  }
-
-  html.light tbody tr:hover,
-  html.light [class*="hover:bg-slate-800"]:hover,
-  html.light [class*="hover:bg-slate-700"]:hover {
-    background: rgba(236, 242, 250, 0.86) !important;
-  }
-
-  html.light [class*="divide-slate"] > :not([hidden]) ~ :not([hidden]),
-  html.light [class*="border-b"][class*="border-slate"] {
-    border-color: #d9e3ef !important;
-  }
-
-  /* Account card dưới sidebar nhìn gọn và sang hơn */
-  html.light .sidebar-account-card,
-  html.light .app-account-card,
-  html.light .admin-account-card,
-  html.light .customer-account-card,
-  html.light .user-account-card,
-  html.light [data-account-card] {
-    background: rgba(255,255,255,0.78) !important;
-    border-color: var(--almotion-light-border) !important;
-    box-shadow: 0 16px 34px rgba(43,64,95,0.09) !important;
-  }
-
-  /* Modal/popover bớt tối, vẫn nổi rõ */
-  html.light .header-popover,
-  html.light .help-modal-shell,
-  html.light [role="dialog"] > div,
-  html.light .modal,
-  html.light .dialog {
-    background: rgba(255, 255, 255, 0.94) !important;
-    border-color: var(--almotion-light-border) !important;
-    box-shadow: 0 24px 70px rgba(43,64,95,0.18) !important;
-  }
-
-  html.light .help-modal-overlay,
-  html.light [class*="bg-slate-950/70"],
-  html.light [class*="bg-slate-950/60"] {
-    background-color: rgba(224, 233, 246, 0.62) !important;
-    backdrop-filter: blur(10px);
-  }
-
-  /* Badge màu: rõ nhưng không loè */
-  html.light [class*="text-emerald"] { color: #047857 !important; }
-  html.light [class*="text-rose"] { color: #be123c !important; }
-  html.light [class*="text-amber"] { color: #b45309 !important; }
-  html.light [class*="text-indigo"] { color: #4f46e5 !important; }
-  html.light [class*="text-sky"] { color: #0369a1 !important; }
-  html.light [class*="text-violet"] { color: #6d28d9 !important; }
-
-  html.light [class*="bg-indigo-600"] [class*="text-indigo"],
-  html.light [class*="bg-indigo-600"] [class*="text-slate"],
-  html.light button[class*="bg-indigo"] [class*="text-indigo"],
-  html.light button[class*="bg-indigo"] [class*="text-slate"] {
-    color: inherit !important;
-  }
-
-  /* Scrollbar xanh xám nhẹ */
-  html.light ::-webkit-scrollbar-thumb {
-    background: #b9c8db !important;
-    border-radius: 999px;
-  }
-
-  html.light ::-webkit-scrollbar-thumb:hover {
-    background: #9fb1c8 !important;
-  }
-
-  html.light * {
-    scrollbar-color: #b9c8db transparent !important;
-  }
-
-  /* Chart chữ rõ hơn trong light mode */
-  html.light .recharts-cartesian-axis-tick-value,
-  html.light .recharts-legend-item-text {
-    fill: #5b6a80 !important;
-    color: #5b6a80 !important;
-  }
-}
-
-
 /* =====================================================================
-   HELP CENTER MODAL RESPONSIVE FIX
-   Giữ UI cũ, chỉ chống tràn/cắt khi zoom trình duyệt.
+   LIGHT MODE PROFESSIONAL POLISH
+   Tông màu giữ nguyên xanh xám hiện tại, chỉ làm giao diện gọn, rõ cấp bậc
+   và chuyên nghiệp hơn. Không ảnh hưởng dark mode, không sửa logic.
    ===================================================================== */
-.help-modal-overlay {
-  z-index: 9999 !important;
+
+/* Nền chính: thêm chiều sâu nhẹ, bớt cảm giác phẳng */
+html.light,
+html.light body,
+html.light #root {
+  background:
+    radial-gradient(circle at 8% -8%, rgba(79, 70, 229, 0.085), transparent 30%),
+    radial-gradient(circle at 92% 2%, rgba(14, 165, 233, 0.085), transparent 28%),
+    linear-gradient(135deg, #d3deea 0%, #e2e9f2 52%, #c9d5e2 100%) !important;
 }
 
-.help-modal-shell {
-  width: min(72rem, calc(100vw - 1.5rem));
-  height: min(860px, calc(100dvh - 1.5rem));
-  max-height: calc(100dvh - 1.5rem);
+/* Main: giữ xanh xám, nhưng sạch và có lớp nền rõ hơn */
+html.light main,
+html.light section,
+html.light .app-main,
+html.light .admin-main,
+html.light .customer-main,
+html.light .user-main,
+html.light [data-main] {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(79, 70, 229, 0.07), transparent 28%),
+    radial-gradient(circle at 90% 8%, rgba(14, 165, 233, 0.075), transparent 26%),
+    linear-gradient(135deg, #d3deea 0%, #e2e9f2 56%, #c9d5e2 100%) !important;
 }
 
-.help-modal-head {
-  flex-shrink: 0;
+/* Sidebar: nổi hơn nền nhưng vẫn nhẹ mắt */
+html.light aside,
+html.light .app-sidebar,
+html.light .admin-sidebar,
+html.light .customer-sidebar,
+html.light .user-sidebar,
+html.light [data-sidebar] {
+  background:
+    linear-gradient(180deg, rgba(231, 238, 247, 0.92) 0%, rgba(211, 222, 235, 0.94) 100%) !important;
+  border-right-color: rgba(144, 160, 181, 0.68) !important;
+  box-shadow: 10px 0 34px rgba(16, 32, 51, 0.08) !important;
 }
 
-.help-modal-body {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scroll-padding-bottom: 2rem;
+/* Header kính mờ tinh tế hơn */
+html.light header,
+html.light .app-header,
+html.light .admin-header,
+html.light .customer-header,
+html.light .user-header,
+html.light [data-header] {
+  background: rgba(226, 233, 242, 0.82) !important;
+  border-bottom-color: rgba(173, 190, 210, 0.78) !important;
+  box-shadow: 0 10px 30px rgba(16, 32, 51, 0.065) !important;
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
-@media (max-width: 900px), (max-height: 720px) {
-  .help-modal-shell {
-    width: calc(100vw - 1rem);
-    height: calc(100dvh - 1rem);
-    border-radius: 1rem;
-  }
-
-  .help-modal-title {
-    font-size: 1.25rem;
-    line-height: 1.75rem;
-  }
-
-  .help-modal-subtitle {
-    font-size: 0.8125rem;
-    line-height: 1.35rem;
-  }
-}
-/* Dán cuối src/index.css để làm sáng riêng trang Quản lý Giao dịch.
-   Không ảnh hưởng dark mode, chỉ chạy khi html.light đang bật. */
-
-html.light .admin-transactions-page {
-  color: #142033 !important;
+/* Nav item: rõ trạng thái hơn, không quá nhiều màu */
+html.light aside nav a:not([class*='bg-indigo']),
+html.light aside nav button:not([class*='bg-indigo']),
+html.light [data-nav-item] {
+  color: #4f6178 !important;
+  background: rgba(237, 243, 250, 0.34) !important;
+  border: 1px solid rgba(157, 174, 196, 0.34) !important;
 }
 
-html.light .admin-transactions-page h1 {
-  color: #142033 !important;
+html.light aside nav a:not([class*='bg-indigo']):hover,
+html.light aside nav button:not([class*='bg-indigo']):hover,
+html.light [data-nav-item]:hover {
+  background: rgba(224, 235, 247, 0.88) !important;
+  color: #102033 !important;
+  border-color: rgba(126, 145, 168, 0.48) !important;
+  box-shadow: 0 8px 18px rgba(16, 32, 51, 0.055) !important;
 }
 
-html.light .admin-transactions-page p {
-  color: #5f7087 !important;
-}
-
-/* 3 ô tổng quan: bớt xanh bệt, nhìn sạch hơn */
-html.light .admin-transactions-summary .admin-transactions-mini-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.92)) !important;
-  border-color: #cfdbeb !important;
-  box-shadow: 0 14px 32px rgba(43, 64, 95, 0.08) !important;
-}
-
-html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(2) {
-  background: linear-gradient(180deg, rgba(236, 253, 245, 0.95), rgba(240, 253, 250, 0.9)) !important;
-  border-color: rgba(16, 185, 129, 0.26) !important;
-}
-
-html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(3) {
-  background: linear-gradient(180deg, rgba(238, 242, 255, 0.96), rgba(245, 243, 255, 0.9)) !important;
-  border-color: rgba(99, 102, 241, 0.24) !important;
-}
-
-html.light .admin-transactions-mini-card p:first-child {
-  color: #64748b !important;
-}
-
-html.light .admin-transactions-mini-card p:last-child {
-  color: #142033 !important;
-}
-
-html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(2) p:last-child {
-  color: #047857 !important;
-}
-
-html.light .admin-transactions-summary .admin-transactions-mini-card:nth-child(3) p:last-child {
-  color: #4f46e5 !important;
-}
-
-/* Khung bảng */
-html.light .admin-transactions-table-card {
-  background: rgba(255, 255, 255, 0.92) !important;
-  border-color: #cad7e8 !important;
-  box-shadow: 0 18px 42px rgba(43, 64, 95, 0.10) !important;
-}
-
-html.light .admin-transactions-toolbar,
-html.light .admin-transactions-pagination {
-  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(240, 246, 253, 0.92)) !important;
-  border-color: #d7e1ee !important;
-}
-
-/* Input ngày + search */
-html.light .admin-transactions-page input {
-  background: #ffffff !important;
-  border-color: #c6d4e6 !important;
-  color: #142033 !important;
-  box-shadow: 0 1px 2px rgba(43, 64, 95, 0.04) !important;
-}
-
-html.light .admin-transactions-page input::placeholder {
-  color: #91a0b2 !important;
-}
-
-/* Header bảng */
-html.light .admin-transactions-thead {
-  background: #f1f6fd !important;
-  color: #607086 !important;
-}
-
-html.light .admin-transactions-thead th {
-  color: #607086 !important;
-  border-color: #d9e3ef !important;
-}
-
-/* Body bảng: bỏ nền xanh đậm bệt */
-html.light .admin-transactions-tbody tr {
-  background: #ffffff !important;
-  border-color: #edf2f7 !important;
-}
-
-html.light .admin-transactions-tbody tr:nth-child(even) {
-  background: #f7fbff !important;
-}
-
-html.light .admin-transactions-tbody tr:hover {
-  background: #eef4ff !important;
-}
-
-html.light .admin-transactions-tbody td {
-  color: #334155 !important;
-  border-color: #e5edf7 !important;
-}
-
-html.light .admin-transactions-tbody .text-white {
-  color: #142033 !important;
-}
-
-html.light .admin-transactions-tbody .text-slate-400 {
-  color: #64748b !important;
-}
-
-html.light .admin-transactions-tbody .text-emerald-400 {
-  color: #047857 !important;
-}
-
-/* Badge thành công */
-html.light .admin-transactions-tbody span[class*="bg-emerald"] {
-  background: rgba(16, 185, 129, 0.12) !important;
-  border-color: rgba(16, 185, 129, 0.25) !important;
-  color: #047857 !important;
-}
-
-/* Nút action */
-html.light .admin-transactions-export-btn {
-  background: #ffffff !important;
-  border-color: #c6d4e6 !important;
-  color: #334155 !important;
-  box-shadow: 0 8px 18px rgba(43, 64, 95, 0.06) !important;
-}
-
-html.light .admin-transactions-export-btn:hover {
-  background: #eef4ff !important;
-  color: #1e293b !important;
-  border-color: #9fb2ce !important;
-}
-
-html.light .admin-transactions-refresh-btn {
-  background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
+/* Active menu: vẫn tím xanh thương hiệu, gọn hơn */
+html.light aside nav a[class*='bg-indigo'],
+html.light aside button[class*='bg-indigo'],
+html.light aside nav a.active,
+html.light aside nav a[aria-current='page'],
+html.light [data-nav-active='true'] {
+  background: linear-gradient(135deg, #4f46e5 0%, #6672ff 100%) !important;
   color: #ffffff !important;
-  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  box-shadow:
+    0 14px 28px rgba(79, 70, 229, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
 }
 
-/* Nút mắt chi tiết */
-html.light .admin-transactions-tbody button {
-  background: #ffffff !important;
-  border-color: #d5e0ef !important;
-  color: #64748b !important;
+/* Card/panel chung: nhìn rõ là card, không chìm vào nền */
+html.light [class*='rounded-3xl'][class*='bg-slate'],
+html.light [class*='rounded-2xl'][class*='bg-slate'],
+html.light [class*='rounded-xl'][class*='bg-slate'],
+html.light [class*='rounded-lg'][class*='bg-slate'],
+html.light [class*='bg-[#111827]'],
+html.light [class*='bg-[#0f172a]'],
+html.light [class*='bg-[#1e293b]'],
+html.light [class*='bg-slate-950'],
+html.light [class*='bg-slate-900'],
+html.light [class*='bg-slate-800'] {
+  background:
+    linear-gradient(180deg, rgba(237, 243, 250, 0.92) 0%, rgba(220, 230, 241, 0.92) 100%) !important;
+  border-color: rgba(173, 190, 210, 0.82) !important;
+  box-shadow:
+    0 12px 30px rgba(16, 32, 51, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.58) !important;
 }
 
-html.light .admin-transactions-tbody button:hover {
-  background: #eef2ff !important;
-  border-color: #818cf8 !important;
-  color: #4f46e5 !important;
+/* Các card có số liệu: thêm độ nổi nhẹ, áp dụng rộng nhưng không quá lố */
+html.light [class*='rounded-2xl']:has([class*='text-3xl']),
+html.light [class*='rounded-xl']:has([class*='text-3xl']),
+html.light [class*='rounded-2xl']:has([class*='text-4xl']),
+html.light [class*='rounded-xl']:has([class*='text-4xl']) {
+  background:
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(239, 245, 252, 0.96) 0%, rgba(222, 232, 243, 0.94) 100%) !important;
+  border-color: rgba(157, 174, 196, 0.78) !important;
+  box-shadow:
+    0 14px 34px rgba(16, 32, 51, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64) !important;
+}
+
+/* Label và số trong card đọc rõ hơn */
+html.light [class*='uppercase'] {
+  color: #5b6b82 !important;
+  letter-spacing: 0.075em;
+}
+
+html.light [class*='text-3xl'],
+html.light [class*='text-4xl'] {
+  color: #0f1f33 !important;
+}
+
+/* Input/search: sạch, có viền và focus chuyên nghiệp */
+html.light input,
+html.light select,
+html.light textarea,
+html.light .input-auth {
+  background: rgba(239, 245, 252, 0.92) !important;
+  border-color: rgba(159, 178, 200, 0.86) !important;
+  color: #102033 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 1px 2px rgba(16, 32, 51, 0.035) !important;
+}
+
+html.light input:focus,
+html.light select:focus,
+html.light textarea:focus {
+  border-color: #6d7cff !important;
+  box-shadow:
+    0 0 0 3px rgba(79, 70, 229, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.70) !important;
+}
+
+/* Button thường có viền nhìn chắc hơn */
+html.light button:not([class*='bg-indigo']):not([aria-current='page']) {
+  border-color: rgba(159, 178, 200, 0.78) !important;
+}
+
+/* Button primary giữ sáng, nhưng bóng gọn hơn */
+html.light button[class*='bg-indigo'],
+html.light a[class*='bg-indigo'],
+html.light [class*='bg-indigo-600'] {
+  background: linear-gradient(135deg, #4f46e5 0%, #6672ff 100%) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 14px 28px rgba(79, 70, 229, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Table: nổi hơn nền, dễ đọc hơn */
+html.light table {
+  color: #102033 !important;
+}
+
+html.light thead,
+html.light thead tr,
+html.light [class*='bg-slate-900/50'] {
+  background: linear-gradient(180deg, #d5e0ec 0%, #cbd8e6 100%) !important;
+  color: #52627a !important;
+  border-color: rgba(173, 190, 210, 0.90) !important;
+}
+
+html.light tbody tr {
+  background: rgba(230, 238, 247, 0.88) !important;
+}
+
+html.light tbody tr:nth-child(even) {
+  background: rgba(220, 230, 241, 0.90) !important;
+}
+
+html.light tbody tr:hover,
+html.light [class*='hover:bg-slate-800']:hover,
+html.light [class*='hover:bg-slate-700']:hover {
+  background: rgba(204, 217, 232, 0.95) !important;
+}
+
+/* Bảng/panel lớn có chiều sâu hơn */
+html.light [class*='rounded-2xl']:has(table),
+html.light [class*='rounded-xl']:has(table),
+html.light [class*='rounded-2xl']:has(.recharts-wrapper),
+html.light [class*='rounded-xl']:has(.recharts-wrapper) {
+  background:
+    linear-gradient(180deg, rgba(236, 243, 251, 0.94) 0%, rgba(217, 228, 240, 0.94) 100%) !important;
+  border-color: rgba(157, 174, 196, 0.80) !important;
+  box-shadow: 0 16px 38px rgba(16, 32, 51, 0.095) !important;
+}
+
+/* Modal light mode: giữ đúng light nhưng không bị nhạt */
+html.light div.fixed.inset-0[class*='bg-black'],
+html.light div.fixed.inset-0[class*='backdrop-blur'],
+html.light .help-modal-overlay {
+  background: rgba(15, 23, 42, 0.30) !important;
+  backdrop-filter: blur(7px) !important;
+}
+
+html.light div.fixed.inset-0 > div,
+html.light .help-modal-shell,
+html.light [role='dialog'] > div {
+  background:
+    linear-gradient(180deg, rgba(239, 245, 252, 0.98) 0%, rgba(222, 232, 243, 0.98) 100%) !important;
+  border-color: rgba(157, 174, 196, 0.88) !important;
+  box-shadow: 0 28px 84px rgba(16, 32, 51, 0.30) !important;
+}
+
+/* Account card sidebar chuyên nghiệp hơn */
+html.light aside > a[href*='profile'],
+html.light [data-account-card] {
+  background:
+    linear-gradient(180deg, rgba(239, 245, 252, 0.90), rgba(222, 232, 243, 0.90)) !important;
+  border-color: rgba(159, 178, 200, 0.76) !important;
+  box-shadow: 0 10px 24px rgba(16, 32, 51, 0.075) !important;
+}
+
+/* Footer nhẹ hơn nhưng vẫn phân tách */
+html.light footer,
+html.light .app-footer,
+html.light .admin-footer,
+html.light .customer-footer,
+html.light .user-footer,
+html.light [data-footer] {
+  background: rgba(218, 228, 240, 0.82) !important;
+  border-top-color: rgba(173, 190, 210, 0.86) !important;
+}
+
+/* Scrollbar dịu và hợp nền hơn */
+html.light ::-webkit-scrollbar-thumb {
+  background: #9cadc2 !important;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #8397b0 !important;
 }

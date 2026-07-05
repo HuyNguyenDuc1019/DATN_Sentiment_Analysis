@@ -5,6 +5,18 @@ import { AuthProvider } from './contexts/AuthContext.jsx';
 import { TaskProvider } from './contexts/TaskContext.jsx';
 import toast, { Toaster } from 'react-hot-toast';
 
+const applySavedTheme = () => {
+  const savedTheme = localStorage.getItem('almotion-theme');
+
+  const theme = savedTheme === 'light' ? 'light' : 'dark';
+
+  document.documentElement.classList.remove('light', 'dark');
+  document.documentElement.classList.add(theme);
+  document.documentElement.style.colorScheme = theme;
+};
+
+applySavedTheme();
+
 const toastStyle = {
   minWidth: '320px',
   maxWidth: '520px',

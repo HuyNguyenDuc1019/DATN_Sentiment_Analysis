@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Activity, CreditCard, Download, MessageSquare, RefreshCcw, TrendingUp, Users, Wallet } from 'lucide-react';
+import { Activity, Download, MessageSquare, RefreshCcw, TrendingUp, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
 
@@ -21,11 +21,6 @@ const emptyStats = {
   positiveRate: 0,
 };
 
-const emptyTransactionStats = {
-  revenue: 0,
-  paidCount: 0,
-  todayCount: 0,
-};
 
 const fallbackTheme = {
   card: 'border-slate-700 bg-slate-900/80 shadow-slate-950/30',
@@ -40,22 +35,7 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString('vi-VN');
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value || 0));
-}
 
-function isToday(value) {
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-
-  const now = new Date();
-  return (
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear()
-  );
-}
 
 const AdminDashboard = () => {
   const { theme = fallbackTheme } = useOutletContext() || {};
@@ -63,7 +43,6 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState(emptyStats);
   const [weeklyData, setWeeklyData] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
-  const [transactionStats, setTransactionStats] = useState(emptyTransactionStats);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -78,21 +57,19 @@ const AdminDashboard = () => {
 
     const adminId = authData.user.id;
 
-    const [metricsRes, chartRes, usersRes, transactionsRes] = await Promise.all([
+    const [metricsRes, chartRes, usersRes] = await Promise.all([
       fetch(`http://localhost:8000/api/admin/metrics?admin_id=${adminId}`),
       fetch(`http://localhost:8000/api/admin/metrics/sentiment-chart?admin_id=${adminId}&days=7`),
       fetch(`http://localhost:8000/api/admin/users?admin_id=${adminId}`),
-      fetch(`http://localhost:8000/api/admin/transactions?admin_id=${adminId}`),
     ]);
 
-    if (!metricsRes.ok || !chartRes.ok || !usersRes.ok || !transactionsRes.ok) {
+    if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
       throw new Error('Lỗi server khi tải dữ liệu dashboard.');
     }
 
     const metricsData = await metricsRes.json();
     const chartDataResponse = await chartRes.json();
     const usersData = await usersRes.json();
-    const transactionsData = await transactionsRes.json();
 
     setStats({
       apiCalls: metricsData.total_api_calls || 0,
@@ -117,12 +94,6 @@ const AdminDashboard = () => {
 
     setRecentUsers(recent);
 
-    const paidTransactions = (transactionsData || []).filter((item) => item.status === 'paid');
-    setTransactionStats({
-      revenue: paidTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      paidCount: paidTransactions.length,
-      todayCount: (transactionsData || []).filter((item) => isToday(item.created_at)).length,
-    });
   } catch (error) {
     console.error('Load admin dashboard failed:', error);
     toast.error('Không thể tải dữ liệu thống kê từ máy chủ Backend.', {
@@ -174,26 +145,6 @@ const AdminDashboard = () => {
     },
   ];
 
-  const transactionCardConfig = [
-    {
-      title: 'Tổng doanh thu VIP',
-      value: transactionStats.revenue,
-      icon: <Wallet className="h-5 w-5 text-emerald-400" />,
-      formatter: formatCurrency,
-    },
-    {
-      title: 'Giao dịch thành công',
-      value: transactionStats.paidCount,
-      icon: <CreditCard className="h-5 w-5 text-indigo-400" />,
-      formatter: formatNumber,
-    },
-    {
-      title: 'Giao dịch hôm nay',
-      value: transactionStats.todayCount,
-      icon: <TrendingUp className="h-5 w-5 text-amber-400" />,
-      formatter: formatNumber,
-    },
-  ];
 const handleExportPdf = useCallback(() => {
   try {
     const exportedAt = new Date().toLocaleString('vi-VN');
@@ -403,7 +354,7 @@ const handleExportPdf = useCallback(() => {
             <div class="header">
               <div>
                 <h1>Báo cáo nhanh hệ thống Almotion</h1>
-                <p>Tổng hợp nhanh các chỉ số quản trị, phản hồi, giao dịch VIP và người dùng gần đây.</p>
+                <p>Tổng hợp nhanh các chỉ số quản trị, phản hồi và người dùng gần đây.</p>
               </div>
 
               <div>
@@ -436,25 +387,6 @@ const handleExportPdf = useCallback(() => {
               </div>
             </section>
 
-            <section class="section">
-              <h2>Thống kê giao dịch VIP</h2>
-              <div class="cards cards-3">
-                <div class="card revenue-card">
-                  <div class="label">Tổng doanh thu VIP</div>
-                  <div class="value revenue">${formatCurrency(transactionStats.revenue)}</div>
-                </div>
-
-                <div class="card">
-                  <div class="label">Giao dịch thành công</div>
-                  <div class="value">${formatNumber(transactionStats.paidCount)}</div>
-                </div>
-
-                <div class="card">
-                  <div class="label">Giao dịch hôm nay</div>
-                  <div class="value">${formatNumber(transactionStats.todayCount)}</div>
-                </div>
-              </div>
-            </section>
 
             <section class="section">
               <h2>Phân hóa phản hồi 7 ngày qua</h2>
@@ -520,7 +452,7 @@ const handleExportPdf = useCallback(() => {
     console.error('Export admin report failed:', error);
     toast.error(`Không thể xuất báo cáo: ${error.message}`);
   }
-}, [chartData, recentUsers, stats, transactionStats]);
+}, [chartData, recentUsers, stats]);
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
@@ -590,46 +522,7 @@ const handleExportPdf = useCallback(() => {
             </div>
           ))
         )}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {isLoading ? (
-          Array(3)
-            .fill(0)
-            .map((_, index) => (
-              <div
-                key={index}
-                className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-28 h-4 bg-slate-700 rounded animate-pulse" />
-                  <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
-                </div>
-                <div className="mt-4">
-                  <div className="w-36 h-9 bg-slate-700 rounded animate-pulse" />
-                </div>
-              </div>
-            ))
-        ) : (
-          transactionCardConfig.map((card, index) => (
-            <div
-              key={index}
-              className="flex flex-col justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 backdrop-blur-md transition-colors hover:bg-emerald-500/10"
-            >
-              <div className="flex items-start justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  {card.title}
-                </h3>
-                {card.icon}
-              </div>
-              <div className="mt-4 flex items-end justify-between">
-                <div className="text-3xl font-bold text-white">{card.formatter(card.value)}</div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
+      </div>      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
         <h3 className="mb-2 text-sm font-medium text-slate-200">
           Phân hóa phản hồi 7 ngày qua
         </h3>
