@@ -32,6 +32,30 @@ const API_BASE_URL = 'http://localhost:8000';
 const ITEMS_PER_PAGE = 10;
 const WINDOW_SIZE = 3;
 
+
+const getErrorMessage = (data, fallback = 'Thao tác thất bại.') => {
+  const raw = data?.detail || data?.message || data?.error || data;
+
+  if (!raw) return fallback;
+  if (typeof raw === 'string') return raw;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.msg || item?.message || JSON.stringify(item);
+      })
+      .join('\n');
+  }
+
+  if (typeof raw === 'object') {
+    return raw.msg || raw.message || JSON.stringify(raw);
+  }
+
+  return String(raw);
+};
+
+
 const getPageItems = (currentPage, totalPages) => {
   if (totalPages <= WINDOW_SIZE + 1) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -305,7 +329,7 @@ const AdminUsers = () => {
     try {
       const adminId = await getCurrentAdminId();
 
-      const res = await fetch(`${API_BASE_URL}/api/admin/users/action`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/action?admin_id=${adminId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -315,9 +339,10 @@ const AdminUsers = () => {
         }),
       });
 
+      const responseData = await res.json().catch(() => null);
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || 'Lỗi server');
+        throw new Error(getErrorMessage(responseData, 'Lỗi server'));
       }
 
       const updatePayload =
@@ -337,7 +362,7 @@ const AdminUsers = () => {
         current && current.id === targetUser.id ? { ...current, ...updatePayload } : current,
       );
 
-      toast.success('Thao tác thành công!', {
+      toast.success(responseData?.message || 'Thao tác thành công!', {
         id: `admin-user-action-${targetUser.id}-${action}`,
       });
 

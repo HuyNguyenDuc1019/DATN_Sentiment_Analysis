@@ -44,6 +44,10 @@ export default function SettingsContent() {
 
   // State Tab Dữ liệu
   const [retentionDays, setRetentionDays] = useState(7);
+  const [datasets, setDatasets] = useState([]);
+  const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
+  const [deletingDatasetId, setDeletingDatasetId] = useState(null);
+  const [datasetToDelete, setDatasetToDelete] = useState(null);
 
   // ==========================================
   // 2. FETCH DỮ LIỆU TỪ BACKEND (GET)
@@ -172,6 +176,98 @@ export default function SettingsContent() {
       console.error(error);
     } finally {
       setIsClearing(false);
+    }
+  };
+
+
+  // ==========================================
+  // 5. QUẢN LÝ DỮ LIỆU THEO FILE / QUÁN
+  // ==========================================
+  const fetchUserDatasets = async () => {
+    if (!userId) return;
+
+    try {
+      setIsLoadingDatasets(true);
+      const response = await fetch(`${API_BASE_URL}/api/user/datasets?user_id=${userId}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || 'Không thể tải danh sách dữ liệu.');
+      }
+
+      const payload = await response.json();
+      setDatasets(Array.isArray(payload?.data) ? payload.data : []);
+    } catch (error) {
+      toast.error(error.message || 'Không thể tải danh sách dữ liệu.');
+      console.error(error);
+    } finally {
+      setIsLoadingDatasets(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'data' && userId) {
+      fetchUserDatasets();
+    }
+  }, [activeTab, userId]);
+
+  const handleOpenDeleteDataset = (dataset) => {
+    if (!dataset?.dataset_id && !dataset?.source_url) {
+      toast.error('Không tìm thấy mã dữ liệu cần xóa.');
+      return;
+    }
+
+    setDatasetToDelete(dataset);
+  };
+
+  const handleConfirmDeleteDataset = async () => {
+    if (!userId || !datasetToDelete) return;
+
+    const datasetId = datasetToDelete.dataset_id;
+    const sourceUrl = datasetToDelete.source_url;
+
+    try {
+      setDeletingDatasetId(datasetId || sourceUrl);
+
+      const query = new URLSearchParams({ user_id: userId });
+      if (!datasetId && sourceUrl) query.set('source_url', sourceUrl);
+
+      const endpoint = datasetId
+        ? `${API_BASE_URL}/api/user/datasets/${datasetId}?${query.toString()}`
+        : `${API_BASE_URL}/api/user/datasets/by-source?${query.toString()}`;
+
+      const response = await fetch(endpoint, { method: 'DELETE' });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || 'Không thể xóa dữ liệu đã chọn.');
+      }
+
+      toast.success('Đã xóa dữ liệu đã chọn.');
+      setDatasetToDelete(null);
+      await fetchUserDatasets();
+    } catch (error) {
+      toast.error(error.message || 'Có lỗi xảy ra khi xóa dữ liệu.');
+      console.error(error);
+    } finally {
+      setDeletingDatasetId(null);
+    }
+  };
+
+  const formatDatasetType = (type) => {
+    const value = String(type || '').toLowerCase();
+    if (value === 'csv') return 'CSV';
+    if (value === 'foody') return 'Foody';
+    if (value === 'shopee') return 'Shopee';
+    return 'URL';
+  };
+
+  const formatDate = (value) => {
+    if (!value) return 'Không rõ';
+    try {
+      return new Date(value).toLocaleDateString('vi-VN');
+    } catch {
+      return 'Không rõ';
     }
   };
 
@@ -432,6 +528,75 @@ export default function SettingsContent() {
                     </div>
 
                     <div className="pt-6 border-t border-slate-700/50">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            <Database size={16} className="text-indigo-400" /> Dữ liệu đã phân tích
+                          </h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Xóa riêng từng file CSV hoặc từng quán/link đã phân tích.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={fetchUserDatasets}
+                          disabled={isLoadingDatasets}
+                          className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          {isLoadingDatasets ? 'Đang tải...' : 'Làm mới'}
+                        </button>
+                      </div>
+
+                      <div className="overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/30">
+                        {isLoadingDatasets ? (
+                          <div className="p-4 text-sm text-slate-400">Đang tải danh sách dữ liệu...</div>
+                        ) : datasets.length ? (
+                          <div className="divide-y divide-slate-700/60">
+                            {datasets.map((dataset) => {
+                              const rowKey = dataset.dataset_id || dataset.source_url || dataset.dataset_name;
+                              const deletingKey = dataset.dataset_id || dataset.source_url;
+                              const isDeleting = deletingDatasetId === deletingKey;
+
+                              return (
+                                <div key={rowKey} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="truncate text-sm font-semibold text-slate-200">
+                                        {dataset.dataset_name || dataset.source_url || 'Không rõ tên dữ liệu'}
+                                      </p>
+                                      <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-bold text-indigo-300">
+                                        {formatDatasetType(dataset.dataset_type)}
+                                      </span>
+                                    </div>
+
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {Number(dataset.total_reviews || 0).toLocaleString('vi-VN')} bình luận · Ngày tạo {formatDate(dataset.created_at)}
+                                    </p>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDeleteDataset(dataset)}
+                                    disabled={isDeleting}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 size={14} />
+                                    {isDeleting ? 'Đang xóa...' : 'Xóa'}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-sm text-slate-500">
+                            Chưa có dữ liệu phân tích riêng theo file/quán.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-700/50">
                       <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2 mb-2">
                         <AlertTriangle size={16} /> Khu vực nguy hiểm
                       </h3>
@@ -466,6 +631,56 @@ export default function SettingsContent() {
           </div>
         </div>
       </div>
+
+      {datasetToDelete && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-rose-500/30 bg-slate-900 shadow-2xl shadow-rose-950/40">
+            <div className="relative p-6">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-500 via-red-500 to-orange-400" />
+
+              <div className="mb-5 flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-500/15 ring-1 ring-rose-500/25">
+                  <Trash2 className="h-6 w-6 text-rose-400" />
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-bold text-white">Xóa dữ liệu đã chọn?</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    Dữ liệu <span className="font-semibold text-slate-200">"{datasetToDelete.dataset_name || datasetToDelete.source_url || 'đã chọn'}"</span> sẽ bị xóa khỏi hệ thống.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4">
+                <p className="text-sm font-medium text-rose-200">
+                  Thao tác này chỉ xóa dữ liệu thuộc file/quán này, không ảnh hưởng các dữ liệu khác.
+                </p>
+              </div>
+
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDatasetToDelete(null)}
+                  disabled={Boolean(deletingDatasetId)}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Hủy
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteDataset}
+                  disabled={Boolean(deletingDatasetId)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-950/30 transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deletingDatasetId ? 'Đang xóa...' : 'Xóa dữ liệu này'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isClearConfirmOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">

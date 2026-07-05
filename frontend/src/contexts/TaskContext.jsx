@@ -94,6 +94,8 @@ export function TaskProvider({ children }) {
     const loadingToast = toast.loading(BACKGROUND_MESSAGE);
 
     try {
+      const csvFileName = batchFile?.name || 'CSV_Upload';
+
       const data = await predictBatch({
         reviews: batchTexts.map((text) => ({
           content: text,
@@ -101,6 +103,10 @@ export function TaskProvider({ children }) {
         })),
         user_id: user.id,
         source_url: 'CSV_Upload',
+
+        // THÊM MỚI: để Settings hiển thị đúng tên file CSV
+        dataset_name: csvFileName,
+        file_name: csvFileName,
       });
 
       setBatchResults(data);
@@ -134,9 +140,15 @@ export function TaskProvider({ children }) {
     const loadingToast = toast.loading(BACKGROUND_MESSAGE);
 
     try {
+      const cleanUrl = url.trim();
+
       const data = await analyzeUrl({
-        url: url.trim(),
+        url: cleanUrl,
         user_id: user.id,
+
+        // THÊM MỚI: nếu backend/scraper chuyển tiếp field này sang /predict/batch,
+        // Settings sẽ hiển thị theo link/quán thay vì tên mặc định.
+        dataset_name: cleanUrl,
       });
 
       const receivedCount = Number(data.count || data.results?.length || 0);

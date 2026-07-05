@@ -101,3 +101,107 @@ async def clear_user_data(user_id: str):
     except Exception as e:
         print(f"Lỗi API clear_user_data: {e}")
         raise HTTPException(status_code=500, detail="Không thể xóa dữ liệu. Vui lòng thử lại sau.")
+
+# ============================================================
+# THÊM CUỐI FILE backend/app/api/routers/user.py
+# Không sửa các API cũ.
+# ============================================================
+
+def infer_dataset_type(source_url: str):
+    source = str(source_url or "").lower()
+
+    if source == "csv_upload":
+        return "csv"
+    if "foody" in source:
+        return "foody"
+    if "shopee" in source:
+        return "shopee"
+    return "url"
+
+
+@router.get("/datasets")
+async def get_user_datasets(user_id: str):
+    try:
+        res = (
+            supabase
+            .table("scraped_reviews")
+            .select("dataset_id,dataset_name,dataset_type,source_url,created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        rows = res.data or []
+        groups = {}
+
+        for row in rows:
+            dataset_id = row.get("dataset_id")
+            source_url = row.get("source_url") or "Không rõ nguồn"
+            key = str(dataset_id) if dataset_id else source_url
+
+            if key not in groups:
+                groups[key] = {
+                    "dataset_id": dataset_id,
+                    "dataset_name": row.get("dataset_name") or source_url,
+                    "dataset_type": row.get("dataset_type") or infer_dataset_type(source_url),
+                    "source_url": source_url,
+                    "total_reviews": 0,
+                    "created_at": row.get("created_at"),
+                }
+
+            groups[key]["total_reviews"] += 1
+
+        return {
+            "status": "success",
+            "data": list(groups.values()),
+        }
+
+    except Exception as e:
+        print(f"Lỗi API get_user_datasets: {e}")
+        raise HTTPException(status_code=500, detail="Không thể tải danh sách dữ liệu.")
+
+
+@router.delete("/datasets/{dataset_id}")
+async def delete_user_dataset(dataset_id: str, user_id: str):
+    try:
+        res = (
+            supabase
+            .table("scraped_reviews")
+            .delete()
+            .eq("user_id", user_id)
+            .eq("dataset_id", dataset_id)
+            .execute()
+        )
+
+        return {
+            "status": "success",
+            "message": "Đã xóa dữ liệu đã chọn.",
+            "deleted": len(res.data or []),
+        }
+
+    except Exception as e:
+        print(f"Lỗi API delete_user_dataset: {e}")
+        raise HTTPException(status_code=500, detail="Không thể xóa dữ liệu đã chọn.")
+
+
+@router.delete("/datasets/by-source")
+async def delete_user_dataset_by_source(user_id: str, source_url: str):
+    try:
+        res = (
+            supabase
+            .table("scraped_reviews")
+            .delete()
+            .eq("user_id", user_id)
+            .eq("source_url", source_url)
+            .execute()
+        )
+
+        return {
+            "status": "success",
+            "message": "Đã xóa dữ liệu theo nguồn đã chọn.",
+            "deleted": len(res.data or []),
+        }
+
+    except Exception as e:
+        print(f"Lỗi API delete_user_dataset_by_source: {e}")
+        raise HTTPException(status_code=500, detail="Không thể xóa dữ liệu theo nguồn.")
