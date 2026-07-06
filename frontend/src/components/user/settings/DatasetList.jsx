@@ -1,0 +1,54 @@
+import { Trash2 } from 'lucide-react';
+
+import { formatDatasetType, formatVietnameseDate } from '../../../utils/user/settingsUtils';
+
+export default function DatasetList({ datasets, isLoading, deletingDatasetId, onDelete }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/30">
+      {isLoading ? (
+        <div className="p-4 text-sm text-slate-400">Đang tải danh sách dữ liệu...</div>
+      ) : datasets.length ? (
+        <div className="divide-y divide-slate-700/60">
+          {datasets.map((dataset) => {
+            const rowKey = dataset.dataset_id || dataset.source_url || dataset.dataset_name;
+            const deletingKey = dataset.dataset_id || dataset.source_url;
+            const isDeleting = deletingDatasetId === deletingKey;
+
+            return (
+              <div key={rowKey} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-200">
+                      {dataset.dataset_name || dataset.source_url || 'Không rõ tên dữ liệu'}
+                    </p>
+                    <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-bold text-indigo-300">
+                      {formatDatasetType(dataset.dataset_type)}
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    {Number(dataset.total_reviews || 0).toLocaleString('vi-VN')} bình luận · Ngày tạo {formatVietnameseDate(dataset.created_at)}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onDelete(dataset)}
+                  disabled={isDeleting}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 size={14} />
+                  {isDeleting ? 'Đang xóa...' : 'Xóa'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="p-4 text-sm text-slate-500">
+          Chưa có dữ liệu phân tích riêng theo file/quán.
+        </div>
+      )}
+    </div>
+  );
+}

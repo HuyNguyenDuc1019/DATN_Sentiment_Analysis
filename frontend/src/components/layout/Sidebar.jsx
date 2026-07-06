@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Sparkles,
   Crown,
+  Scale,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -52,6 +53,9 @@ export default function Sidebar() {
           </Link>
           <Link to="/url-analyzer" className={getLinkClass('/url-analyzer')}>
             <LinkIcon className="w-5 h-5" />Trình phân tích URL
+          </Link>
+          <Link to="/compare" className={getLinkClass('/compare')}>
+            <Scale className="w-5 h-5" />So sánh quán
           </Link>
           <Link to="/batch-prediction" className={getLinkClass('/batch-prediction')}>
             <List className="w-5 h-5" />Dự đoán hàng loạt
