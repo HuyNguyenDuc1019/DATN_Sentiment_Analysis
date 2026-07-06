@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 
 
 # ==========================================
@@ -26,9 +26,7 @@ class ReviewItem(BaseModel):
 class BatchPredictRequest(BaseModel):
     reviews: List[ReviewItem]  # 👈 Đổi từ 'texts: List[str]' thành 'reviews: List[ReviewItem]'
     user_id: str  
-    source_url: str
-    dataset_name: Optional[str] = None
-    file_name: Optional[str] = None  
+    source_url: str  
 
 class FeedbackRequest(BaseModel):
     original_content: str
