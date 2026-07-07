@@ -215,6 +215,90 @@ async function scrapeFoodyForCompare(url) {
 }
 
 // ==========================================
+// 3.2. CÀO GOOGLE MAPS CHỈ ĐỂ SO SÁNH, KHÔNG LƯU DB
+// ==========================================
+async function scrapeGoogleMapsForCompare(url) {
+    // 1. Kiểm tra Cache trước cho nhẹ server
+    const cachedReviews = getCompareCache(url);
+    if (cachedReviews) {
+        console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận cho Google Maps`);
+        return cachedReviews;
+    }
+
+    console.log('⚖️ Đang cào Google Maps cho chức năng so sánh, không lưu DB...');
+    
+    // ĐIỀN MÃ API KEY CỦA BẠN VÀO ĐÂY LẦN NỮA NHÉ
+    const API_KEY = "2d7afde6c5f875e747f9bf067e8147e6c0b63aec2dab90fddf70e621f357c92f"; 
+
+    // 2. Chặt thịt URL lấy từ khóa (Y chang hàm chuẩn)
+    let searchQuery = url;
+    if (url.includes('/place/')) {
+        try {
+            const parts = url.split('/place/')[1].split('/')[0];
+            searchQuery = decodeURIComponent(parts.replace(/\+/g, ' '));
+            console.log(`🪄 [Compare] Đã ép kiểu URL thành: "${searchQuery}"`);
+        } catch (e) {
+            console.log('⚠️ Không thể tự bóc tách tên quán, sử dụng URL gốc.');
+        }
+    }
+
+    try {
+        console.log(`🔍 Bước 1: Tìm ID quán cho chức năng Compare...`);
+        const searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(searchQuery)}&api_key=${API_KEY}&hl=vi`;
+        const searchRes = await axios.get(searchUrl);
+        const data = searchRes.data;
+
+        // Xử lý tìm ID ở cả 2 trường hợp như đã fix
+        let dataId = null;
+        if (data.place_results && data.place_results.data_id) {
+            dataId = data.place_results.data_id;
+        } else if (data.local_results && data.local_results.length > 0) {
+            dataId = data.local_results[0].data_id;
+        }
+
+        if (!dataId) {
+            throw new Error(`Không tìm thấy địa điểm trên bản đồ cho từ khóa: ${searchQuery}`);
+        }
+
+        // 3. Cào bình luận
+        console.log(`🔍 Bước 2: Tải bình luận Google Maps (Compare)...`);
+        const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${API_KEY}&hl=vi`;
+        const reviewRes = await axios.get(reviewUrl);
+        const rawReviews = reviewRes.data.reviews;
+
+        if (!rawReviews || rawReviews.length === 0) {
+            return [];
+        }
+
+        const cleanReviews = [];
+        for (let item of rawReviews) {
+            let content = item.snippet || item.details || "";
+            if (!content || content.trim() === "") continue;
+
+            let reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
+
+            cleanReviews.push({
+                content: content.replace(/[\r\n]+/g, ' ').trim(),
+                review_date: reviewDate.toISOString()
+            });
+        }
+
+        // 4. Giới hạn số lượng review và lưu Cache y như Foody
+        const limit = typeof COMPARE_MAX_REVIEWS !== 'undefined' ? COMPARE_MAX_REVIEWS : 50;
+        const limitedReviews = cleanReviews.slice(0, limit);
+
+        setCompareCache(url, limitedReviews);
+        console.log(`💎 Compare Google Maps: Thu thập ${cleanReviews.length}, xuất ${limitedReviews.length} bình luận, lưu cache!`);
+
+        return limitedReviews;
+
+    } catch (error) {
+        console.error('🔥 Lỗi cào Google Maps (Compare):', error.response?.data || error.message);
+        throw new Error(error.response?.data?.error || "Lỗi khi gọi API Google Maps (SerpApi).");
+    }
+}
+
+// ==========================================
 // 3. CỖ MÁY CÀO DỮ LIỆU FOODY
 // ==========================================
 async function scrapeFoody(url, userId, lastScrapedDate) {
@@ -351,6 +435,115 @@ async function scrapeFoody(url, userId, lastScrapedDate) {
 }
 
 // ==========================================
+// 3.5. CỖ MÁY CÀO DỮ LIỆU GOOGLE MAPS (SERPAPI)
+// ==========================================
+async function scrapeGoogleMaps(url, userId, lastScrapedDate) {
+    console.log(`🤖 Nhận lệnh cào Google Maps từ User ID: ${userId}`);
+    console.log(`⏱️ Mốc thời gian dừng cào (Last Scraped): ${lastScrapedDate || 'Chưa từng cào'}`);
+    
+    // ĐIỀN MÃ API KEY CỦA BẠN VÀO ĐÂY
+    const API_KEY = "2d7afde6c5f875e747f9bf067e8147e6c0b63aec2dab90fddf70e621f357c92f"; 
+
+    // -------- 🪄 BƯỚC MỚI: XỬ LÝ URL --------
+    let searchQuery = url;
+    if (url.includes('/place/')) {
+        try {
+            // Cắt URL lấy phần tên quán (nằm giữa /place/ và dấu / tiếp theo)
+            const parts = url.split('/place/')[1].split('/')[0];
+            // Giải mã các ký tự %20, dấu + thành tiếng Việt có dấu
+            searchQuery = decodeURIComponent(parts.replace(/\+/g, ' '));
+            console.log(`🪄 Đã ép kiểu URL thành Từ khóa tìm kiếm: "${searchQuery}"`);
+        } catch (e) {
+            console.log('⚠️ Không thể tự bóc tách tên quán, sử dụng URL gốc.');
+        }
+    }
+    // ----------------------------------------
+
+try {
+        console.log(`🔍 Bước 1: Đang tìm ID của quán trên Google Maps cho từ khóa: ${searchQuery}...`);
+        
+        const searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(searchQuery)}&api_key=${API_KEY}&hl=vi`;
+        
+        const searchRes = await axios.get(searchUrl);
+        const data = searchRes.data; // Lấy toàn bộ dữ liệu trả về
+
+        // -------- BẢN NÂNG CẤP: TÌM DATA_ID Ở CẢ 2 TRƯỜNG HỢP --------
+        let dataId = null;
+
+        if (data.place_results && data.place_results.data_id) {
+            // Trường hợp A: Trả về chính xác 1 quán duy nhất
+            dataId = data.place_results.data_id;
+            console.log("👉 Bắt được quán ở chế độ Exact Match (place_results)!");
+        } else if (data.local_results && data.local_results.length > 0) {
+            // Trường hợp B: Trả về một danh sách quán
+            dataId = data.local_results[0].data_id;
+            console.log("👉 Bắt được quán ở chế độ List Match (local_results)!");
+        }
+
+        if (!dataId) {
+            // Nếu lục cả 2 hộp đều không có thì mới báo lỗi
+            throw new Error(`Không tìm thấy địa điểm trên bản đồ cho từ khóa: ${searchQuery}`);
+        }
+        // -------------------------------------------------------------
+
+        console.log(`✅ Tìm thấy mã quán (data_id: ${dataId}). Bắt đầu tải bình luận...`);
+
+        // ==========================================
+        // 🔍 Bước 2: Gọi API lấy danh sách bình luận (GIỮ NGUYÊN CODE CŨ BÊN DƯỚI)
+        // ==========================================
+        console.log('🔍 Bước 2: Gọi API lấy danh sách bình luận...');
+        const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${API_KEY}&hl=vi`;
+        const reviewRes = await axios.get(reviewUrl);
+        const rawReviews = reviewRes.data.reviews;
+
+        if (!rawReviews || rawReviews.length === 0) {
+            return { message: "Quán này không có bình luận nào." };
+        }
+
+        const cleanReviews = [];
+
+        for (let item of rawReviews) {
+            // Lấy nội dung (SerpApi để ở trường snippet)
+            let content = item.snippet || item.details || "";
+            if (!content || content.trim() === "") continue; // Bỏ qua review chỉ chấm sao, ko viết chữ
+
+            // Lấy ngày tháng chuẩn ISO (Cái này SerpApi trả về sẵn, quá sướng!)
+            let reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
+
+            // So sánh thời gian để ngắt cào nếu đụng review cũ
+            if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
+                console.log(`🛑 Đã chạm bình luận cũ (Ngày: ${reviewDate.toISOString()}). Ngắt thu thập!`);
+                break;
+            }
+
+            cleanReviews.push({
+                content: content.replace(/[\r\n]+/g, ' ').trim(),
+                review_date: reviewDate.toISOString()
+            });
+        }
+
+        console.log(`💎 Thành phẩm: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`);
+
+        // ------------------------------------------
+        console.log('🚀 Đang gửi dữ liệu sang FastAPI để AI phân tích...');
+        if (cleanReviews.length > 0) {
+            const response = await axios.post('http://localhost:8000/predict/batch', {
+                reviews: cleanReviews,
+                user_id: userId,
+                source_url: url
+            });
+            console.log('🎉 AI VÀ DATABASE ĐÃ XỬ LÝ XONG (GOOGLE MAPS)!');
+            return response.data;
+        } else {
+            return { message: "Quán này không có bình luận nào mới kể từ lần cào trước." };
+        }
+
+    } catch (error) {
+        console.error('🔥 Lỗi cào Google Maps:', error.response?.data || error.message);
+        throw new Error(error.response?.data?.error || "Lỗi khi gọi API Google Maps (SerpApi).");
+    }
+}
+// ==========================================
 // 4. API ENDPOINT NHẬN LỆNH TỪ FRONTEND
 // ==========================================
 app.post('/api/scrape', async (req, res) => {
@@ -378,12 +571,10 @@ app.post('/api/scrape', async (req, res) => {
             console.log('👉 Phát hiện link Foody. Đang gọi Bot Foody...');
             result = await scrapeFoody(url, user_id, lastScrapedDate); 
             
-        } else if (url.includes('google.com') || url.includes('maps.app.goo.gl')) {
-            console.log('👉 Phát hiện link Google Maps. Bot Google Maps hiện chưa cập nhật logic ngày tháng.');
-            return res.status(400).json({
-                success: false,
-                error: 'Bot Google Maps đang bảo trì cập nhật thuật toán thời gian.'
-            });
+            } else if (url.includes('google.com') || url.includes('maps')) {
+            console.log('👉 Phát hiện link Google Maps. Đang gọi Bot SerpApi...');
+            // Chuyển sang gọi hàm scrapeGoogleMaps vừa tạo ở trên
+            result = await scrapeGoogleMaps(url, user_id, lastScrapedDate);
             
         } else {
             console.log('❌ URL không hợp lệ:', url);
@@ -424,12 +615,9 @@ app.post('/api/compare/scrape', async (req, res) => {
         if (url.includes('foody.vn')) {
             console.log('⚖️ Phát hiện link Foody. Đang cào dữ liệu cho so sánh...');
             reviews = await scrapeFoodyForCompare(url);
-        } else if (url.includes('google.com') || url.includes('maps.app.goo.gl')) {
-            console.log('👉 Phát hiện link Google Maps. Bot Google Maps hiện chưa cập nhật cho chức năng so sánh.');
-            return res.status(400).json({
-                success: false,
-                error: 'Bot Google Maps đang bảo trì cập nhật thuật toán thời gian.'
-            });
+        } else if (url.includes('google.com') || url.includes('maps')) {
+            console.log('⚖️ Phát hiện link Google Maps. Đang cào dữ liệu cho so sánh...');
+            reviews = await scrapeGoogleMapsForCompare(url);
         } else {
             console.log('❌ URL không hợp lệ:', url);
             return res.status(400).json({
