@@ -145,7 +145,7 @@ export async function logAdminActivity({
 }
 
 /**
- * Gọi hàm này khi admin đăng xuất hoặc chuyển tài khoản.
+ * Gọi hàm này khi admin đăng xuất hoặc chuyển tài khoản
  */
 export function resetAdminActivityCache() {
   cachedAdmin = null;
