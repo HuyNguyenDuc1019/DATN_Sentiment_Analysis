@@ -4,6 +4,14 @@ import { supabase } from './supabaseClient';
 // Khi logout hoặc đổi tài khoản thì gọi resetAdminActivityCache().
 let cachedAdmin = null;
 
+const ACTIVITY_RETENTION_DAYS = 1;
+
+function getRetentionDate() {
+  const retentionDate = new Date();
+  retentionDate.setDate(retentionDate.getDate() - ACTIVITY_RETENTION_DAYS);
+  return retentionDate;
+}
+
 async function getCurrentAdmin() {
   if (cachedAdmin) return cachedAdmin;
 
@@ -42,6 +50,47 @@ async function getCurrentAdmin() {
 }
 
 /**
+ * Xóa nhật ký hoạt động admin cũ hơn 1 ngày.
+ * Hàm này không làm gián đoạn thao tác chính nếu xóa lỗi.
+ */
+export async function cleanupOldAdminActivities() {
+  try {
+    const retentionDate = getRetentionDate();
+
+    const { error } = await supabase
+      .from('admin_activity_logs')
+      .delete()
+      .lt('created_at', retentionDate.toISOString());
+
+    if (error) {
+      console.error('Không thể dọn nhật ký hoạt động cũ:', error);
+    }
+  } catch (error) {
+    console.error('Không thể dọn nhật ký hoạt động cũ:', error);
+  }
+}
+
+/**
+ * Lấy nhật ký hoạt động admin trong 1 ngày gần nhất.
+ */
+export async function fetchRecentAdminActivities(limit = 50) {
+  const retentionDate = getRetentionDate();
+
+  const { data, error } = await supabase
+    .from('admin_activity_logs')
+    .select('*')
+    .gte('created_at', retentionDate.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
  * Ghi 1 dòng nhật ký hoạt động admin.
  *
  * Chỉ ghi log nếu tài khoản hiện tại có role = admin.
@@ -73,6 +122,10 @@ export async function logAdminActivity({
       console.warn('Bỏ qua ghi log vì tài khoản hiện tại không phải admin.');
       return;
     }
+
+    // Dọn log cũ hơn 1 ngày trước khi ghi log mới.
+    // Supabase trigger vẫn nên giữ, đoạn này là lớp bảo vệ thêm ở FE.
+    await cleanupOldAdminActivities();
 
     const { error } = await supabase.from('admin_activity_logs').insert({
       admin_id: admin.id,

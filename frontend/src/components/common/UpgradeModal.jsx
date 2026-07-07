@@ -105,6 +105,13 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
             <span>Trực quan hóa dữ liệu với biểu đồ <strong>Đám mây từ khóa</strong> (Word Cloud).</span>
           </li>
+          <li className="flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <span>
+    Mở khóa tính năng <strong>So sánh quán ăn</strong> để đối chiếu mức độ hài lòng,
+    điểm rủi ro và từ khóa nổi bật giữa nhiều quán.
+  </span>
+</li>
         </ul>
 
         <button 

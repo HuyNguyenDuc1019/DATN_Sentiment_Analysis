@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Crown, Loader2, RefreshCw, Save } from 'lucide-react';
+import { BarChart3, Crown, Save, Scale } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import UpgradeModal from '../../components/common/UpgradeModal';
@@ -30,7 +30,10 @@ import {
 
 export default function RestaurantCompare() {
   const { user, userProfile, refreshUserProfile } = useAuth();
-  const isVip = userProfile?.tier === 'vip';
+
+  const isVip =
+    userProfile?.tier === 'vip' ||
+    userProfile?.role === 'admin';
 
   const [restaurants, setRestaurants] = useState([
     { ...EMPTY_RESTAURANT },
@@ -73,14 +76,14 @@ export default function RestaurantCompare() {
   };
 
   const addRestaurant = () => {
-    if (restaurants.length >= 3) {
-      toast('Chỉ so sánh tối đa 3 quán/lần để kết quả dễ đọc.');
+    if (!isVip) {
+      toast.error('So sánh quán là tính năng VIP. Vui lòng nâng cấp để sử dụng.');
+      setIsUpgradeModalOpen(true);
       return;
     }
 
-    if (!isVip) {
-      toast.error('Gói Free chỉ so sánh tối đa 2 quán. Nâng cấp VIP để so sánh 3 quán.');
-      setIsUpgradeModalOpen(true);
+    if (restaurants.length >= 3) {
+      toast('Chỉ so sánh tối đa 3 quán/lần để kết quả dễ đọc.');
       return;
     }
 
@@ -97,7 +100,7 @@ export default function RestaurantCompare() {
   };
 
   const loadComparisonHistory = async () => {
-    if (!user?.id) return;
+    if (!user?.id || !isVip) return;
 
     try {
       setIsLoadingHistory(true);
@@ -115,7 +118,7 @@ export default function RestaurantCompare() {
 
   useEffect(() => {
     loadComparisonHistory();
-  }, [user?.id]);
+  }, [user?.id, isVip]);
 
   const stopCompare = () => {
     if (compareAbortRef.current) {
@@ -129,6 +132,12 @@ export default function RestaurantCompare() {
 
   const deleteHistoryItem = async (comparisonId) => {
     if (!user?.id || !comparisonId) return;
+
+    if (!isVip) {
+      toast.error('Lịch sử so sánh là tính năng VIP.');
+      setIsUpgradeModalOpen(true);
+      return;
+    }
 
     try {
       setDeletingHistoryId(comparisonId);
@@ -153,6 +162,12 @@ export default function RestaurantCompare() {
   };
 
   const loadHistoryResult = (session) => {
+    if (!isVip) {
+      toast.error('Lịch sử so sánh là tính năng VIP.');
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+
     const items = Array.isArray(session?.items) ? session.items : [];
 
     if (!items.length) {
@@ -167,6 +182,12 @@ export default function RestaurantCompare() {
   const handleCompare = async () => {
     if (!user?.id) {
       toast.error('Vui lòng đăng nhập trước khi so sánh quán.');
+      return;
+    }
+
+    if (!isVip) {
+      toast.error('So sánh quán là tính năng VIP.');
+      setIsUpgradeModalOpen(true);
       return;
     }
 
@@ -189,12 +210,6 @@ export default function RestaurantCompare() {
 
     if (payloadItems.length < 2) {
       toast.error('Vui lòng nhập ít nhất 2 link quán.');
-      return;
-    }
-
-    if (!isVip && payloadItems.length > 2) {
-      toast.error('Gói Free chỉ so sánh tối đa 2 quán.');
-      setIsUpgradeModalOpen(true);
       return;
     }
 
@@ -225,6 +240,13 @@ export default function RestaurantCompare() {
       if (!isMountedRef.current) return;
 
       console.warn(error);
+
+      if (error.message?.includes('VIP') || error.message?.includes('403')) {
+        setIsUpgradeModalOpen(true);
+        toast.error('So sánh quán là tính năng VIP.');
+        return;
+      }
+
       setResults(DEMO_RESULT);
       toast.error(error.message || 'Backend so sánh chưa sẵn sàng. Đang hiển thị dữ liệu mẫu.');
     } finally {
@@ -241,14 +263,14 @@ export default function RestaurantCompare() {
       return;
     }
 
-    if (!results.length) {
-      toast.error('Chưa có kết quả so sánh để lưu.');
-      return;
-    }
-
     if (!isVip) {
       toast.error('Lưu lịch sử so sánh là tính năng VIP.');
       setIsUpgradeModalOpen(true);
+      return;
+    }
+
+    if (!results.length) {
+      toast.error('Chưa có kết quả so sánh để lưu.');
       return;
     }
 
@@ -281,6 +303,73 @@ export default function RestaurantCompare() {
     setRestaurants([{ ...EMPTY_RESTAURANT }, { ...EMPTY_RESTAURANT }]);
     setResults([]);
   };
+
+  if (userProfile && !isVip) {
+    return (
+      <div className="p-8 animate-in fade-in duration-500 font-sans">
+        <div className="mx-auto max-w-4xl rounded-3xl border border-amber-500/30 bg-slate-900/80 p-8 text-center shadow-2xl shadow-amber-950/20">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-300">
+            <Crown className="h-10 w-10" />
+          </div>
+
+          <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-[0.24em] text-amber-200">
+            Tính năng VIP
+          </div>
+
+          <h1 className="mt-5 text-3xl font-black text-white">
+            So sánh quán ăn chỉ dành cho tài khoản VIP
+          </h1>
+
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-400">
+            Tính năng này giúp so sánh nhiều quán ăn dựa trên bình luận, tỉ lệ tích cực,
+            rủi ro tiêu cực, từ khóa nổi bật và gợi ý chọn quán phù hợp.
+            Vui lòng nâng cấp VIP để sử dụng.
+          </p>
+
+          <div className="mt-8 grid gap-4 text-left md:grid-cols-3">
+            <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-5">
+              <Scale className="mb-3 h-6 w-6 text-indigo-300" />
+              <h3 className="font-bold text-white">So sánh nhiều quán</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Đối chiếu điểm mạnh, điểm yếu và tỉ lệ hài lòng giữa các quán ăn.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-5">
+              <BarChart3 className="mb-3 h-6 w-6 text-emerald-300" />
+              <h3 className="font-bold text-white">Phân tích rủi ro</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Phát hiện quán có nhiều phản hồi tiêu cực về phục vụ, giá hoặc chất lượng món.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-5">
+              <Save className="mb-3 h-6 w-6 text-amber-300" />
+              <h3 className="font-bold text-white">Lưu lịch sử</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Lưu lại kết quả so sánh để xem lại và phục vụ báo cáo.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsUpgradeModalOpen(true)}
+            className="mt-8 inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400"
+          >
+            <Crown className="h-5 w-5" />
+            Nâng cấp VIP để mở khóa
+          </button>
+        </div>
+
+        <UpgradeModal
+          isOpen={isUpgradeModalOpen}
+          onClose={() => setIsUpgradeModalOpen(false)}
+          onUpgraded={refreshUserProfile}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">

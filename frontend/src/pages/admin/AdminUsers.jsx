@@ -30,6 +30,17 @@ import {
   updateAdminUserAction,
 } from '../../services/admin/usersService';
 
+function getUserActionSuccessMessage(action) {
+  const messages = {
+    ban: 'Đã khóa tài khoản người dùng thành công.',
+    unban: 'Đã mở khóa tài khoản người dùng thành công.',
+    upgrade_vip: 'Đã nâng cấp tài khoản lên VIP thành công.',
+    downgrade_vip: 'Đã hạ cấp tài khoản về gói Free thành công.',
+  };
+
+  return messages[action] || 'Đã cập nhật tài khoản người dùng thành công.';
+}
+
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -183,7 +194,7 @@ export default function AdminUsers() {
         current && current.id === targetUser.id ? { ...current, ...updatePayload } : current,
       );
 
-      toast.success(responseData?.message || 'Thao tác thành công!', {
+      toast.success(getUserActionSuccessMessage(action), {
         id: `admin-user-action-${targetUser.id}-${action}`,
       });
 

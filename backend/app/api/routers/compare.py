@@ -54,10 +54,50 @@ def normalize_keywords(value):
     return []
 
 
+def verify_vip_user(user_id: str):
+    if supabase is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Backend chưa cấu hình Supabase nên không thể kiểm tra VIP.",
+        )
+
+    try:
+        res = (
+            supabase
+            .table("profiles")
+            .select("id, role, tier")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+
+        profile = res.data
+
+        if not profile:
+            raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản người dùng.")
+
+        role = str(profile.get("role") or "").lower()
+        tier = str(profile.get("tier") or "").lower()
+
+        if role == "admin" or tier == "vip":
+            return profile
+
+        raise HTTPException(
+            status_code=403,
+            detail="So sánh quán là tính năng VIP. Vui lòng nâng cấp để sử dụng.",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Không thể kiểm tra VIP compare: {error}")
+        raise HTTPException(status_code=500, detail="Không thể kiểm tra trạng thái VIP.")
+
+
 @router.post("/restaurants")
 async def compare_restaurants(req: CompareRestaurantsRequest):
-    # API so sánh tạm thời để FE không bị 404.
-    # Không ghi vào scraped_reviews, không làm nhiễu dashboard.
+    verify_vip_user(req.user_id)
+
     if len(req.restaurants) < 2:
         raise HTTPException(status_code=400, detail="Cần ít nhất 2 quán để so sánh.")
 
@@ -89,14 +129,13 @@ async def compare_restaurants(req: CompareRestaurantsRequest):
     return {
         "success": True,
         "data": results,
-        "message": "Đã so sánh tạm thời. Dữ liệu này không lưu vào Dashboard.",
+        "message": "Đã so sánh quán thành công.",
     }
 
 
 @router.get("/history")
 async def get_comparison_history(user_id: str):
-    if supabase is None:
-        return {"success": True, "data": []}
+    verify_vip_user(user_id)
 
     try:
         sessions_res = (
@@ -137,15 +176,15 @@ async def get_comparison_history(user_id: str):
             })
 
         return {"success": True, "data": data}
+
     except Exception as error:
         print(f"Không thể tải history compare: {error}")
-        return {"success": True, "data": []}
+        raise HTTPException(status_code=500, detail="Không thể tải lịch sử so sánh.")
 
 
 @router.post("/save")
 async def save_comparison(req: SaveComparisonRequest):
-    if supabase is None:
-        return {"success": True, "message": "Backend chưa cấu hình Supabase, bỏ qua lưu history."}
+    verify_vip_user(req.user_id)
 
     if not req.items:
         raise HTTPException(status_code=400, detail="Không có kết quả so sánh để lưu.")
@@ -191,26 +230,38 @@ async def save_comparison(req: SaveComparisonRequest):
             "message": "Đã lưu lịch sử so sánh.",
             "comparison_id": comparison_id,
         }
+
     except HTTPException:
         raise
     except Exception as error:
         print(f"Không thể lưu history compare: {error}")
-        return {
-            "success": True,
-            "message": "Không lưu được history, nhưng kết quả so sánh vẫn hợp lệ.",
-        }
+        raise HTTPException(status_code=500, detail="Không thể lưu lịch sử so sánh.")
 
 
 @router.delete("/history/{comparison_id}")
 async def delete_comparison_history(comparison_id: str, user_id: str):
-    if supabase is None:
-        return {"success": True, "message": "Đã bỏ qua xóa history."}
+    verify_vip_user(user_id)
 
     try:
+        session_res = (
+            supabase
+            .table("comparison_sessions")
+            .select("id, user_id")
+            .eq("id", comparison_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        if not session_res.data:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lịch sử so sánh cần xóa.")
+
         supabase.table("comparison_items").delete().eq("comparison_id", comparison_id).execute()
         supabase.table("comparison_sessions").delete().eq("id", comparison_id).eq("user_id", user_id).execute()
 
         return {"success": True, "message": "Đã xóa lịch sử so sánh."}
+
+    except HTTPException:
+        raise
     except Exception as error:
         print(f"Không thể xóa history compare: {error}")
-        return {"success": True, "message": "Đã bỏ qua xóa history."}
+        raise HTTPException(status_code=500, detail="Không thể xóa lịch sử so sánh.")
