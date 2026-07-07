@@ -14,9 +14,9 @@ import ClearDataModal from '../../components/user/settings/ClearDataModal';
 import SaveSettingsBar from '../../components/user/settings/SaveSettingsBar';
 
 import {
-  clearAllUserData,
-  deleteUserDataset,
   fetchUserDatasets,
+  deleteUserDataset,
+  clearUserData,
   fetchUserSettings,
   saveUserSettings,
 } from '../../services/user/settingsService';
@@ -134,7 +134,7 @@ export default function Settings() {
     try {
       setIsClearing(true);
 
-      await clearAllUserData(userId);
+      await clearUserData(userId);
 
       toast.success('Đã xóa toàn bộ dữ liệu thành công.');
       setIsClearConfirmOpen(false);

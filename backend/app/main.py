@@ -4,7 +4,7 @@ import os
 from app.predictor import SentimentPredictor
 
 # Import routers
-from app.api.routers import admin, user, predict, dashboard, feedback
+from app.api.routers import admin, user, predict, dashboard, feedback, compare
 
 app = FastAPI(
     title="Foody Sentiment Analysis API",
@@ -14,7 +14,7 @@ app = FastAPI(
 
 origins = [
     "http://localhost:3000",
-    "http://localhost:5173",  
+    "http://localhost:5173",
 ]
 
 app.add_middleware(
@@ -29,7 +29,6 @@ app.add_middleware(
 async def load_model():
     model_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "phobert_saved_model")
     try:
-        # Khởi tạo mô hình và lưu vào state của ứng dụng (app.state)
         app.state.predictor = SentimentPredictor(model_path=model_dir)
         print("✅ Mô hình PhoBERT đã sẵn sàng!")
     except Exception as e:
@@ -42,3 +41,4 @@ app.include_router(user.router)
 app.include_router(predict.router)
 app.include_router(dashboard.router)
 app.include_router(feedback.router)
+app.include_router(compare.router)

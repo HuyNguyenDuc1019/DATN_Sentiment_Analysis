@@ -1,73 +1,134 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL =
+  import.meta.env.VITE_FASTAPI_URL ||
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_PYTHON_API ||
+  'http://localhost:8000';
 
-async function parseError(response, fallbackMessage) {
-  const errorData = await response.json().catch(() => null);
-  return new Error(errorData?.detail || fallbackMessage);
-}
-
-export async function fetchUserSettings(userId) {
-  const response = await fetch(`${API_BASE_URL}/api/user/settings?user_id=${userId}`);
-
-  if (!response.ok) {
-    throw await parseError(response, 'Không thể tải cấu hình');
-  }
-
-  return response.json();
-}
-
-export async function saveUserSettings(payload) {
-  const response = await fetch(`${API_BASE_URL}/api/user/settings`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw await parseError(response, 'Lưu cấu hình thất bại');
-  }
-
+async function readJson(response) {
   return response.json().catch(() => null);
 }
 
-export async function clearAllUserData(userId) {
+function parseError(data, fallback = 'Thao tác thất bại.') {
+  const raw = data?.detail || data?.message || data?.error || data;
+
+  if (!raw) return fallback;
+  if (typeof raw === 'string') return raw;
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.msg || item?.message || JSON.stringify(item);
+      })
+      .join('\n');
+  }
+
+  if (typeof raw === 'object') {
+    return raw.msg || raw.message || JSON.stringify(raw);
+  }
+
+  return String(raw);
+}
+
+function normalizeDatasets(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.datasets)) return data.datasets;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+export async function fetchUserDatasets(userId) {
+  if (!userId) return [];
+
+  const response = await fetch(`${API_BASE_URL}/api/user/datasets?user_id=${userId}`);
+  const data = await readJson(response);
+
+  if (response.status === 404) return [];
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(parseError(data, 'Không thể tải dữ liệu đã phân tích.'));
+  }
+
+  return normalizeDatasets(data);
+}
+
+export async function deleteUserDataset({ userId, datasetId }) {
+  if (!userId || !datasetId) return null;
+
+  const safeDatasetId = encodeURIComponent(datasetId);
+
+  const response = await fetch(`${API_BASE_URL}/api/user/datasets/${safeDatasetId}?user_id=${userId}`, {
+    method: 'DELETE',
+  });
+
+  const data = await readJson(response);
+
+  if (response.status === 404) return null;
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(parseError(data, 'Không thể xóa dữ liệu đã chọn.'));
+  }
+
+  return data;
+}
+
+export async function clearUserData(userId) {
+  if (!userId) return null;
+
   const response = await fetch(`${API_BASE_URL}/api/user/data/clear?user_id=${userId}`, {
     method: 'DELETE',
   });
 
-  if (!response.ok) {
-    throw await parseError(response, 'Không thể xóa dữ liệu');
+  const data = await readJson(response);
+
+  if (response.status === 404) return null;
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(parseError(data, 'Không thể xóa toàn bộ dữ liệu.'));
   }
 
-  return response.json().catch(() => null);
+  return data;
 }
 
-export async function fetchUserDatasets(userId) {
-  const response = await fetch(`${API_BASE_URL}/api/user/datasets?user_id=${userId}`);
-
-  if (!response.ok) {
-    throw await parseError(response, 'Không thể tải danh sách dữ liệu.');
-  }
-
-  const payload = await response.json();
-  return Array.isArray(payload?.data) ? payload.data : [];
+export async function clearAllUserData(userId) {
+  return clearUserData(userId);
 }
 
-export async function deleteUserDataset({ userId, datasetId, sourceUrl }) {
-  const query = new URLSearchParams({ user_id: userId });
+export async function fetchUserSettings(userId) {
+  if (!userId) return null;
 
-  if (!datasetId && sourceUrl) {
-    query.set('source_url', sourceUrl);
+  const response = await fetch(`${API_BASE_URL}/api/user/settings?user_id=${userId}`);
+  const data = await readJson(response);
+
+  if (response.status === 404) return null;
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(parseError(data, 'Không thể tải cấu hình người dùng.'));
   }
 
-  const endpoint = datasetId
-    ? `${API_BASE_URL}/api/user/datasets/${datasetId}?${query.toString()}`
-    : `${API_BASE_URL}/api/user/datasets/by-source?${query.toString()}`;
+  return data?.data || data?.settings || data;
+}
 
-  const response = await fetch(endpoint, { method: 'DELETE' });
+export async function saveUserSettings({ userId, payload }) {
+  if (!userId) return null;
 
-  if (!response.ok) {
-    throw await parseError(response, 'Không thể xóa dữ liệu đã chọn.');
+  const response = await fetch(`${API_BASE_URL}/api/user/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      ...payload,
+    }),
+  });
+
+  const data = await readJson(response);
+
+  if (response.status === 404) return null;
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(parseError(data, 'Không thể lưu cấu hình người dùng.'));
   }
 
-  return response.json().catch(() => null);
+  return data;
 }

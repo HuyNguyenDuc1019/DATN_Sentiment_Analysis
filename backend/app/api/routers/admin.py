@@ -70,6 +70,26 @@ def verify_admin(admin_id: str):
     return admin_id
 
 
+def normalize_ai_label(value):
+    if value in [1, "1", True, "positive", "POSITIVE", "tích cực", "Tích cực"]:
+        return 1
+
+    if value in [0, "0", False, "negative", "NEGATIVE", "tiêu cực", "Tiêu cực"]:
+        return 0
+
+    try:
+        return 1 if int(value) == 1 else 0
+    except Exception:
+        return 0
+
+
+def safe_count_rows(response):
+    if hasattr(response, "count") and response.count is not None:
+        return response.count
+
+    return len(response.data or [])
+
+
 def _append_review_history(feedback_id: str, entry: dict):
     try:
         current = supabase.table('feedback_data').select('review_history').eq('id', feedback_id).single().execute()
@@ -82,10 +102,19 @@ def _append_review_history(feedback_id: str, entry: dict):
 @router.get("/users")
 async def get_admin_users(admin_id: str = Depends(verify_admin)):
     try:
-        res = supabase.table('profiles').select('*').execute()
-        return res.data
+        res = (
+            supabase
+            .table("profiles")
+            .select("id, email, full_name, role, status, tier, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        return res.data or []
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"⚠️ LỖI API ADMIN USERS: {e}")
+        return []
 
 @router.put("/users/action")
 async def update_user_action(request: AdminActionRequest, admin_id: str = Depends(verify_admin)):
@@ -224,7 +253,7 @@ async def get_admin_metrics(admin_id: str = Depends(verify_admin)):
 @router.get("/metrics/sentiment-chart")
 async def get_admin_sentiment_chart(admin_id: str = Depends(verify_admin), days: int = 7):
     try:
-        safe_days = max(int(days), 1)
+        safe_days = max(int(days or 7), 1)
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=safe_days - 1)
 
@@ -238,7 +267,11 @@ async def get_admin_sentiment_chart(admin_id: str = Depends(verify_admin), days:
         )
 
         rows = response.data or []
-        grouped = defaultdict(lambda: {"positive": 0, "negative": 0, "total": 0})
+        grouped = defaultdict(lambda: {
+            "positive": 0,
+            "negative": 0,
+            "total": 0,
+        })
 
         for index in range(safe_days):
             day = (start_date + timedelta(days=index)).date().isoformat()
@@ -246,20 +279,52 @@ async def get_admin_sentiment_chart(admin_id: str = Depends(verify_admin), days:
 
         for row in rows:
             created_at = row.get("created_at")
-            if not created_at: continue
+            if not created_at:
+                continue
+
             date_key = str(created_at)[:10]
-            label = row.get("ai_label")
-            if int(label or 0) == 1:
+            label = normalize_ai_label(row.get("ai_label"))
+
+            if label == 1:
                 grouped[date_key]["positive"] += 1
             else:
                 grouped[date_key]["negative"] += 1
+
             grouped[date_key]["total"] += 1
 
-        chart_data = [{"date": date, "positive": values["positive"], "negative": values["negative"], "total": values["total"]} for date, values in sorted(grouped.items())]
+        chart_data = [
+            {
+                "date": date,
+                "positive": values["positive"],
+                "negative": values["negative"],
+                "total": values["total"],
+            }
+            for date, values in sorted(grouped.items())
+        ]
 
-        return {"chart_data": chart_data}
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+        return {
+            "chart_data": chart_data,
+        }
+
+    except Exception as e:
+        print(f"⚠️ LỖI API ADMIN SENTIMENT CHART: {e}")
+
+        fallback = []
+        safe_days = max(int(days or 7), 1)
+        end_date = datetime.now(timezone.utc)
+
+        for index in range(safe_days):
+            day = (end_date - timedelta(days=safe_days - 1 - index)).date().isoformat()
+            fallback.append({
+                "date": day,
+                "positive": 0,
+                "negative": 0,
+                "total": 0,
+            })
+
+        return {
+            "chart_data": fallback,
+        }
 
 @router.get("/feedback/confidence-map")
 async def get_feedback_confidence_map(admin_id: str = Depends(verify_admin)):

@@ -1,40 +1,98 @@
 import { supabase } from '../supabaseClient';
 import { escapeHtml } from '../../utils/admin/dashboardUtils';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL =
+  import.meta.env.VITE_FASTAPI_URL ||
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_PYTHON_API ||
+  'http://localhost:8000';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function readJson(response) {
+  return response.json().catch(() => null);
+}
+
+async function fetchJsonWithRetry(url, options = {}, retries = 2) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      const data = await readJson(response);
+
+      if (response.ok) {
+        return data;
+      }
+
+      lastError = new Error(
+        data?.detail ||
+          data?.message ||
+          data?.error ||
+          `Server error ${response.status}`,
+      );
+
+      // Chỉ retry lỗi 500. Lỗi 400/401/403 thì không retry.
+      if (response.status < 500) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < retries) {
+      await sleep(500 * (attempt + 1));
+    }
+  }
+
+  throw lastError || new Error('Không thể kết nối server.');
+}
 
 export async function getCurrentAdminId() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
-  if (authError || !authData?.user) {
-    throw new Error('Không tìm thấy thông tin đăng nhập.');
+  if (authData?.user?.id) {
+    return authData.user.id;
   }
 
-  return authData.user.id;
+  const localUserId =
+    localStorage.getItem('userId') ||
+    localStorage.getItem('user_id') ||
+    localStorage.getItem('adminId') ||
+    localStorage.getItem('admin_id') ||
+    localStorage.getItem('uid');
+
+  if (localUserId) {
+    return localUserId;
+  }
+
+  if (authError) {
+    console.error('Lỗi lấy admin id:', authError);
+  }
+
+  throw new Error('Không tìm thấy thông tin đăng nhập.');
 }
 
 export async function fetchAdminDashboardData() {
   const adminId = await getCurrentAdminId();
+  const encodedAdminId = encodeURIComponent(adminId);
 
-  const [metricsRes, chartRes, usersRes] = await Promise.all([
-    fetch(`${API_BASE_URL}/api/admin/metrics?admin_id=${adminId}`),
-    fetch(`${API_BASE_URL}/api/admin/metrics/sentiment-chart?admin_id=${adminId}&days=7`),
-    fetch(`${API_BASE_URL}/api/admin/users?admin_id=${adminId}`),
-  ]);
+  try {
+    const [metricsData, chartDataResponse, usersData] = await Promise.all([
+      fetchJsonWithRetry(`${API_BASE_URL}/api/admin/metrics?admin_id=${encodedAdminId}`),
+      fetchJsonWithRetry(`${API_BASE_URL}/api/admin/metrics/sentiment-chart?admin_id=${encodedAdminId}&days=7`),
+      fetchJsonWithRetry(`${API_BASE_URL}/api/admin/users?admin_id=${encodedAdminId}`),
+    ]);
 
-  if (!metricsRes.ok || !chartRes.ok || !usersRes.ok) {
+    return {
+      metricsData,
+      chartDataResponse,
+      usersData,
+    };
+  } catch (error) {
+    console.error('Load admin dashboard failed:', error);
     throw new Error('Lỗi server khi tải dữ liệu dashboard.');
   }
-
-  const metricsData = await metricsRes.json();
-  const chartDataResponse = await chartRes.json();
-  const usersData = await usersRes.json();
-
-  return {
-    metricsData,
-    chartDataResponse,
-    usersData,
-  };
 }
 
 export function exportAdminDashboardReport({ stats, chartData, recentUsers, formatNumber }) {
