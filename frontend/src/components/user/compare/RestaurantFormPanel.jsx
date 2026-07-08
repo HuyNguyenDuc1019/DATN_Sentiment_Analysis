@@ -77,7 +77,7 @@ export default function RestaurantFormPanel({
                       onUpdateRestaurant(index, 'name', inferRestaurantNameFromUrl(item.url, `Quán ${String.fromCharCode(65 + index)}`));
                     }
                   }}
-                  placeholder="Dán link Foody/Shopee/Google review của quán..."
+                  placeholder="Dán link Foody/Google review của quán..."
                   className="w-full rounded-xl border border-slate-700 bg-slate-950/70 py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </div>

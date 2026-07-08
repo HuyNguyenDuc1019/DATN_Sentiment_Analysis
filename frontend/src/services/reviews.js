@@ -21,7 +21,7 @@ export async function fetchUserReviews(userId, filters = {}) {
 
     if (filters.source === 'CSV') query = query.eq('source_url', 'CSV_Upload');
     if (filters.source === 'Foody') query = query.ilike('source_url', '%foody%');
-    if (filters.source === 'Shopee') query = query.ilike('source_url', '%shopee%');
+    if (filters.source === 'Goole') query = query.ilike('source_url', '%goole%');
 
     const { data, error } = await query.range(from, from + pageSize - 1);
 

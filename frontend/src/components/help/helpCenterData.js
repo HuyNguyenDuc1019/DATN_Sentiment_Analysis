@@ -58,7 +58,7 @@ Nếu một đường dẫn đã từng được thu thập trước đó, hệ 
 
 File nên có một cột chứa nội dung bình luận rõ ràng. Tên cột có thể là content, comment, review, bình luận hoặc nội dung. Sau khi tải file lên, hãy xem bảng xem trước ở bên phải để kiểm tra hệ thống đã đọc đúng bình luận chưa.
 
-Nếu bảng xem trước hiển thị đúng nội dung, bạn bấm Bắt đầu xử lý. Hệ thống sẽ ghi nhận nhiều bình luận cùng lúc, phù hợp khi bạn đã có dữ liệu từ Excel, Google Sheet, Foody, Shopee hoặc một nguồn khác.
+Nếu bảng xem trước hiển thị đúng nội dung, bạn bấm Bắt đầu xử lý. Hệ thống sẽ ghi nhận nhiều bình luận cùng lúc, phù hợp khi bạn đã có dữ liệu từ Excel, Google Sheet, Foody hoặc một nguồn khác.
 
 Sau khi xử lý xong, dữ liệu trong file cũng được tính vào Bảng điều khiển và Báo cáo. Nhờ vậy bạn có thể so sánh dữ liệu từ file CSV với dữ liệu thu thập từ đường dẫn.`,
   },

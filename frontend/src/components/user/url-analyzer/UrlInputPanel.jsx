@@ -17,7 +17,7 @@ export default function UrlInputPanel({ url, setUrl, loading, analyze }) {
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               onKeyDown={(event) => event.key === 'Enter' && !loading && analyze()}
-              placeholder="Dán link Foody/Shopee vào đây..."
+              placeholder="Dán link Foody/Google vào đây..."
               className="w-full bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
           </div>
