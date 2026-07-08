@@ -1,32 +1,67 @@
-export const SOURCE_OPTIONS = ['Tất cả', 'CSV', 'Foody', 'Shopee'];
+export const SOURCE_OPTIONS = ['Tất cả', 'CSV', 'Foody', 'Google Maps'];
 
-export function getSourceName(sourceUrl = '') {
-  if (sourceUrl === 'CSV_Upload') return 'CSV';
-  if (sourceUrl.toLowerCase().includes('foody')) return 'Foody';
-  if (sourceUrl.toLowerCase().includes('shopee')) return 'Shopee';
+export function getSourceName(sourceUrl = '', datasetType = '', datasetName = '') {
+  const url = String(sourceUrl || '').toLowerCase();
+  const type = String(datasetType || '').toLowerCase();
+  const name = String(datasetName || '').toLowerCase();
+
+  if (
+    type === 'google_maps' ||
+    name.includes('google') ||
+    url.includes('google.com/maps') ||
+    url.includes('www.google.com/maps') ||
+    url.includes('maps.google.com') ||
+    url.includes('maps.app.goo.gl') ||
+    url.includes('goo.gl/maps') ||
+    url.includes('google.com/search')
+  ) {
+    return 'Google Maps';
+  }
+
+  if (
+    type === 'foody' ||
+    name.includes('foody') ||
+    url.includes('foody.vn')
+  ) {
+    return 'Foody';
+  }
+
+  if (
+    type === 'csv' ||
+    name.includes('csv') ||
+    url === 'csv_upload' ||
+    url.includes('csv_upload')
+  ) {
+    return 'CSV';
+  }
+
   return 'Khác';
 }
 
 export function toAnalyticsSource(source) {
   if (source === 'CSV') return 'CSV_Upload';
   if (source === 'Foody') return 'Foody';
-  if (source === 'Shopee') return 'Shopee';
+  if (source === 'Google Maps') return 'google_maps';
+
   return 'all';
 }
 
 export function wordColor(sentiment) {
   if (sentiment === 'positive') return '#34d399';
   if (sentiment === 'negative') return '#fb7185';
+
   return '#cbd5e1';
 }
 
 export function scaleWord(value, min, max) {
   if (max === min) return 22;
+
   return Math.round(14 + ((value - min) / (max - min)) * 28);
 }
 
 export function extractWordCloud(payload) {
   const words = payload?.wordcloud || payload?.data?.wordcloud;
+
   return Array.isArray(words) ? normalizeWordCloudWords(words) : null;
 }
 
@@ -34,6 +69,7 @@ export function buildWordCloudFromReviews(reviews) {
   return normalizeWordCloudWords(
     reviews.flatMap((item) => {
       const sentiment = Number(item.ai_label) === 1 ? 'positive' : 'negative';
+
       return extractReportKeywords(item).map((keyword) => ({
         text: keyword,
         value: 1,
@@ -53,7 +89,23 @@ export function extractReportKeywords(item) {
       .filter(Boolean);
   }
 
-  return [];
+  const content =
+    item.content ||
+    item.text ||
+    item.comment ||
+    item.review ||
+    item.original_content ||
+    '';
+
+  if (!content) return [];
+
+  return String(content)
+    .toLocaleLowerCase('vi-VN')
+    .replace(/[.,;:!?()[\]{}"'`]/g, ' ')
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 3)
+    .slice(0, 20);
 }
 
 export function normalizeWordCloudWords(words) {
@@ -61,10 +113,15 @@ export function normalizeWordCloudWords(words) {
 
   words.forEach((word) => {
     const classified = classifyWordCloudKeyword(word?.text, word?.sentiment);
+
     if (!classified) return;
 
     const key = `${normalizeText(classified.text)}|${classified.sentiment}`;
-    const current = counts.get(key) || { ...classified, value: 0 };
+    const current = counts.get(key) || {
+      ...classified,
+      value: 0,
+    };
+
     current.value += Math.max(1, Number(word?.value || 1));
     counts.set(key, current);
   });
@@ -76,6 +133,7 @@ export function normalizeWordCloudWords(words) {
 
 export function classifyWordCloudKeyword(rawText, rawSentiment) {
   const text = cleanKeyword(rawText);
+
   if (!text) return null;
 
   const normalized = normalizeText(text);
@@ -83,9 +141,23 @@ export function classifyWordCloudKeyword(rawText, rawSentiment) {
   const positive = findKeywordLabel(normalized, POSITIVE_WORD_CLOUD_TERMS);
   const negative = findKeywordLabel(normalized, NEGATIVE_WORD_CLOUD_TERMS);
 
-  if (negative) return { text: negative, sentiment: 'negative' };
-  if (positive && sentiment !== 'negative') return { text: positive, sentiment: 'positive' };
-  if (positive && sentiment === 'negative') return null;
+  if (negative) {
+    return {
+      text: negative,
+      sentiment: 'negative',
+    };
+  }
+
+  if (positive && sentiment !== 'negative') {
+    return {
+      text: positive,
+      sentiment: 'positive',
+    };
+  }
+
+  if (positive && sentiment === 'negative') {
+    return null;
+  }
 
   return null;
 }
@@ -108,8 +180,33 @@ export function cleanKeyword(value) {
 export function normalizeSentiment(value) {
   const sentiment = normalizeText(value);
 
-  if (['positive', 'pos', '1', 'true', 'tich cuc', 'hai long', 'khach hai long'].includes(sentiment)) return 'positive';
-  if (['negative', 'neg', '0', 'false', 'tieu cuc', 'chua hai long', 'khach chua hai long'].includes(sentiment)) return 'negative';
+  if (
+    [
+      'positive',
+      'pos',
+      '1',
+      'true',
+      'tich cuc',
+      'hai long',
+      'khach hai long',
+    ].includes(sentiment)
+  ) {
+    return 'positive';
+  }
+
+  if (
+    [
+      'negative',
+      'neg',
+      '0',
+      'false',
+      'tieu cuc',
+      'chua hai long',
+      'khach chua hai long',
+    ].includes(sentiment)
+  ) {
+    return 'negative';
+  }
 
   return 'neutral';
 }
@@ -126,27 +223,87 @@ export function normalizeText(value) {
 }
 
 export const POSITIVE_WORD_CLOUD_TERMS = [
-  { label: 'Ngon', matches: ['ngon', 'ngon quá', 'rất ngon', 'đậm đà', 'vừa miệng'] },
-  { label: 'Sạch sẽ', matches: ['sạch', 'sạch sẽ', 'vệ sinh'] },
-  { label: 'Phục vụ tốt', matches: ['phục vụ tốt', 'phục vụ nhanh', 'nhiệt tình', 'thân thiện'] },
-  { label: 'Nhân viên thân thiện', matches: ['nhân viên thân thiện', 'nhân viên nhiệt tình', 'nhân viên vui vẻ'] },
-  { label: 'Giá hợp lý', matches: ['giá hợp lý', 'giá rẻ', 'đáng tiền', 'giá ổn'] },
-  { label: 'Không gian tốt', matches: ['không gian', 'thoáng', 'rộng rãi', 'mát mẻ'] },
-  { label: 'Giao nhanh', matches: ['giao nhanh', 'lên món nhanh', 'ra món nhanh'] },
-  { label: 'Đóng gói kỹ', matches: ['đóng gói', 'gói kỹ', 'đóng gói kỹ'] },
-  { label: 'Sẽ quay lại', matches: ['quay lại', 'ủng hộ', 'ghé lại'] },
+  {
+    label: 'Ngon',
+    matches: ['ngon', 'ngon quá', 'rất ngon', 'đậm đà', 'vừa miệng'],
+  },
+  {
+    label: 'Sạch sẽ',
+    matches: ['sạch', 'sạch sẽ', 'vệ sinh'],
+  },
+  {
+    label: 'Phục vụ tốt',
+    matches: ['phục vụ tốt', 'phục vụ nhanh', 'nhiệt tình', 'thân thiện'],
+  },
+  {
+    label: 'Nhân viên thân thiện',
+    matches: ['nhân viên thân thiện', 'nhân viên nhiệt tình', 'nhân viên vui vẻ'],
+  },
+  {
+    label: 'Giá hợp lý',
+    matches: ['giá hợp lý', 'giá rẻ', 'đáng tiền', 'giá ổn'],
+  },
+  {
+    label: 'Không gian tốt',
+    matches: ['không gian', 'thoáng', 'rộng rãi', 'mát mẻ'],
+  },
+  {
+    label: 'Giao nhanh',
+    matches: ['giao nhanh', 'lên món nhanh', 'ra món nhanh'],
+  },
+  {
+    label: 'Đóng gói kỹ',
+    matches: ['đóng gói', 'gói kỹ', 'đóng gói kỹ'],
+  },
+  {
+    label: 'Sẽ quay lại',
+    matches: ['quay lại', 'ủng hộ', 'ghé lại'],
+  },
 ];
 
 export const NEGATIVE_WORD_CLOUD_TERMS = [
-  { label: 'Không ngon', matches: ['không ngon', 'dở', 'tệ', 'nhạt', 'khó ăn', 'thất vọng'] },
-  { label: 'Chờ lâu', matches: ['chờ lâu', 'đợi lâu', 'lâu', 'chậm', 'quá lâu'] },
-  { label: 'Phục vụ kém', matches: ['phục vụ kém', 'thái độ', 'khó chịu', 'không thân thiện'] },
-  { label: 'Nhân viên chưa tốt', matches: ['nhân viên tệ', 'nhân viên khó chịu', 'nhân viên chậm'] },
-  { label: 'Giá cao', matches: ['giá cao', 'đắt', 'mắc', 'không đáng tiền'] },
-  { label: 'Quá mặn', matches: ['mặn', 'quá mặn'] },
-  { label: 'Quá ngọt', matches: ['ngọt gắt', 'quá ngọt'] },
-  { label: 'Không sạch', matches: ['bẩn', 'không sạch', 'mất vệ sinh'] },
-  { label: 'Sai món', matches: ['sai món', 'thiếu món', 'nhầm món'] },
-  { label: 'Đóng gói kém', matches: ['đổ', 'tràn', 'bể', 'đóng gói kém'] },
-  { label: 'Khó tìm quán', matches: ['khó tìm', 'địa chỉ khó tìm'] },
+  {
+    label: 'Không ngon',
+    matches: ['không ngon', 'dở', 'tệ', 'nhạt', 'khó ăn', 'thất vọng'],
+  },
+  {
+    label: 'Chờ lâu',
+    matches: ['chờ lâu', 'đợi lâu', 'lâu', 'chậm', 'quá lâu'],
+  },
+  {
+    label: 'Phục vụ kém',
+    matches: ['phục vụ kém', 'thái độ', 'khó chịu', 'không thân thiện'],
+  },
+  {
+    label: 'Nhân viên chưa tốt',
+    matches: ['nhân viên tệ', 'nhân viên khó chịu', 'nhân viên chậm'],
+  },
+  {
+    label: 'Giá cao',
+    matches: ['giá cao', 'đắt', 'mắc', 'không đáng tiền'],
+  },
+  {
+    label: 'Quá mặn',
+    matches: ['mặn', 'quá mặn'],
+  },
+  {
+    label: 'Quá ngọt',
+    matches: ['ngọt gắt', 'quá ngọt'],
+  },
+  {
+    label: 'Không sạch',
+    matches: ['bẩn', 'không sạch', 'mất vệ sinh'],
+  },
+  {
+    label: 'Sai món',
+    matches: ['sai món', 'thiếu món', 'nhầm món'],
+  },
+  {
+    label: 'Đóng gói kém',
+    matches: ['đổ', 'tràn', 'bể', 'đóng gói kém'],
+  },
+  {
+    label: 'Khó tìm quán',
+    matches: ['khó tìm', 'địa chỉ khó tìm'],
+  },
 ];

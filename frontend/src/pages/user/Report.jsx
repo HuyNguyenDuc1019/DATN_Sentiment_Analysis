@@ -14,7 +14,6 @@ import PerformanceSummaryCard from '../../components/user/report/PerformanceSumm
 import {
   buildWordCloudFromReviews,
   extractWordCloud,
-  getSourceName,
   toAnalyticsSource,
 } from '../../utils/user/reportUtils';
 
@@ -23,13 +22,83 @@ import {
   fetchReportReviews,
 } from '../../services/user/reportService';
 
+function normalizeLabel(value) {
+  if (value === 1 || value === '1') return 1;
+
+  const text = String(value ?? '').trim().toLowerCase();
+
+  if (
+    [
+      'positive',
+      'pos',
+      'label_1',
+      'tích cực',
+      'tich cuc',
+      'khách hài lòng',
+      'khach hai long',
+    ].includes(text)
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function normalizeConfidence(value) {
+  const number = Number(value || 0);
+  return number > 1 ? number / 100 : number;
+}
+
+function getReviewSource(item) {
+  const datasetType = String(item.dataset_type || '').toLowerCase();
+  const datasetName = String(item.dataset_name || '').toLowerCase();
+  const sourceUrl = String(item.source_url || '').toLowerCase();
+
+  if (
+    datasetType === 'google_maps' ||
+    datasetName.includes('google') ||
+    sourceUrl.includes('google.com/maps') ||
+    sourceUrl.includes('www.google.com/maps') ||
+    sourceUrl.includes('maps.google.com') ||
+    sourceUrl.includes('maps.app.goo.gl') ||
+    sourceUrl.includes('goo.gl/maps') ||
+    sourceUrl.includes('google.com/search')
+  ) {
+    return 'Google Maps';
+  }
+
+  if (
+    datasetType === 'foody' ||
+    datasetName.includes('foody') ||
+    sourceUrl.includes('foody.vn')
+  ) {
+    return 'Foody';
+  }
+
+  if (
+    datasetType === 'csv' ||
+    datasetName.includes('csv') ||
+    sourceUrl === 'csv_upload' ||
+    sourceUrl.includes('csv_upload') ||
+    sourceUrl === 'csv'
+  ) {
+    return 'CSV';
+  }
+
+  return 'Khác';
+}
+
 export default function Report() {
   const { user, userProfile, refreshUserProfile } = useAuth();
   const reportRef = useRef(null);
 
   const [reviews, setReviews] = useState([]);
   const [keywordAnalytics, setKeywordAnalytics] = useState(null);
-  const [filters, setFilters] = useState({ startDate: '', endDate: '', source: 'Tất cả' });
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    source: 'Tất cả',
+  });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -47,16 +116,27 @@ export default function Report() {
     setLoading(true);
 
     try {
+      /**
+       * Ở đây vẫn lấy dữ liệu theo filter từ backend.
+       * Sau đó phía dưới vẫn lọc lại local bằng filteredReviews.
+       * Như vậy nếu backend chưa hỗ trợ Google Maps thì frontend vẫn lọc đúng.
+       */
       const source = filters.source === 'Tất cả' ? '' : filters.source;
       const sourceUrl = toAnalyticsSource(filters.source);
 
       const [reviewRows, keywordPayload] = await Promise.allSettled([
-        fetchReportReviews(user.id, { ...filters, source }),
-        fetchReportKeywordAnalytics({ userId: user.id, sourceUrl }),
+        fetchReportReviews(user.id, {
+          ...filters,
+          source,
+        }),
+        fetchReportKeywordAnalytics({
+          userId: user.id,
+          sourceUrl,
+        }),
       ]);
 
       if (reviewRows.status === 'fulfilled') {
-        setReviews(reviewRows.value);
+        setReviews(Array.isArray(reviewRows.value) ? reviewRows.value : []);
       } else {
         throw reviewRows.reason;
       }
@@ -73,35 +153,91 @@ export default function Report() {
     load();
   }, [load]);
 
+  /**
+   * Quan trọng:
+   * Nếu chọn "Tất cả" thì giữ toàn bộ nguồn.
+   * Nếu chọn "Google Maps" thì chỉ lấy review Google Maps.
+   * Nếu chọn "Foody" thì chỉ lấy review Foody.
+   * Nếu chọn "CSV" thì chỉ lấy review CSV.
+   */
+  const filteredReviews = useMemo(() => {
+    if (filters.source === 'Tất cả') {
+      return reviews;
+    }
+
+    return reviews.filter((item) => getReviewSource(item) === filters.source);
+  }, [filters.source, reviews]);
+
   const report = useMemo(() => {
-    const positive = reviews.filter((item) => Number(item.ai_label) === 1).length;
-    const confidence = reviews.length
-      ? reviews.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / reviews.length
+    const positive = filteredReviews.filter((item) => normalizeLabel(item.ai_label) === 1).length;
+
+    const confidence = filteredReviews.length
+      ? filteredReviews.reduce((sum, item) => sum + Number(item.confidence || 0), 0) /
+        filteredReviews.length
       : 0;
-    const normalizedConfidence = confidence > 1 ? confidence / 100 : confidence;
+
+    const normalizedConfidence = normalizeConfidence(confidence);
 
     const groups = {};
 
-    reviews.forEach((item) => {
-      const key = getSourceName(item.source_url);
-      groups[key] ||= { source: key, positive: 0, negative: 0 };
-      groups[key][Number(item.ai_label) === 1 ? 'positive' : 'negative'] += 1;
+    filteredReviews.forEach((item) => {
+      const sourceName = getReviewSource(item);
+      const label = normalizeLabel(item.ai_label);
+
+      groups[sourceName] ||= {
+        source: sourceName,
+        positive: 0,
+        negative: 0,
+        total: 0,
+      };
+
+      if (label === 1) {
+        groups[sourceName].positive += 1;
+      } else {
+        groups[sourceName].negative += 1;
+      }
+
+      groups[sourceName].total += 1;
     });
+
+    /**
+     * Khi chọn "Tất cả nguồn":
+     * hiện đủ Foody, Google Maps, CSV, Khác nếu có dữ liệu.
+     *
+     * Khi chọn riêng "Google Maps":
+     * filteredReviews chỉ còn Google Maps nên chart chỉ hiện Google Maps.
+     */
+    const orderedSources = ['Foody', 'Google Maps', 'CSV', 'Khác'];
+
+    const sourceGroups = orderedSources
+      .filter((sourceName) => groups[sourceName])
+      .map((sourceName) => groups[sourceName]);
+
+    const otherGroups = Object.values(groups).filter(
+      (group) => !orderedSources.includes(group.source),
+    );
+
+    const finalGroups = [...sourceGroups, ...otherGroups];
 
     const hasDateFilter = Boolean(filters.startDate || filters.endDate);
 
     return {
       positive,
-      negative: reviews.length - positive,
+      negative: filteredReviews.length - positive,
       confidence: normalizedConfidence,
-      groups: Object.values(groups),
-      words: reviews.length
+      groups: finalGroups,
+      words: filteredReviews.length
         ? hasDateFilter
-          ? buildWordCloudFromReviews(reviews)
-          : extractWordCloud(keywordAnalytics) || buildWordCloudFromReviews(reviews)
+          ? buildWordCloudFromReviews(filteredReviews)
+          : extractWordCloud(keywordAnalytics) || buildWordCloudFromReviews(filteredReviews)
         : [],
     };
-  }, [filters.endDate, filters.startDate, keywordAnalytics, reviews]);
+  }, [
+    filters.endDate,
+    filters.startDate,
+    filteredReviews,
+    keywordAnalytics,
+  ]);
 
   const exportPdf = async () => {
     if (!isVip) {
@@ -123,10 +259,24 @@ export default function Report() {
         .set({
           margin: 8,
           filename: `bao-cao-phan-hoi-${date}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#0f172a', logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+          image: {
+            type: 'jpeg',
+            quality: 0.98,
+          },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#0f172a',
+            logging: false,
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'landscape',
+          },
+          pagebreak: {
+            mode: ['avoid-all', 'css', 'legacy'],
+          },
         })
         .from(reportRef.current)
         .save();
@@ -145,8 +295,12 @@ export default function Report() {
     <div className="flex h-full flex-col space-y-6 overflow-y-auto p-8 font-sans animate-in fade-in duration-500">
       <div className="mb-2 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="mb-1 text-2xl font-semibold tracking-wide text-white">Báo cáo phản hồi</h1>
-          <p className="text-sm text-slate-400">Tổng hợp tình hình khách hàng theo thời gian và nguồn dữ liệu.</p>
+          <h1 className="mb-1 text-2xl font-semibold tracking-wide text-white">
+            Báo cáo phản hồi
+          </h1>
+          <p className="text-sm text-slate-400">
+            Tổng hợp tình hình khách hàng theo thời gian và nguồn dữ liệu.
+          </p>
         </div>
 
         <button
@@ -174,11 +328,14 @@ export default function Report() {
       <div ref={reportRef} className="print-report space-y-6 bg-[#0f172a] p-1">
         <div className={`${exporting ? 'block' : 'hidden'} pdf-heading text-white`}>
           <h2 className="text-2xl font-bold">Báo cáo phản hồi khách hàng</h2>
-          <p className="mt-1 text-sm text-slate-400">Ngày xuất: {new Date().toLocaleDateString('vi-VN')}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Ngày xuất: {new Date().toLocaleDateString('vi-VN')}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <ComparisonChartCard groups={report.groups} />
+
           <WordCloudCard
             words={report.words}
             isVip={isVip}
@@ -187,7 +344,7 @@ export default function Report() {
         </div>
 
         <PerformanceSummaryCard
-          total={reviews.length}
+          total={filteredReviews.length}
           positive={report.positive}
           negative={report.negative}
           confidence={report.confidence}

@@ -9,8 +9,37 @@ const TaskContext = createContext(null);
 const BACKGROUND_MESSAGE =
   'Đang nạp dữ liệu. Hệ thống sẽ phân tích ngầm, vui lòng xem kết quả tại trang Dashboard sau ít phút.';
 
+const detectUrlSource = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (normalized.includes('foody.vn')) {
+    return {
+      type: 'foody',
+      name: 'Foody',
+    };
+  }
+
+  if (
+    normalized.includes('google.com/maps') ||
+    normalized.includes('maps.app.goo.gl') ||
+    normalized.includes('goo.gl/maps') ||
+    normalized.includes('google.com/search') ||
+    normalized.includes('maps')
+  ) {
+    return {
+      type: 'google_maps',
+      name: 'Google Maps',
+    };
+  }
+
+  return {
+    type: 'unknown',
+    name: 'Không xác định',
+  };
+};
+
 export function TaskProvider({ children }) {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
 
   const [batchFile, setBatchFile] = useState(null);
   const [batchTexts, setBatchTexts] = useState([]);
@@ -32,6 +61,7 @@ export function TaskProvider({ children }) {
     setBatchColumns([]);
     setBatchResults([]);
     setBatchLoading(false);
+
     setUrl('');
     setUrlResults([]);
     setUrlCount(0);
@@ -47,6 +77,7 @@ export function TaskProvider({ children }) {
       skipEmptyLines: true,
       complete: ({ data, meta }) => {
         const fields = meta.fields || [];
+
         const preferred =
           fields.find((name) =>
             [
@@ -58,7 +89,7 @@ export function TaskProvider({ children }) {
               'bình luận',
               'noi_dung',
               'nội dung',
-            ].includes(String(name).trim().toLowerCase())
+            ].includes(String(name).trim().toLowerCase()),
           ) || fields[0];
 
         const texts = data
@@ -75,7 +106,9 @@ export function TaskProvider({ children }) {
           toast.error('Không tìm thấy nội dung phản hồi trong file CSV.');
         }
       },
-      error: (error) => toast.error(error.message || 'Không đọc được file CSV.'),
+      error: (error) => {
+        toast.error(error.message || 'Không đọc được file CSV.');
+      },
     });
   };
 
@@ -84,10 +117,12 @@ export function TaskProvider({ children }) {
       toast.error('Vui lòng đăng nhập trước khi phân tích file.');
       return;
     }
+
     if (!batchTexts.length) {
       toast.error('File chưa có phản hồi hợp lệ để phân tích.');
       return;
     }
+
     if (batchLoading) return;
 
     setBatchLoading(true);
@@ -103,22 +138,19 @@ export function TaskProvider({ children }) {
         })),
         user_id: user.id,
         source_url: 'CSV_Upload',
-
-        // THÊM MỚI: để Settings hiển thị đúng tên file CSV
         dataset_name: csvFileName,
         file_name: csvFileName,
+        dataset_type: 'csv',
       });
 
       setBatchResults(data);
+
       toast.success(
         `Đã tiếp nhận ${data.length} phản hồi. Kết quả sẽ được cập nhật tại Dashboard.`,
-        { id: loadingToast }
+        { id: loadingToast },
       );
     } catch (error) {
       toast.error(error.message || 'Không thể xử lý file CSV.', { id: loadingToast });
-
-      // Quan trọng: ném lỗi ra ngoài để BatchPrediction.jsx bắt được status 403
-      // và mở UpgradeModal khi gói Free vượt giới hạn.
       throw error;
     } finally {
       setBatchLoading(false);
@@ -130,40 +162,57 @@ export function TaskProvider({ children }) {
       toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
       return;
     }
-    if (!/^https?:\/\//i.test(url.trim())) {
+
+    const cleanUrl = url.trim();
+
+    if (!/^https?:\/\//i.test(cleanUrl)) {
       toast.error('Vui lòng nhập đường dẫn hợp lệ.');
       return;
     }
+
     if (urlLoading) return;
+
+    const sourceInfo = detectUrlSource(cleanUrl);
+    const isVip = userProfile?.tier === 'vip';
+
+    if (sourceInfo.type === 'unknown') {
+      toast.error('Hệ thống hiện chỉ hỗ trợ link Foody và Google Maps.');
+      return;
+    }
+
+    if (sourceInfo.type === 'google_maps' && !isVip) {
+      toast.error('Tính năng phân tích Google Maps chỉ dành cho tài khoản VIP.');
+      return;
+    }
 
     setUrlLoading(true);
     const loadingToast = toast.loading(BACKGROUND_MESSAGE);
 
     try {
-      const cleanUrl = url.trim();
-
       const data = await analyzeUrl({
         url: cleanUrl,
         user_id: user.id,
-
-        // THÊM MỚI: nếu backend/scraper chuyển tiếp field này sang /predict/batch,
-        // Settings sẽ hiển thị theo link/quán thay vì tên mặc định.
-        dataset_name: cleanUrl,
+        dataset_name: sourceInfo.name,
+        dataset_type: sourceInfo.type,
       });
 
       const receivedCount = Number(data.count || data.results?.length || 0);
+
       setUrlResults(data.results || []);
       setUrlCount(receivedCount);
-      const successMessage = receivedCount > 0
-        ? `Đã tiếp nhận ${receivedCount} phản hồi từ đường dẫn. Dashboard sẽ cập nhật sau ít phút.`
-        : 'Đã kiểm tra đường dẫn này. Hiện chưa có phản hồi mới để cập nhật.';
+
+      const successMessage =
+        receivedCount > 0
+          ? `Đã tiếp nhận ${receivedCount} phản hồi từ ${sourceInfo.name}. Dashboard sẽ cập nhật sau ít phút.`
+          : `Đã kiểm tra ${sourceInfo.name}. Hiện chưa có phản hồi mới để cập nhật.`;
+
       toast.success(successMessage, { id: loadingToast });
     } catch (error) {
       toast.error(
         error.message === 'Failed to fetch'
           ? 'Không kết nối được bộ thu thập dữ liệu tại cổng 3000.'
           : error.message,
-        { id: loadingToast }
+        { id: loadingToast },
       );
     } finally {
       setUrlLoading(false);
@@ -207,7 +256,8 @@ export function TaskProvider({ children }) {
       urlLoading,
       urlFilter,
       user?.id,
-    ]
+      userProfile?.tier,
+    ],
   );
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
@@ -215,8 +265,10 @@ export function TaskProvider({ children }) {
 
 export function useTasks() {
   const context = useContext(TaskContext);
+
   if (!context) {
     throw new Error('useTasks must be used inside TaskProvider');
   }
+
   return context;
 }

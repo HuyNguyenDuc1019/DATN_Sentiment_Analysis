@@ -4,19 +4,34 @@ import DateField from './DateField';
 import { SOURCE_OPTIONS } from '../../../utils/user/reportUtils';
 
 export default function FilterBar({ filters, setFilters, loading, onRefresh }) {
-  const update = (field) => (event) => setFilters((current) => ({ ...current, [field]: event.target.value }));
+  const update = (field) => (event) =>
+    setFilters((current) => ({
+      ...current,
+      [field]: event.target.value,
+    }));
 
   return (
     <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-700 bg-slate-800/50 p-4 text-sm backdrop-blur-md xl:flex-row xl:items-center">
       <div className="flex flex-col gap-4 text-slate-300 lg:flex-row lg:items-end">
         <div className="flex flex-wrap items-end gap-3">
           <span className="pb-2 text-slate-400">Khoảng thời gian:</span>
-          <DateField label="Từ ngày" value={filters.startDate} onChange={update('startDate')} />
-          <DateField label="Đến ngày" value={filters.endDate} onChange={update('endDate')} />
+
+          <DateField
+            label="Từ ngày"
+            value={filters.startDate}
+            onChange={update('startDate')}
+          />
+
+          <DateField
+            label="Đến ngày"
+            value={filters.endDate}
+            onChange={update('endDate')}
+          />
         </div>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-xs text-slate-500">Nguồn</span>
+
           <select
             value={filters.source}
             onChange={update('source')}
