@@ -41,7 +41,10 @@ function normalizeDatasets(data) {
 export async function fetchUserDatasets(userId) {
   if (!userId) return [];
 
-  const response = await fetch(`${API_BASE_URL}/api/user/datasets?user_id=${userId}`);
+  const response = await fetch(
+    `${API_BASE_URL}/api/user/datasets?user_id=${encodeURIComponent(userId)}`,
+  );
+
   const data = await readJson(response);
 
   if (response.status === 404) return [];
@@ -54,17 +57,25 @@ export async function fetchUserDatasets(userId) {
 }
 
 export async function deleteUserDataset({ userId, datasetId }) {
-  if (!userId || !datasetId) return null;
+  if (!userId || !datasetId) {
+    throw new Error('Thiếu user_id hoặc dataset_id.');
+  }
 
   const safeDatasetId = encodeURIComponent(datasetId);
+  const safeUserId = encodeURIComponent(userId);
 
-  const response = await fetch(`${API_BASE_URL}/api/user/datasets/${safeDatasetId}?user_id=${userId}`, {
-    method: 'DELETE',
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/user/datasets/${safeDatasetId}?user_id=${safeUserId}`,
+    {
+      method: 'DELETE',
+    },
+  );
 
   const data = await readJson(response);
 
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    throw new Error('Không tìm thấy API xóa dữ liệu.');
+  }
 
   if (!response.ok || data?.success === false) {
     throw new Error(parseError(data, 'Không thể xóa dữ liệu đã chọn.'));
@@ -74,15 +85,22 @@ export async function deleteUserDataset({ userId, datasetId }) {
 }
 
 export async function clearUserData(userId) {
-  if (!userId) return null;
+  if (!userId) {
+    throw new Error('Thiếu user_id.');
+  }
 
-  const response = await fetch(`${API_BASE_URL}/api/user/data/clear?user_id=${userId}`, {
-    method: 'DELETE',
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/user/data/clear?user_id=${encodeURIComponent(userId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
 
   const data = await readJson(response);
 
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    throw new Error('Không tìm thấy API xóa toàn bộ dữ liệu.');
+  }
 
   if (!response.ok || data?.success === false) {
     throw new Error(parseError(data, 'Không thể xóa toàn bộ dữ liệu.'));
@@ -98,7 +116,10 @@ export async function clearAllUserData(userId) {
 export async function fetchUserSettings(userId) {
   if (!userId) return null;
 
-  const response = await fetch(`${API_BASE_URL}/api/user/settings?user_id=${userId}`);
+  const response = await fetch(
+    `${API_BASE_URL}/api/user/settings?user_id=${encodeURIComponent(userId)}`,
+  );
+
   const data = await readJson(response);
 
   if (response.status === 404) return null;
@@ -110,21 +131,27 @@ export async function fetchUserSettings(userId) {
   return data?.data || data?.settings || data;
 }
 
-export async function saveUserSettings({ userId, payload }) {
-  if (!userId) return null;
+export async function saveUserSettings(payload) {
+  const userId = payload?.user_id || payload?.userId;
+
+  if (!userId) {
+    throw new Error('Thiếu user_id.');
+  }
 
   const response = await fetch(`${API_BASE_URL}/api/user/settings`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      user_id: userId,
       ...payload,
+      user_id: userId,
     }),
   });
 
   const data = await readJson(response);
 
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    throw new Error('Không tìm thấy API lưu cấu hình.');
+  }
 
   if (!response.ok || data?.success === false) {
     throw new Error(parseError(data, 'Không thể lưu cấu hình người dùng.'));

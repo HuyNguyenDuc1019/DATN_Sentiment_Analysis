@@ -189,64 +189,72 @@ async def delete_user_dataset(dataset_id: str, user_id: str):
         from urllib.parse import unquote
         import uuid
 
-        dataset_key = unquote(dataset_id)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Thiếu user_id.")
 
-        query = (
-            supabase
-            .table("scraped_reviews")
-            .select("id, dataset_id, dataset_name, source_url")
-            .eq("user_id", user_id)
-        )
+        dataset_key = unquote(dataset_id).strip()
 
-        # Nếu dataset_key là UUID thì lọc theo dataset_id.
-        # Nếu không phải UUID như CSV_Upload thì KHÔNG đụng cột dataset_id để tránh lỗi type.
-        is_uuid = False
+        if not dataset_key:
+            raise HTTPException(status_code=400, detail="Thiếu dataset_id.")
+
+        rows = []
+
+        # Tìm theo source_url
+        try:
+            res_url = (
+                supabase
+                .table("scraped_reviews")
+                .select("id, dataset_id, dataset_name, source_url")
+                .eq("user_id", user_id)
+                .eq("source_url", dataset_key)
+                .execute()
+            )
+            rows.extend(res_url.data or [])
+        except Exception as url_error:
+            print(f"Không tìm được theo source_url: {url_error}")
+
+        # Tìm theo dataset_name
+        try:
+            res_name = (
+                supabase
+                .table("scraped_reviews")
+                .select("id, dataset_id, dataset_name, source_url")
+                .eq("user_id", user_id)
+                .eq("dataset_name", dataset_key)
+                .execute()
+            )
+            rows.extend(res_name.data or [])
+        except Exception as name_error:
+            print(f"Không tìm được theo dataset_name: {name_error}")
+
+        # Tìm theo dataset_id nếu là UUID
         try:
             uuid.UUID(dataset_key)
-            is_uuid = True
+
+            res_dataset_id = (
+                supabase
+                .table("scraped_reviews")
+                .select("id, dataset_id, dataset_name, source_url")
+                .eq("user_id", user_id)
+                .eq("dataset_id", dataset_key)
+                .execute()
+            )
+            rows.extend(res_dataset_id.data or [])
         except ValueError:
-            is_uuid = False
+            pass
+        except Exception as dataset_error:
+            print(f"Không tìm được theo dataset_id: {dataset_error}")
 
-        if is_uuid:
-            res = query.eq("dataset_id", dataset_key).execute()
-            rows = res.data or []
-        else:
-            rows = []
-
-            # Tìm theo dataset_name
-            try:
-                res_name = (
-                    supabase
-                    .table("scraped_reviews")
-                    .select("id, dataset_id, dataset_name, source_url")
-                    .eq("user_id", user_id)
-                    .eq("dataset_name", dataset_key)
-                    .execute()
-                )
-                rows.extend(res_name.data or [])
-            except Exception as name_error:
-                print(f"Không tìm được theo dataset_name: {name_error}")
-
-            # Tìm theo source_url
-            try:
-                res_url = (
-                    supabase
-                    .table("scraped_reviews")
-                    .select("id, dataset_id, dataset_name, source_url")
-                    .eq("user_id", user_id)
-                    .eq("source_url", dataset_key)
-                    .execute()
-                )
-                rows.extend(res_url.data or [])
-            except Exception as url_error:
-                print(f"Không tìm được theo source_url: {url_error}")
-
-        review_ids = list({row["id"] for row in rows if row.get("id")})
+        review_ids = list({
+            row.get("id")
+            for row in rows
+            if row.get("id")
+        })
 
         if not review_ids:
             return {
                 "status": "success",
-                "message": "Không tìm thấy dữ liệu cần xóa hoặc dữ liệu đã được xóa trước đó.",
+                "message": "Không tìm thấy dữ liệu cần xóa.",
                 "deleted_count": 0,
             }
 
@@ -263,6 +271,9 @@ async def delete_user_dataset(dataset_id: str, user_id: str):
             "message": "Đã xóa dữ liệu đã chọn.",
             "deleted_count": len(delete_res.data or review_ids),
         }
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         print(f"Lỗi API delete_user_dataset: {e}")

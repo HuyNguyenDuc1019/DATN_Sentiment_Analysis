@@ -25,6 +25,7 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('ai');
 
   const { user, profile, userProfile, refreshUserProfile } = useAuth();
+
   const currentProfile = userProfile || profile;
   const userId = user?.id;
   const isVip = currentProfile?.tier === 'vip';
@@ -43,6 +44,7 @@ export default function Settings() {
 
   const [retentionDays, setRetentionDays] = useState(7);
   const [feedbackConfidenceThreshold, setFeedbackConfidenceThreshold] = useState(70);
+
   const [datasets, setDatasets] = useState([]);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
   const [deletingDatasetId, setDeletingDatasetId] = useState(null);
@@ -68,7 +70,13 @@ export default function Settings() {
 
           const nextRetentionDays = Number(data.retention_days || (isVip ? 30 : 7));
           setRetentionDays(isVip ? nextRetentionDays : 7);
-          setFeedbackConfidenceThreshold(Math.min(95, Math.max(30, Number(data.feedback_confidence_threshold ?? 70))));
+
+          setFeedbackConfidenceThreshold(
+            Math.min(
+              95,
+              Math.max(30, Number(data.feedback_confidence_threshold ?? 70)),
+            ),
+          );
         }
       } catch (error) {
         toast.error(error.message || 'Lỗi khi tải cấu hình hệ thống!');
@@ -86,6 +94,28 @@ export default function Settings() {
       setRetentionDays(7);
     }
   }, [isVip, retentionDays]);
+
+  const loadUserDatasets = async () => {
+    if (!userId) return;
+
+    try {
+      setIsLoadingDatasets(true);
+
+      const data = await fetchUserDatasets(userId);
+      setDatasets(data);
+    } catch (error) {
+      toast.error(error.message || 'Không thể tải danh sách dữ liệu.');
+      console.error(error);
+    } finally {
+      setIsLoadingDatasets(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'data' && userId) {
+      loadUserDatasets();
+    }
+  }, [activeTab, userId]);
 
   const handleSaveSettings = async () => {
     if (!userId) {
@@ -134,10 +164,17 @@ export default function Settings() {
     try {
       setIsClearing(true);
 
-      await clearUserData(userId);
+      const result = await clearUserData(userId);
+
+      if (result && Number(result.deleted_count || 0) === 0) {
+        toast.error('Không tìm thấy dữ liệu để xóa.');
+        return;
+      }
 
       toast.success('Đã xóa toàn bộ dữ liệu thành công.');
       setIsClearConfirmOpen(false);
+
+      await loadUserDatasets();
     } catch (error) {
       toast.error(error.message || 'Có lỗi xảy ra khi xóa dữ liệu.');
       console.error(error);
@@ -146,30 +183,20 @@ export default function Settings() {
     }
   };
 
-  const loadUserDatasets = async () => {
-    if (!userId) return;
-
-    try {
-      setIsLoadingDatasets(true);
-
-      const data = await fetchUserDatasets(userId);
-      setDatasets(data);
-    } catch (error) {
-      toast.error(error.message || 'Không thể tải danh sách dữ liệu.');
-      console.error(error);
-    } finally {
-      setIsLoadingDatasets(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'data' && userId) {
-      loadUserDatasets();
-    }
-  }, [activeTab, userId]);
+  const getDatasetKey = (dataset) => {
+  return (
+    dataset?.source_url ||
+    dataset?.dataset_name ||
+    dataset?.dataset_id ||
+    dataset?.id ||
+    ''
+  );
+};
 
   const handleOpenDeleteDataset = (dataset) => {
-    if (!dataset?.dataset_id && !dataset?.source_url) {
+    const datasetKey = getDatasetKey(dataset);
+
+    if (!datasetKey) {
       toast.error('Không tìm thấy mã dữ liệu cần xóa.');
       return;
     }
@@ -177,31 +204,44 @@ export default function Settings() {
     setDatasetToDelete(dataset);
   };
 
-  const handleConfirmDeleteDataset = async () => {
-    if (!userId || !datasetToDelete) return;
+ const handleConfirmDeleteDataset = async () => {
+  if (!userId || !datasetToDelete) return;
 
-    const datasetId = datasetToDelete.dataset_id;
-    const sourceUrl = datasetToDelete.source_url;
+  const datasetKey = getDatasetKey(datasetToDelete);
 
-    try {
-      setDeletingDatasetId(datasetId || sourceUrl);
+  if (!datasetKey) {
+    toast.error('Không tìm thấy mã dữ liệu cần xóa.');
+    return;
+  }
 
-      await deleteUserDataset({
-        userId,
-        datasetId,
-        sourceUrl,
-      });
+  try {
+    setDeletingDatasetId(datasetKey);
 
-      toast.success('Đã xóa dữ liệu đã chọn.');
-      setDatasetToDelete(null);
-      await loadUserDatasets();
-    } catch (error) {
-      toast.error(error.message || 'Có lỗi xảy ra khi xóa dữ liệu.');
-      console.error(error);
-    } finally {
-      setDeletingDatasetId(null);
+    const result = await deleteUserDataset({
+      userId,
+      datasetId: datasetKey,
+    });
+
+    if (result && Number(result.deleted_count || 0) === 0) {
+      toast.error('Không tìm thấy dữ liệu cần xóa.');
+      return;
     }
-  };
+
+    toast.success('Đã xóa dữ liệu đã chọn.');
+    setDatasetToDelete(null);
+
+    setDatasets((current) =>
+      current.filter((item) => getDatasetKey(item) !== datasetKey),
+    );
+
+    await loadUserDatasets();
+  } catch (error) {
+    toast.error(error.message || 'Có lỗi xảy ra khi xóa dữ liệu.');
+    console.error(error);
+  } finally {
+    setDeletingDatasetId(null);
+  }
+};
 
   if (isLoading) {
     return <div className="p-8 text-slate-400">Đang tải cấu hình hệ thống...</div>;
@@ -211,7 +251,9 @@ export default function Settings() {
     <>
       <div className="p-8 h-full flex flex-col font-sans animate-in fade-in duration-500 overflow-y-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Cài đặt hệ thống</h1>
+          <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">
+            Cài đặt hệ thống
+          </h1>
           <p className="text-slate-400 text-sm">
             Quản lý cấu hình trí tuệ nhân tạo, thông báo và tài nguyên của bạn.
           </p>
@@ -245,7 +287,10 @@ export default function Settings() {
               )}
 
               {activeTab === 'billing' && (
-                <BillingTab isVip={isVip} onUpgrade={() => setIsUpgradeModalOpen(true)} />
+                <BillingTab
+                  isVip={isVip}
+                  onUpgrade={() => setIsUpgradeModalOpen(true)}
+                />
               )}
 
               {activeTab === 'data' && (
