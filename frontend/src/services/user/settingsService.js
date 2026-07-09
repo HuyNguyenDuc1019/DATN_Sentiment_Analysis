@@ -61,11 +61,13 @@ export async function deleteUserDataset({ userId, datasetId }) {
     throw new Error('Thiếu user_id hoặc dataset_id.');
   }
 
-  const safeDatasetId = encodeURIComponent(datasetId);
-  const safeUserId = encodeURIComponent(userId);
+  const params = new URLSearchParams({
+    user_id: userId,
+    dataset_id: datasetId,
+  });
 
   const response = await fetch(
-    `${API_BASE_URL}/api/user/datasets/${safeDatasetId}?user_id=${safeUserId}`,
+    `${API_BASE_URL}/api/user/datasets/remove?${params.toString()}`,
     {
       method: 'DELETE',
     },

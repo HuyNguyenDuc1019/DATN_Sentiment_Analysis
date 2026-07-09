@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from datetime import datetime
+import uuid
+
 from app.database import supabase
 
 router = APIRouter(prefix="/api/user", tags=["User"])
@@ -21,6 +23,7 @@ class UserSettingsUpdate(BaseModel):
     alert_email: Optional[bool] = None
     weekly_report: Optional[bool] = None
     retention_days: Optional[int] = None
+    feedback_confidence_threshold: Optional[float] = None
 
 
 @router.put("/upgrade")
@@ -63,7 +66,13 @@ async def upgrade_to_vip(req: UpgradeRequest):
 @router.get("/settings")
 async def get_user_settings(user_id: str):
     try:
-        res = supabase.table("user_settings").select("*").eq("user_id", user_id).execute()
+        res = (
+            supabase
+            .table("user_settings")
+            .select("*")
+            .eq("user_id", user_id)
+            .execute()
+        )
 
         if not res.data or len(res.data) == 0:
             return {
@@ -74,6 +83,7 @@ async def get_user_settings(user_id: str):
                 "alert_email": False,
                 "weekly_report": True,
                 "retention_days": 7,
+                "feedback_confidence_threshold": 70,
             }
 
         return res.data[0]
@@ -142,6 +152,7 @@ async def get_user_datasets(user_id: str):
                 "dataset_type": dataset_type,
                 "source_url": row.get("source_url"),
                 "review_count": 0,
+                "total_reviews": 0,
                 "positive_count": 0,
                 "negative_count": 0,
                 "avg_confidence": 0,
@@ -150,6 +161,7 @@ async def get_user_datasets(user_id: str):
             })
 
             item["review_count"] += 1
+            item["total_reviews"] += 1
 
             label = row.get("ai_label")
 
@@ -183,13 +195,18 @@ async def get_user_datasets(user_id: str):
         raise HTTPException(status_code=500, detail="Không thể tải dữ liệu đã phân tích.")
 
 
-# Đổi đường dẫn API và chuyển sang dùng Query
 @router.delete("/datasets/remove")
 async def delete_user_dataset(
-    dataset_id: str = Query(..., description="Tên, URL hoặc ID của dataset"), 
-    user_id: str = Query(..., description="ID của user")
+    dataset_id: str = Query(..., description="Tên, URL hoặc ID của dataset"),
+    user_id: str = Query(..., description="ID của user"),
 ):
     try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Thiếu user_id.")
+
+        if not dataset_id:
+            raise HTTPException(status_code=400, detail="Thiếu dataset_id.")
+
         dataset_key = dataset_id.strip()
 
         if not dataset_key:
@@ -197,21 +214,19 @@ async def delete_user_dataset(
 
         rows = []
 
-        # TÌM THEO SOURCE_URL
         try:
             res_url = (
                 supabase
                 .table("scraped_reviews")
-                .select("id") # Chỉ cần lấy id cho nhẹ, không cần lấy name hay url
+                .select("id")
                 .eq("user_id", user_id)
                 .eq("source_url", dataset_key)
                 .execute()
             )
             rows.extend(res_url.data or [])
         except Exception as url_error:
-            pass
+            print(f"Không tìm được theo source_url: {url_error}")
 
-        # TÌM THEO DATASET_NAME
         try:
             res_name = (
                 supabase
@@ -223,11 +238,11 @@ async def delete_user_dataset(
             )
             rows.extend(res_name.data or [])
         except Exception as name_error:
-            pass
+            print(f"Không tìm được theo dataset_name: {name_error}")
 
-        # TÌM THEO DATASET_ID (UUID)
         try:
             uuid.UUID(dataset_key)
+
             res_dataset_id = (
                 supabase
                 .table("scraped_reviews")
@@ -239,11 +254,14 @@ async def delete_user_dataset(
             rows.extend(res_dataset_id.data or [])
         except ValueError:
             pass
-        except Exception:
-            pass
+        except Exception as dataset_error:
+            print(f"Không tìm được theo dataset_id: {dataset_error}")
 
-        # LỌC LẤY ID DUY NHẤT
-        review_ids = list({row.get("id") for row in rows if row.get("id")})
+        review_ids = list({
+            row.get("id")
+            for row in rows
+            if row.get("id")
+        })
 
         if not review_ids:
             return {
@@ -252,14 +270,7 @@ async def delete_user_dataset(
                 "deleted_count": 0,
             }
 
-        # THỰC HIỆN XÓA
-        delete_res = (
-            supabase
-            .table("scraped_reviews")
-            .delete()
-            .in_("id", review_ids)
-            .execute()
-        )
+        supabase.table("scraped_reviews").delete().in_("id", review_ids).execute()
 
         return {
             "status": "success",
@@ -269,12 +280,15 @@ async def delete_user_dataset(
 
     except HTTPException:
         raise
+
     except Exception as e:
         print(f"Lỗi API delete_user_dataset: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Không thể xóa dữ liệu đã chọn: {str(e)}"
         )
+
+
 @router.delete("/data/clear")
 async def clear_user_data(user_id: str):
     try:

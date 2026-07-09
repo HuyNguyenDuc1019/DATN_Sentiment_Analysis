@@ -184,14 +184,14 @@ export default function Settings() {
   };
 
   const getDatasetKey = (dataset) => {
-  return (
-    dataset?.source_url ||
-    dataset?.dataset_name ||
-    dataset?.dataset_id ||
-    dataset?.id ||
-    ''
-  );
-};
+    return (
+      dataset?.source_url ||
+      dataset?.dataset_name ||
+      dataset?.dataset_id ||
+      dataset?.id ||
+      ''
+    );
+  };
 
   const handleOpenDeleteDataset = (dataset) => {
     const datasetKey = getDatasetKey(dataset);
@@ -204,44 +204,44 @@ export default function Settings() {
     setDatasetToDelete(dataset);
   };
 
- const handleConfirmDeleteDataset = async () => {
-  if (!userId || !datasetToDelete) return;
+  const handleConfirmDeleteDataset = async () => {
+    if (!userId || !datasetToDelete) return;
 
-  const datasetKey = getDatasetKey(datasetToDelete);
+    const datasetKey = getDatasetKey(datasetToDelete);
 
-  if (!datasetKey) {
-    toast.error('Không tìm thấy mã dữ liệu cần xóa.');
-    return;
-  }
-
-  try {
-    setDeletingDatasetId(datasetKey);
-
-    const result = await deleteUserDataset({
-      userId,
-      datasetId: datasetKey,
-    });
-
-    if (result && Number(result.deleted_count || 0) === 0) {
-      toast.error('Không tìm thấy dữ liệu cần xóa.');
+    if (!datasetKey) {
+      toast.error('Không tìm thấy mã dữ liệu cần xóa.');
       return;
     }
 
-    toast.success('Đã xóa dữ liệu đã chọn.');
-    setDatasetToDelete(null);
+    try {
+      setDeletingDatasetId(datasetKey);
 
-    setDatasets((current) =>
-      current.filter((item) => getDatasetKey(item) !== datasetKey),
-    );
+      const result = await deleteUserDataset({
+        userId,
+        datasetId: datasetKey,
+      });
 
-    await loadUserDatasets();
-  } catch (error) {
-    toast.error(error.message || 'Có lỗi xảy ra khi xóa dữ liệu.');
-    console.error(error);
-  } finally {
-    setDeletingDatasetId(null);
-  }
-};
+      if (result && Number(result.deleted_count || 0) === 0) {
+        toast.error('Không tìm thấy dữ liệu cần xóa.');
+        return;
+      }
+
+      toast.success('Đã xóa dữ liệu đã chọn.');
+      setDatasetToDelete(null);
+
+      setDatasets((current) =>
+        current.filter((item) => getDatasetKey(item) !== datasetKey),
+      );
+
+      await loadUserDatasets();
+    } catch (error) {
+      toast.error(error.message || 'Có lỗi xảy ra khi xóa dữ liệu.');
+      console.error(error);
+    } finally {
+      setDeletingDatasetId(null);
+    }
+  };
 
   if (isLoading) {
     return <div className="p-8 text-slate-400">Đang tải cấu hình hệ thống...</div>;
