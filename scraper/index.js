@@ -630,43 +630,89 @@ async function scrapeGoogleMaps(
 
     console.log(`✅ Tìm thấy mã quán data_id: ${dataId}. Bắt đầu tải bình luận...`);
 
-    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
+    // ==========================================
+    // 🔍 BƯỚC 2: CÀO BÌNH LUẬN XUYÊN TRANG
+    // ==========================================
+    const cleanReviews = [];
+    let nextToken = "";
+    let pageCount = 0;
+    let isStop = false;
 
-    const reviewRes = await axios.get(reviewUrl);
-    const rawReviews = reviewRes.data.reviews;
+    // Giới hạn 5 trang (tầm 50 review) mỗi lần cào để tiết kiệm API. Có thể tăng lên nếu cần.
+    while (pageCount < 5 && !isStop) {
+      pageCount++;
+      console.log(`⏳ Đang cào dữ liệu Trang ${pageCount}...`);
 
-    if (!rawReviews || rawReviews.length === 0) {
+      // SỬA: Dùng SERPAPI_KEY và sort_by=newestFirst
+      let reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi&sort_by=newestFirst`;
+
+      if (nextToken) {
+        reviewUrl += `&next_page_token=${nextToken}`;
+      }
+
+      const reviewRes = await axios.get(reviewUrl);
+      const rawReviews = reviewRes.data.reviews || [];
+
+      if (rawReviews.length === 0) break;
+
+      for (const item of rawReviews) {
+        // 1. Lấy dữ liệu thô
+        let rawText = item.snippet || item.details || '';
+
+        // 2. Trạm kiểm duyệt 1: Nếu SerpApi trả về một Object (thường là bình luận có dịch thuật)
+        if (typeof rawText === 'object' && rawText !== null) {
+            // Cố gắng bóc tách lấy chữ gốc hoặc bản dịch ở bên trong
+            rawText = rawText.translated || rawText.original || rawText.text || '';
+        }
+
+        // 3. Trạm kiểm duyệt 2: Ép kiểu 100% thành chuỗi, chặn đứng chữ [object Object]
+        let safeString = String(rawText);
+        if (safeString === '[object Object]') {
+            safeString = '';
+        }
+
+        // 4. Đưa vào hàm dọn dẹp của bạn
+        const content = cleanReviewText(safeString);
+
+        if (!content) continue;
+
+        const reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
+
+        if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
+          console.log(
+            `🛑 Đã chạm bình luận cũ (${reviewDate.toISOString()}) ở Trang ${pageCount}. Ngắt thu thập!`,
+          );
+          isStop = true;
+          break;
+        }
+
+        cleanReviews.push({
+          content,
+          review_date: reviewDate.toISOString(),
+        });
+      }
+
+      // Kiểm tra xem có token để sang trang tiếp theo không
+      if (!isStop && reviewRes.data.serpapi_pagination && reviewRes.data.serpapi_pagination.next_page_token) {
+        nextToken = reviewRes.data.serpapi_pagination.next_page_token;
+      } else {
+        break; // Hết trang hoặc đã bị ngắt thì thoát vòng lặp
+      }
+    }
+
+    if (cleanReviews.length === 0) {
       return {
-        message: 'Quán này không có bình luận nào.',
+        message: 'Quán này không có bình luận nào mới.',
       };
     }
 
-    const cleanReviews = [];
-
-    for (const item of rawReviews) {
-      const content = cleanReviewText(item.snippet || item.details || '');
-
-      if (!content) continue;
-
-      const reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
-
-      if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
-        console.log(
-          `🛑 Đã chạm bình luận cũ (${reviewDate.toISOString()}). Ngắt thu thập!`,
-        );
-        break;
-      }
-
-      cleanReviews.push({
-        content,
-        review_date: reviewDate.toISOString(),
-      });
-    }
-
     console.log(
-      `💎 Thành phẩm Google Maps: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`,
+      `💎 Thành phẩm Google Maps: Lật ${pageCount} trang, thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`,
     );
 
+    // ==========================================
+    // 🚀 BƯỚC 3: GỬI DỮ LIỆU SANG AI
+    // ==========================================
     return sendReviewsToPredictBatch({
       cleanReviews,
       userId,
@@ -674,6 +720,7 @@ async function scrapeGoogleMaps(
       datasetName,
       datasetType,
     });
+    
   } catch (error) {
     console.error('🔥 Lỗi cào Google Maps:', error.response?.data || error.message);
 
@@ -686,7 +733,8 @@ async function scrapeGoogleMaps(
 }
 
 app.post('/api/scrape', async (req, res) => {
-  const { url, user_id, dataset_name, dataset_type } = req.body;
+  // 👉 1. Bắt thêm biến custom_start_date từ Frontend gửi lên
+  const { url, user_id, dataset_name, dataset_type, custom_start_date } = req.body;
 
   if (!url || !user_id) {
     return res.status(400).json({
@@ -705,10 +753,24 @@ app.post('/api/scrape', async (req, res) => {
       });
     }
 
-    const lastScrapedDate = await getLastScrapedDate({
-      url,
-      userId: user_id,
-    });
+    // ==========================================
+    // 🎯 LOGIC TÌM MỐC THỜI GIAN CÀO
+    // ==========================================
+    let cutoffDate = null;
+    
+    if (custom_start_date) {
+        // TRƯỜNG HỢP A: Có mốc thời gian ép buộc (Quán đổi chủ)
+        console.log(`🕒 User ép buộc mốc thời gian cào từ ngày: ${custom_start_date}`);
+        cutoffDate = custom_start_date;
+    } else {
+        // TRƯỜNG HỢP B: Chạy tự động nối tiếp dữ liệu cũ
+        console.log('⏳ Không có mốc tùy chọn. Đang hỏi Database mốc thời gian cào lần cuối...');
+        cutoffDate = await getLastScrapedDate({
+          url,
+          userId: user_id,
+        });
+    }
+    // ==========================================
 
     const finalDatasetName = dataset_name || sourceInfo.name;
     const finalDatasetType = dataset_type || sourceInfo.type;
@@ -721,7 +783,7 @@ app.post('/api/scrape', async (req, res) => {
       result = await scrapeFoody(
         url,
         user_id,
-        lastScrapedDate,
+        cutoffDate, // 👉 Đã thay bằng cutoffDate
         finalDatasetName,
         finalDatasetType,
       );
@@ -731,7 +793,7 @@ app.post('/api/scrape', async (req, res) => {
       result = await scrapeGoogleMaps(
         url,
         user_id,
-        lastScrapedDate,
+        cutoffDate, // 👉 Đã thay bằng cutoffDate
         finalDatasetName,
         finalDatasetType,
       );
