@@ -183,58 +183,55 @@ async def get_user_datasets(user_id: str):
         raise HTTPException(status_code=500, detail="Không thể tải dữ liệu đã phân tích.")
 
 
-@router.delete("/datasets/{dataset_id:path}")
-async def delete_user_dataset(dataset_id: str, user_id: str):
+# Đổi đường dẫn API và chuyển sang dùng Query
+@router.delete("/datasets/remove")
+async def delete_user_dataset(
+    dataset_id: str = Query(..., description="Tên, URL hoặc ID của dataset"), 
+    user_id: str = Query(..., description="ID của user")
+):
     try:
-        from urllib.parse import unquote
-        import uuid
-
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Thiếu user_id.")
-
-        dataset_key = unquote(dataset_id).strip()
+        dataset_key = dataset_id.strip()
 
         if not dataset_key:
             raise HTTPException(status_code=400, detail="Thiếu dataset_id.")
 
         rows = []
 
-        # Tìm theo source_url
+        # TÌM THEO SOURCE_URL
         try:
             res_url = (
                 supabase
                 .table("scraped_reviews")
-                .select("id, dataset_id, dataset_name, source_url")
+                .select("id") # Chỉ cần lấy id cho nhẹ, không cần lấy name hay url
                 .eq("user_id", user_id)
                 .eq("source_url", dataset_key)
                 .execute()
             )
             rows.extend(res_url.data or [])
         except Exception as url_error:
-            print(f"Không tìm được theo source_url: {url_error}")
+            pass
 
-        # Tìm theo dataset_name
+        # TÌM THEO DATASET_NAME
         try:
             res_name = (
                 supabase
                 .table("scraped_reviews")
-                .select("id, dataset_id, dataset_name, source_url")
+                .select("id")
                 .eq("user_id", user_id)
                 .eq("dataset_name", dataset_key)
                 .execute()
             )
             rows.extend(res_name.data or [])
         except Exception as name_error:
-            print(f"Không tìm được theo dataset_name: {name_error}")
+            pass
 
-        # Tìm theo dataset_id nếu là UUID
+        # TÌM THEO DATASET_ID (UUID)
         try:
             uuid.UUID(dataset_key)
-
             res_dataset_id = (
                 supabase
                 .table("scraped_reviews")
-                .select("id, dataset_id, dataset_name, source_url")
+                .select("id")
                 .eq("user_id", user_id)
                 .eq("dataset_id", dataset_key)
                 .execute()
@@ -242,14 +239,11 @@ async def delete_user_dataset(dataset_id: str, user_id: str):
             rows.extend(res_dataset_id.data or [])
         except ValueError:
             pass
-        except Exception as dataset_error:
-            print(f"Không tìm được theo dataset_id: {dataset_error}")
+        except Exception:
+            pass
 
-        review_ids = list({
-            row.get("id")
-            for row in rows
-            if row.get("id")
-        })
+        # LỌC LẤY ID DUY NHẤT
+        review_ids = list({row.get("id") for row in rows if row.get("id")})
 
         if not review_ids:
             return {
@@ -258,6 +252,7 @@ async def delete_user_dataset(dataset_id: str, user_id: str):
                 "deleted_count": 0,
             }
 
+        # THỰC HIỆN XÓA
         delete_res = (
             supabase
             .table("scraped_reviews")
@@ -269,12 +264,11 @@ async def delete_user_dataset(dataset_id: str, user_id: str):
         return {
             "status": "success",
             "message": "Đã xóa dữ liệu đã chọn.",
-            "deleted_count": len(delete_res.data or review_ids),
+            "deleted_count": len(review_ids),
         }
 
     except HTTPException:
         raise
-
     except Exception as e:
         print(f"Lỗi API delete_user_dataset: {e}")
         raise HTTPException(
