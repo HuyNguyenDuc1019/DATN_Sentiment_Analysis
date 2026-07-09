@@ -224,7 +224,6 @@ const runUrlAnalysis = async ({ customDate } = {}) => {
     setUrlLoading(false);
   }
 };
-
   const value = useMemo(
     () => ({
       batch: {

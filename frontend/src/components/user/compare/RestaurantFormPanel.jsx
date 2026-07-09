@@ -1,6 +1,102 @@
 import { Link2, Loader2, Plus, Sparkles, Trash2, Utensils, XCircle } from 'lucide-react';
 
-import { inferRestaurantNameFromUrl } from '../../../utils/user/compareUtils';
+const getFallbackName = (index) => `Quán ${String.fromCharCode(65 + index)}`;
+
+const normalizeInputUrl = (value) => {
+  const text = String(value || '').trim();
+
+  if (!text) return '';
+
+  if (/^https?:\/\//i.test(text)) {
+    return text;
+  }
+
+  if (
+    text.startsWith('google.com') ||
+    text.startsWith('www.google.com') ||
+    text.startsWith('maps.google.com') ||
+    text.startsWith('foody.vn') ||
+    text.startsWith('www.foody.vn')
+  ) {
+    return `https://${text}`;
+  }
+
+  return text;
+};
+
+const extractRestaurantNameFromUrl = (value, fallbackName = 'Quán') => {
+  if (!value) return fallbackName;
+
+  const normalizedUrl = normalizeInputUrl(value);
+
+  try {
+    const decoded = decodeURIComponent(normalizedUrl);
+
+    if (decoded.includes('google.com/maps') && decoded.includes('/place/')) {
+      const placePart = decoded.split('/place/')[1]?.split('/')[0];
+
+      const placeName = String(placePart || '')
+        .replace(/\+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      return placeName || fallbackName;
+    }
+
+    if (decoded.includes('foody.vn')) {
+      const url = new URL(decoded);
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      const lastPart = pathParts[pathParts.length - 1];
+
+      if (lastPart) {
+        return lastPart
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, (char) => char.toUpperCase())
+          .trim();
+      }
+    }
+
+    return fallbackName;
+  } catch {
+    try {
+      const decoded = decodeURIComponent(String(value || ''));
+
+      if (decoded.includes('/place/')) {
+        const placePart = decoded.split('/place/')[1]?.split('/')[0];
+
+        const placeName = String(placePart || '')
+          .replace(/\+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        return placeName || fallbackName;
+      }
+
+      return fallbackName;
+    } catch {
+      return fallbackName;
+    }
+  }
+};
+
+const shouldAutoOverwriteName = (currentName, fallbackName) => {
+  const name = String(currentName || '').trim();
+
+  if (!name) return true;
+  if (name === fallbackName) return true;
+
+  const lower = name.toLowerCase();
+
+  return (
+    lower.startsWith('data=') ||
+    lower.startsWith('data=!') ||
+    lower.includes('!3m') ||
+    lower.includes('!4m') ||
+    lower.includes('google.com/maps') ||
+    lower.includes('http://') ||
+    lower.includes('https://')
+  );
+};
 
 export default function RestaurantFormPanel({
   restaurants,
@@ -12,6 +108,50 @@ export default function RestaurantFormPanel({
   onCompare,
   onStopCompare,
 }) {
+  const handleUrlChange = (index, nextUrl) => {
+    const currentItem = restaurants[index];
+    const fallbackName = getFallbackName(index);
+    const inferredName = extractRestaurantNameFromUrl(nextUrl, fallbackName);
+
+    onUpdateRestaurant(index, 'url', nextUrl);
+
+    if (
+      inferredName &&
+      inferredName !== fallbackName &&
+      shouldAutoOverwriteName(currentItem?.name, fallbackName)
+    ) {
+      onUpdateRestaurant(index, 'name', inferredName);
+    }
+  };
+
+  const handleUrlBlur = (index) => {
+    const currentItem = restaurants[index];
+    const fallbackName = getFallbackName(index);
+    const inferredName = extractRestaurantNameFromUrl(currentItem?.url, fallbackName);
+
+    if (
+      inferredName &&
+      inferredName !== fallbackName &&
+      shouldAutoOverwriteName(currentItem?.name, fallbackName)
+    ) {
+      onUpdateRestaurant(index, 'name', inferredName);
+    }
+  };
+
+  const handleNameBlur = (index) => {
+    const currentItem = restaurants[index];
+    const fallbackName = getFallbackName(index);
+    const inferredName = extractRestaurantNameFromUrl(currentItem?.url, fallbackName);
+
+    if (
+      inferredName &&
+      inferredName !== fallbackName &&
+      shouldAutoOverwriteName(currentItem?.name, fallbackName)
+    ) {
+      onUpdateRestaurant(index, 'name', inferredName);
+    }
+  };
+
   return (
     <div className="rounded-3xl border border-slate-700 bg-slate-800/40 p-6 backdrop-blur-md">
       <div className="mb-6 flex items-center justify-between gap-3">
@@ -34,13 +174,19 @@ export default function RestaurantFormPanel({
 
       <div className="space-y-4">
         {restaurants.map((item, index) => (
-          <div key={index} className="rounded-2xl border border-slate-700/70 bg-slate-950/30 p-4">
+          <div
+            key={index}
+            className="rounded-2xl border border-slate-700/70 bg-slate-950/30 p-4"
+          >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
                   <Utensils className="h-4 w-4" />
                 </div>
-                <h3 className="font-semibold text-white">Quán {String.fromCharCode(65 + index)}</h3>
+
+                <h3 className="font-semibold text-white">
+                  Quán {String.fromCharCode(65 + index)}
+                </h3>
               </div>
 
               {restaurants.length > 2 && (
@@ -58,26 +204,19 @@ export default function RestaurantFormPanel({
               <input
                 value={item.name}
                 onChange={(event) => onUpdateRestaurant(index, 'name', event.target.value)}
-                onBlur={() => {
-                  if (!item.name.trim() && item.url.trim()) {
-                    onUpdateRestaurant(index, 'name', inferRestaurantNameFromUrl(item.url, `Quán ${String.fromCharCode(65 + index)}`));
-                  }
-                }}
+                onBlur={() => handleNameBlur(index)}
                 placeholder="Tên quán, có thể bỏ trống"
                 className="rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
 
               <div className="relative">
                 <Link2 className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
                 <input
                   value={item.url}
-                  onChange={(event) => onUpdateRestaurant(index, 'url', event.target.value)}
-                  onBlur={() => {
-                    if (!item.name.trim() && item.url.trim()) {
-                      onUpdateRestaurant(index, 'name', inferRestaurantNameFromUrl(item.url, `Quán ${String.fromCharCode(65 + index)}`));
-                    }
-                  }}
-                  placeholder="Dán link Foody/Shopee/Google review của quán..."
+                  onChange={(event) => handleUrlChange(index, event.target.value)}
+                  onBlur={() => handleUrlBlur(index)}
+                  placeholder="Dán link Foody/Google review của quán..."
                   className="w-full rounded-xl border border-slate-700 bg-slate-950/70 py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -109,7 +248,11 @@ export default function RestaurantFormPanel({
             disabled={!canCompare || isComparing}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-950/25 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isComparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {isComparing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
             {isComparing ? 'Đang so sánh...' : 'Bắt đầu so sánh'}
           </button>
         </div>

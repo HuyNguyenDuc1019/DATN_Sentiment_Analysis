@@ -19,6 +19,7 @@ export default function UrlInputPanel({
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+
             <input
               type="text"
               value={url}
@@ -66,8 +67,11 @@ export default function UrlInputPanel({
           <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
             <div className="mb-2 flex flex-col gap-1 text-xs font-medium text-indigo-100 sm:flex-row sm:items-center sm:justify-between">
               <span>Đang nạp dữ liệu từ đường dẫn.</span>
-              <span className="text-slate-300">Bạn có thể chuyển trang, hệ thống vẫn tiếp tục xử lý.</span>
+              <span className="text-slate-300">
+                Bạn có thể chuyển trang, hệ thống vẫn tiếp tục xử lý.
+              </span>
             </div>
+
             <div className="h-2 overflow-hidden rounded-full bg-slate-900">
               <div className="h-full w-full origin-left animate-pulse rounded-full bg-gradient-to-r from-indigo-500 via-violet-400 to-cyan-300" />
             </div>

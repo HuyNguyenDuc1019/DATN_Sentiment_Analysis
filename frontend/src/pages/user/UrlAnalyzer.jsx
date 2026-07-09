@@ -15,10 +15,6 @@ export default function UrlAnalyzer() {
   const { url, setUrl, results, count, loading, filter, setFilter, analyze } = urlAnalyzer;
 
   const [page, setPage] = useState(1);
-
-  // Mốc thời gian bắt đầu cào.
-  // Bỏ trống: backend tự dùng lastScrapedDate để cào tiếp nối dữ liệu cũ.
-  // Có chọn ngày: backend cào lại từ ngày này.
   const [customDate, setCustomDate] = useState('');
 
   const pageSize = 6;
@@ -30,8 +26,13 @@ export default function UrlAnalyzer() {
     ? results.reduce((sum, item) => sum + normalizeConfidence(item.confidence), 0) / results.length
     : 0;
 
-  const visible = results.filter((item) =>
-    filter === 'all' || (filter === 'positive' ? item.prediction === 1 : item.prediction === 0)
+  const visible = useMemo(
+    () =>
+      results.filter((item) =>
+        filter === 'all' ||
+        (filter === 'positive' ? item.prediction === 1 : item.prediction === 0),
+      ),
+    [results, filter],
   );
 
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
@@ -45,12 +46,17 @@ export default function UrlAnalyzer() {
     setPage(1);
   }, [filter, results.length]);
 
+  const handleAnalyze = () => {
+    analyze({ customDate });
+  };
+
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
       <div>
         <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">
           Thu thập phản hồi từ đường dẫn
         </h1>
+
         <p className="text-slate-400 text-sm">
           Dán link quán hoặc gian hàng để hệ thống thu thập phản hồi và cập nhật trang Tổng quan.
         </p>
@@ -61,7 +67,7 @@ export default function UrlAnalyzer() {
           url={url}
           setUrl={setUrl}
           loading={loading}
-          analyze={() => analyze({ customDate })}
+          analyze={handleAnalyze}
           customDate={customDate}
           setCustomDate={setCustomDate}
         />

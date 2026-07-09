@@ -270,3 +270,32 @@ async def delete_user_dataset(dataset_id: str, user_id: str):
             status_code=500,
             detail=f"Không thể xóa dữ liệu đã chọn: {str(e)}"
         )
+@router.delete("/data/clear")
+async def clear_user_data(user_id: str):
+    try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Thiếu user_id.")
+
+        delete_res = (
+            supabase
+            .table("scraped_reviews")
+            .delete()
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        return {
+            "status": "success",
+            "message": "Đã xóa toàn bộ dữ liệu thành công.",
+            "deleted_count": len(delete_res.data or []),
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print(f"Lỗi API clear_user_data: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Không thể xóa toàn bộ dữ liệu: {str(e)}"
+        )

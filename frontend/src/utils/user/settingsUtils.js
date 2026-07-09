@@ -3,7 +3,7 @@ export function formatDatasetType(type) {
 
   if (value === 'csv') return 'CSV';
   if (value === 'foody') return 'Foody';
-  if (value === 'shopee') return 'Shopee';
+  if (value === 'goole') return 'Goole';
 
   return 'URL';
 }

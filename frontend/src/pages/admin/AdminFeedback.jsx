@@ -238,49 +238,74 @@ export default function AdminFeedback() {
   };
 
   const handleReview = async (item, action) => {
-    const status = action === 'approve' ? 'approved' : 'rejected';
-    const actionText = action === 'approve' ? 'duyệt' : 'từ chối';
+  const currentStatus = normalizeStatus(item.status);
 
-    setUpdatingId(item.id);
+  if (currentStatus === 'approved') {
+    toast.error('Phản hồi này đã được duyệt trước đó.', {
+      id: `admin-feedback-already-approved-${item.id}`,
+    });
+    return;
+  }
 
-    try {
-      const adminId = await getAdminId();
-      const response = await reviewFeedback({
-        adminId,
-        feedbackId: item.id,
-        action,
-      });
+  if (currentStatus === 'rejected') {
+    toast.error('Phản hồi này đã bị từ chối trước đó.', {
+      id: `admin-feedback-already-rejected-${item.id}`,
+    });
+    return;
+  }
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(getErrorMessage(err, 'Không thể duyệt phản hồi.'));
-      }
+  const status = action === 'approve' ? 'approved' : 'rejected';
+  const actionText = action === 'approve' ? 'duyệt' : 'từ chối';
 
-      setItems((current) =>
-        current.map((feedback) => (feedback.id === item.id ? { ...feedback, status } : feedback)),
-      );
+  setUpdatingId(item.id);
 
-      toast.success(`Đã ${actionText} phản hồi thành công!`, {
-        id: `admin-feedback-${action}-${item.id}`,
-      });
+  try {
+    const adminId = await getAdminId();
 
-      logAdminActivity({
-        actionType: action === 'approve' ? 'feedback_approved' : 'feedback_rejected',
-        targetType: 'feedback',
-        targetId: item.id,
-        description: `${actionText} phản hồi: "${(item.original_content || '').slice(0, 60)}${
-          (item.original_content || '').length > 60 ? '...' : ''
-        }"`,
-      });
-    } catch (error) {
-      console.error('Lỗi duyệt phản hồi:', error);
-      toast.error(`Không thể ${actionText} phản hồi: ${error.message}`, {
-        id: `admin-feedback-${action}-error`,
-      });
-    } finally {
-      setUpdatingId('');
+    const response = await reviewFeedback({
+      adminId,
+      feedbackId: item.id,
+      action,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => null);
+      throw new Error(getErrorMessage(err, 'Không thể duyệt phản hồi.'));
     }
-  };
+
+    setItems((current) =>
+      current.map((feedback) =>
+        feedback.id === item.id
+          ? {
+              ...feedback,
+              status,
+            }
+          : feedback,
+      ),
+    );
+
+    toast.success(`Đã ${actionText} phản hồi thành công!`, {
+      id: `admin-feedback-${action}-${item.id}`,
+    });
+
+    logAdminActivity({
+      actionType: action === 'approve' ? 'feedback_approved' : 'feedback_rejected',
+      targetType: 'feedback',
+      targetId: item.id,
+      description: `${actionText} phản hồi: "${(item.original_content || '').slice(0, 60)}${
+        (item.original_content || '').length > 60 ? '...' : ''
+      }"`,
+    });
+  } catch (error) {
+    console.error('Lỗi duyệt phản hồi:', error);
+
+    toast.error(`Không thể ${actionText} phản hồi: ${error.message}`, {
+      id: `admin-feedback-${action}-error`,
+    });
+  } finally {
+    setUpdatingId('');
+  }
+};
 
   const handleExport = async () => {
     try {

@@ -68,12 +68,28 @@ export default function RestaurantCompare() {
   const canCompare = restaurants.filter((item) => normalizeUrl(item.url)).length >= 2;
 
   const updateRestaurant = (index, field, value) => {
-    setRestaurants((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item,
-      ),
-    );
-  };
+  setRestaurants((current) =>
+    current.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+
+      const nextItem = {
+        ...item,
+        [field]: value,
+      };
+
+      if (field === 'url' && !item.name.trim() && value.trim()) {
+        const fallbackName = `Quán ${String.fromCharCode(65 + index)}`;
+        const inferredName = inferRestaurantNameFromUrl(value, fallbackName);
+
+        if (inferredName && inferredName !== fallbackName) {
+          nextItem.name = inferredName;
+        }
+      }
+
+      return nextItem;
+    }),
+  );
+};
 
   const addRestaurant = () => {
     if (!isVip) {

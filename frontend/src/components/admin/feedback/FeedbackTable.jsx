@@ -6,6 +6,20 @@ import FeedbackStatusBadge from './FeedbackStatusBadge';
 import MismatchBadge from './MismatchBadge';
 import { formatDate, isFeedbackMismatch } from '../../../utils/admin/feedbackUtils';
 
+const normalizeFeedbackStatus = (value) => {
+  const status = String(value || '').trim().toLowerCase();
+
+  if (status === 'approved' || status === 'đã duyệt' || status === 'da duyet') {
+    return 'approved';
+  }
+
+  if (status === 'rejected' || status === 'đã từ chối' || status === 'da tu choi') {
+    return 'rejected';
+  }
+
+  return 'pending';
+};
+
 export default function FeedbackTable({
   isLoading,
   filteredItems,
@@ -46,7 +60,9 @@ export default function FeedbackTable({
 
         <tbody className="divide-y divide-slate-700/50">
           {isLoading ? (
-            Array(5).fill(0).map((_, index) => <FeedbackTableSkeletonRow key={index} />)
+            Array(5)
+              .fill(0)
+              .map((_, index) => <FeedbackTableSkeletonRow key={index} />)
           ) : filteredItems.length === 0 ? (
             <tr>
               <td colSpan="10" className="px-5 py-12 text-center text-slate-500 text-sm">
@@ -56,7 +72,27 @@ export default function FeedbackTable({
           ) : (
             paginatedItems.map((item) => {
               const profile = profiles[item.user_id] || {};
-              const disabled = updatingId === item.id;
+              const normalizedStatus = normalizeFeedbackStatus(item.status);
+
+              const isApproved = normalizedStatus === 'approved';
+              const isRejected = normalizedStatus === 'rejected';
+              const isReviewed = isApproved || isRejected;
+              const isUpdating = updatingId === item.id;
+
+              const approveDisabled = isUpdating || isReviewed;
+              const rejectDisabled = isUpdating || isReviewed;
+
+              const approveTitle = isApproved
+                ? 'Phản hồi này đã được duyệt'
+                : isRejected
+                  ? 'Phản hồi này đã bị từ chối'
+                  : 'Duyệt';
+
+              const rejectTitle = isApproved
+                ? 'Phản hồi này đã được duyệt'
+                : isRejected
+                  ? 'Phản hồi này đã bị từ chối'
+                  : 'Từ chối';
 
               return (
                 <tr
@@ -98,7 +134,10 @@ export default function FeedbackTable({
                   <td className="px-5 py-4 min-w-[150px]">
                     <div className="flex items-center gap-2 whitespace-nowrap">
                       {isFeedbackMismatch(item) && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500" title="Người dùng đã sửa nhãn" />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-orange-500"
+                          title="Người dùng đã sửa nhãn"
+                        />
                       )}
                       <FeedbackLabelBadge value={item.corrected_label} />
                     </div>
@@ -109,11 +148,17 @@ export default function FeedbackTable({
                   </td>
 
                   <td className="px-5 py-4 text-sm">
-                    <p className="text-slate-200 font-medium truncate max-w-[160px]">{profile.full_name || 'Người dùng'}</p>
-                    <p className="text-xs text-slate-500 truncate max-w-[160px]">{profile.email || item.user_id || 'Không rõ'}</p>
+                    <p className="text-slate-200 font-medium truncate max-w-[160px]">
+                      {profile.full_name || 'Người dùng'}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate max-w-[160px]">
+                      {profile.email || item.user_id || 'Không rõ'}
+                    </p>
                   </td>
 
-                  <td className="px-5 py-4 text-xs text-slate-400 whitespace-nowrap">{formatDate(item.created_at)}</td>
+                  <td className="px-5 py-4 text-xs text-slate-400 whitespace-nowrap">
+                    {formatDate(item.created_at)}
+                  </td>
 
                   <td className="px-5 py-4 min-w-[110px]">
                     <FeedbackStatusBadge status={item.status} />
@@ -122,6 +167,7 @@ export default function FeedbackTable({
                   <td className="px-5 py-4 text-right" onClick={(event) => event.stopPropagation()}>
                     <div className="flex justify-end items-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                       <button
+                        type="button"
                         onClick={() => onOpenDetailModal(item)}
                         className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
                         title="Xem chi tiết"
@@ -130,21 +176,39 @@ export default function FeedbackTable({
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => onReview(item, 'approve')}
-                        disabled={disabled}
-                        className="flex items-center justify-center w-8 h-8 rounded text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Duyệt"
+                        disabled={approveDisabled}
+                        className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
+                          approveDisabled
+                            ? 'cursor-not-allowed text-slate-600 opacity-40'
+                            : 'text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10'
+                        }`}
+                        title={approveTitle}
                       >
-                        {disabled ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                        {isUpdating ? (
+                          <RefreshCw size={18} className="animate-spin" />
+                        ) : (
+                          <CheckCircle2 size={20} />
+                        )}
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => onReview(item, 'reject')}
-                        disabled={disabled}
-                        className="flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Từ chối"
+                        disabled={rejectDisabled}
+                        className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
+                          rejectDisabled
+                            ? 'cursor-not-allowed text-slate-600 opacity-40'
+                            : 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/10'
+                        }`}
+                        title={rejectTitle}
                       >
-                        {disabled ? <RefreshCw size={18} className="animate-spin" /> : <XCircle size={20} />}
+                        {isUpdating ? (
+                          <RefreshCw size={18} className="animate-spin" />
+                        ) : (
+                          <XCircle size={20} />
+                        )}
                       </button>
                     </div>
                   </td>
@@ -161,18 +225,34 @@ export default function FeedbackTable({
 function FeedbackTableSkeletonRow() {
   return (
     <tr>
-      <td className="px-4 py-4"><div className="w-3.5 h-3.5 bg-slate-700/50 rounded animate-pulse" /></td>
+      <td className="px-4 py-4">
+        <div className="w-3.5 h-3.5 bg-slate-700/50 rounded animate-pulse" />
+      </td>
       <td className="px-5 py-4">
         <div className="w-3/4 h-4 bg-slate-700/50 rounded animate-pulse mb-2" />
         <div className="w-1/2 h-4 bg-slate-700/50 rounded animate-pulse" />
       </td>
-      <td className="px-5 py-4"><div className="w-20 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-20 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-20 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-12 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-24 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-20 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-16 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
+      <td className="px-5 py-4">
+        <div className="w-20 h-6 bg-slate-700/50 rounded-full animate-pulse" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="w-20 h-4 bg-slate-700/50 rounded animate-pulse" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="w-20 h-6 bg-slate-700/50 rounded-full animate-pulse" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="w-12 h-4 bg-slate-700/50 rounded animate-pulse" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="w-24 h-4 bg-slate-700/50 rounded animate-pulse" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="w-20 h-4 bg-slate-700/50 rounded animate-pulse" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="w-16 h-6 bg-slate-700/50 rounded-full animate-pulse" />
+      </td>
       <td className="px-5 py-4 text-right">
         <div className="flex justify-end gap-2">
           <div className="w-8 h-8 bg-slate-700/50 rounded animate-pulse" />
