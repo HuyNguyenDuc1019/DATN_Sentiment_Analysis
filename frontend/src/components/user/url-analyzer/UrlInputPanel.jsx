@@ -1,6 +1,13 @@
-import { BarChart2, Link as LinkIcon, Search } from 'lucide-react';
+import { BarChart2, CalendarDays, Link as LinkIcon, Search } from 'lucide-react';
 
-export default function UrlInputPanel({ url, setUrl, loading, analyze }) {
+export default function UrlInputPanel({
+  url,
+  setUrl,
+  loading,
+  analyze,
+  customDate,
+  setCustomDate,
+}) {
   return (
     <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col justify-center">
       <div className="flex items-center gap-2 mb-4 text-slate-200 font-medium">
@@ -8,7 +15,7 @@ export default function UrlInputPanel({ url, setUrl, loading, analyze }) {
         <h2>Đường dẫn cần theo dõi</h2>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
@@ -17,7 +24,7 @@ export default function UrlInputPanel({ url, setUrl, loading, analyze }) {
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               onKeyDown={(event) => event.key === 'Enter' && !loading && analyze()}
-              placeholder="Dán link Foody/Shopee vào đây..."
+              placeholder="Dán link Foody hoặc Google Maps vào đây..."
               className="w-full bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
           </div>
@@ -34,6 +41,25 @@ export default function UrlInputPanel({ url, setUrl, loading, analyze }) {
             <BarChart2 className="w-5 h-5" />
             {loading ? 'ĐANG THU THẬP...' : 'THU THẬP'}
           </button>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm text-slate-300 mb-2">
+            <CalendarDays className="w-4 h-4 text-indigo-400" />
+            Mốc thời gian bắt đầu cào
+          </label>
+
+          <input
+            type="date"
+            value={customDate}
+            onChange={(event) => setCustomDate(event.target.value)}
+            disabled={loading}
+            className="w-full max-w-xs bg-slate-900 border border-slate-700 text-slate-200 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-60"
+          />
+
+          <p className="text-xs text-slate-500 mt-2">
+            Bỏ trống nếu muốn tự động cào tiếp nối dữ liệu cũ. Chọn ngày nếu muốn cào lại từ mốc thời gian cụ thể.
+          </p>
         </div>
 
         {loading && (

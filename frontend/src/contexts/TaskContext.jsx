@@ -157,67 +157,73 @@ export function TaskProvider({ children }) {
     }
   };
 
-  const runUrlAnalysis = async () => {
-    if (!user?.id) {
-      toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
-      return;
+const runUrlAnalysis = async ({ customDate } = {}) => {
+  if (!user?.id) {
+    toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
+    return;
+  }
+
+  const cleanUrl = url.trim();
+
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    toast.error('Vui lòng nhập đường dẫn hợp lệ.');
+    return;
+  }
+
+  if (urlLoading) return;
+
+  const sourceInfo = detectUrlSource(cleanUrl);
+  const isVip = userProfile?.tier === 'vip';
+
+  if (sourceInfo.type === 'unknown') {
+    toast.error('Hệ thống hiện chỉ hỗ trợ link Foody và Google Maps.');
+    return;
+  }
+
+  if (sourceInfo.type === 'google_maps' && !isVip) {
+    toast.error('Tính năng phân tích Google Maps chỉ dành cho tài khoản VIP.');
+    return;
+  }
+
+  setUrlLoading(true);
+  const loadingToast = toast.loading(BACKGROUND_MESSAGE);
+
+  try {
+    const payload = {
+      url: cleanUrl,
+      user_id: user.id,
+      dataset_name: sourceInfo.name,
+      dataset_type: sourceInfo.type,
+    };
+
+    if (customDate) {
+      payload.custom_start_date = new Date(customDate).toISOString();
     }
 
-    const cleanUrl = url.trim();
+    const data = await analyzeUrl(payload);
 
-    if (!/^https?:\/\//i.test(cleanUrl)) {
-      toast.error('Vui lòng nhập đường dẫn hợp lệ.');
-      return;
-    }
+    const receivedCount = Number(data.count || data.results?.length || 0);
 
-    if (urlLoading) return;
+    setUrlResults(data.results || []);
+    setUrlCount(receivedCount);
 
-    const sourceInfo = detectUrlSource(cleanUrl);
-    const isVip = userProfile?.tier === 'vip';
+    const successMessage =
+      receivedCount > 0
+        ? `Đã tiếp nhận ${receivedCount} phản hồi từ ${sourceInfo.name}. Dashboard sẽ cập nhật sau ít phút.`
+        : `Đã kiểm tra ${sourceInfo.name}. Hiện chưa có phản hồi mới để cập nhật.`;
 
-    if (sourceInfo.type === 'unknown') {
-      toast.error('Hệ thống hiện chỉ hỗ trợ link Foody và Google Maps.');
-      return;
-    }
-
-    if (sourceInfo.type === 'google_maps' && !isVip) {
-      toast.error('Tính năng phân tích Google Maps chỉ dành cho tài khoản VIP.');
-      return;
-    }
-
-    setUrlLoading(true);
-    const loadingToast = toast.loading(BACKGROUND_MESSAGE);
-
-    try {
-      const data = await analyzeUrl({
-        url: cleanUrl,
-        user_id: user.id,
-        dataset_name: sourceInfo.name,
-        dataset_type: sourceInfo.type,
-      });
-
-      const receivedCount = Number(data.count || data.results?.length || 0);
-
-      setUrlResults(data.results || []);
-      setUrlCount(receivedCount);
-
-      const successMessage =
-        receivedCount > 0
-          ? `Đã tiếp nhận ${receivedCount} phản hồi từ ${sourceInfo.name}. Dashboard sẽ cập nhật sau ít phút.`
-          : `Đã kiểm tra ${sourceInfo.name}. Hiện chưa có phản hồi mới để cập nhật.`;
-
-      toast.success(successMessage, { id: loadingToast });
-    } catch (error) {
-      toast.error(
-        error.message === 'Failed to fetch'
-          ? 'Không kết nối được bộ thu thập dữ liệu tại cổng 3000.'
-          : error.message,
-        { id: loadingToast },
-      );
-    } finally {
-      setUrlLoading(false);
-    }
-  };
+    toast.success(successMessage, { id: loadingToast });
+  } catch (error) {
+    toast.error(
+      error.message === 'Failed to fetch'
+        ? 'Không kết nối được bộ thu thập dữ liệu tại cổng 3000.'
+        : error.message,
+      { id: loadingToast },
+    );
+  } finally {
+    setUrlLoading(false);
+  }
+};
 
   const value = useMemo(
     () => ({

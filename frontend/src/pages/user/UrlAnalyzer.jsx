@@ -16,10 +16,16 @@ export default function UrlAnalyzer() {
 
   const [page, setPage] = useState(1);
 
+  // Mốc thời gian bắt đầu cào.
+  // Bỏ trống: backend tự dùng lastScrapedDate để cào tiếp nối dữ liệu cũ.
+  // Có chọn ngày: backend cào lại từ ngày này.
+  const [customDate, setCustomDate] = useState('');
+
   const pageSize = 6;
   const receivedCount = Number(count || results.length || 0);
 
   const positive = results.filter((item) => item.prediction === 1).length;
+
   const avgConfidence = results.length
     ? results.reduce((sum, item) => sum + normalizeConfidence(item.confidence), 0) / results.length
     : 0;
@@ -42,7 +48,9 @@ export default function UrlAnalyzer() {
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
       <div>
-        <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">Thu thập phản hồi từ đường dẫn</h1>
+        <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">
+          Thu thập phản hồi từ đường dẫn
+        </h1>
         <p className="text-slate-400 text-sm">
           Dán link quán hoặc gian hàng để hệ thống thu thập phản hồi và cập nhật trang Tổng quan.
         </p>
@@ -53,7 +61,9 @@ export default function UrlAnalyzer() {
           url={url}
           setUrl={setUrl}
           loading={loading}
-          analyze={analyze}
+          analyze={() => analyze({ customDate })}
+          customDate={customDate}
+          setCustomDate={setCustomDate}
         />
 
         <ResponseCounterCard receivedCount={receivedCount} />
@@ -61,17 +71,20 @@ export default function UrlAnalyzer() {
 
       <div>
         <h2 className="text-lg font-medium text-white mb-4">Thông tin vừa thu thập</h2>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <UrlStatsCard
             icon={<MessageSquare className="w-5 h-5 text-indigo-400" />}
             title="Tổng phản hồi"
             value={receivedCount.toLocaleString('vi-VN')}
           />
+
           <UrlStatsCard
             icon={<ShieldCheck className="w-5 h-5 text-indigo-400" />}
             title="Độ chắc chắn trung bình"
             value={`${(avgConfidence * 100).toFixed(1)}%`}
           />
+
           <UrlStatsCard
             icon={<ThumbsUp className="w-5 h-5 text-emerald-400" />}
             title="Tỷ lệ khách hài lòng"
