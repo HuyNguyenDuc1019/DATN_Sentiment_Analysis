@@ -4,7 +4,7 @@ import os
 from app.predictor import SentimentPredictor
 
 # Import routers
-from app.api.routers import admin, user, predict, dashboard, feedback, compare
+from app.api.routers import admin, user, predict, dashboard, feedback, compare, payment
 
 app = FastAPI(
     title="Foody Sentiment Analysis API",
@@ -42,3 +42,4 @@ app.include_router(predict.router)
 app.include_router(dashboard.router)
 app.include_router(feedback.router)
 app.include_router(compare.router)
+app.include_router(payment.router)
