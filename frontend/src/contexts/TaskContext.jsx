@@ -221,7 +221,7 @@ export function TaskProvider({ children }) {
     }
   };
 
-  const runUrlAnalysis = async () => {
+  const runUrlAnalysis = async (customDate = '') => {
     if (!user?.id) {
       toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
       return;
@@ -266,6 +266,10 @@ export function TaskProvider({ children }) {
         dataset_name: sourceInfo.name,
         dataset_type: sourceInfo.type,
       };
+
+      if (customDate) {
+        payload.custom_start_date = new Date(customDate).toISOString();
+      }
 
       console.log('Payload gửi xuống scraper:', payload);
 

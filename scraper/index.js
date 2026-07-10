@@ -320,16 +320,19 @@ async function sendReviewsToPredictBatch({
   }
 }
 
-async function scrapeFoodyForCompare(url) {
-  const cachedReviews = getCompareCache(url);
-
-  if (cachedReviews) {
-    console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận cho ${url}`);
-    return cachedReviews;
-  }
-
-  console.log('⚖️ Đang cào Foody cho chức năng so sánh, không lưu DB...');
+async function scrapeFoody(
+  url,
+  userId,
+  lastScrapedDate,
+  datasetName = 'Foody',
+  datasetType = 'foody',
+  scrapeTask = null,
+) {
+  console.log(`🤖 Nhận lệnh cào Foody từ User ID: ${userId}`);
+  console.log(`⏱️ Mốc thời gian bắt đầu cào: ${lastScrapedDate || 'Chưa từng cào'}`);
   console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
+
+  ensureTaskNotStopped(scrapeTask);
 
   const browser = await puppeteer.launch({
     headless: false,
@@ -339,6 +342,8 @@ async function scrapeFoodyForCompare(url) {
   const page = await browser.newPage();
 
   try {
+    ensureTaskNotStopped(scrapeTask);
+
     console.log(`🌐 Đang truy cập trang: ${url}`);
 
     await page.goto(url, {
@@ -346,19 +351,27 @@ async function scrapeFoodyForCompare(url) {
       timeout: 60000,
     });
 
-    console.log('⏳ Đang đợi Foody khởi tạo giao diện...');
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    ensureTaskNotStopped(scrapeTask);
 
-    console.log('⏳ Đang tìm và click nút "Xem thêm bình luận" cho so sánh...');
+    console.log('⏳ Đang đợi Foody khởi tạo giao diện...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    ensureTaskNotStopped(scrapeTask);
+
+    console.log('⏳ Đang tìm và tự động click nút "Xem thêm bình luận"...');
 
     let hasMoreComments = true;
     let clickCount = 0;
 
-    while (hasMoreComments && clickCount < 3) {
+    while (hasMoreComments && clickCount < 50) {
+      ensureTaskNotStopped(scrapeTask);
+
       try {
         await page.waitForSelector('a.fd-btn-more', {
-          timeout: 1500,
+          timeout: 2000,
         });
+
+        ensureTaskNotStopped(scrapeTask);
 
         const clicked = await page.evaluate(() => {
           const buttons = document.querySelectorAll('a.fd-btn-more');
@@ -383,16 +396,18 @@ async function scrapeFoodyForCompare(url) {
         }
 
         clickCount += 1;
-        console.log(`👉 Compare đã click "Xem thêm" lần ${clickCount}...`);
+        console.log(`👉 Đã click "Xem thêm" lần ${clickCount}...`);
 
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch {
         console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
         hasMoreComments = false;
       }
     }
 
-    console.log('🔍 Bắt đầu bóc tách bình luận cho so sánh...');
+    ensureTaskNotStopped(scrapeTask);
+
+    console.log('🔍 Bắt đầu bóc tách nội dung và ngày đăng...');
 
     const rawReviews = await page.evaluate(() => {
       const commentItems = document.querySelectorAll('.item-comment, .review-item');
@@ -423,29 +438,54 @@ async function scrapeFoodyForCompare(url) {
     });
 
     const cleanReviews = [];
+    const seenContents = new Set();
+    const startDate = lastScrapedDate ? new Date(lastScrapedDate) : null;
 
     for (const item of rawReviews) {
+      ensureTaskNotStopped(scrapeTask);
+
       const formattedText = cleanReviewText(item.text);
 
-      if (isValidComment(formattedText)) {
-        const reviewDate = parseFoodyDate(item.date_str);
-
-        cleanReviews.push({
-          content: formattedText,
-          review_date: reviewDate.toISOString(),
-        });
+      if (!isValidComment(formattedText)) {
+        continue;
       }
+
+      const reviewDate = parseFoodyDate(item.date_str);
+
+      if (startDate && reviewDate < startDate) {
+        console.log(
+          `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc ${startDate.toISOString()}`,
+        );
+        continue;
+      }
+
+      const contentKey = formattedText.toLowerCase().replace(/\s+/g, ' ').trim();
+
+      if (seenContents.has(contentKey)) {
+        console.log('⏭️ Bỏ qua bình luận trùng nội dung.');
+        continue;
+      }
+
+      seenContents.add(contentKey);
+
+      cleanReviews.push({
+        content: formattedText,
+        review_date: reviewDate.toISOString(),
+      });
     }
 
-    const limitedReviews = cleanReviews.slice(0, COMPARE_MAX_REVIEWS);
+    ensureTaskNotStopped(scrapeTask);
 
-    setCompareCache(url, limitedReviews);
+    console.log(`💎 Thành phẩm Foody: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`);
 
-    console.log(
-      `💎 Compare Foody: Thu thập ${cleanReviews.length}, gửi ${limitedReviews.length} bình luận, cache 15 phút!`,
-    );
-
-    return limitedReviews;
+    return sendReviewsToPredictBatch({
+      cleanReviews,
+      userId,
+      url,
+      datasetName,
+      datasetType,
+      scrapeTask,
+    });
   } finally {
     await browser.close();
   }
@@ -895,7 +935,14 @@ app.post('/api/scrape/stop', (req, res) => {
 });
 
 app.post('/api/scrape', async (req, res) => {
-  const { task_id, url, user_id, dataset_name, dataset_type } = req.body;
+  const {
+    task_id,
+    url,
+    user_id,
+    dataset_name,
+    dataset_type,
+    custom_start_date,
+  } = req.body;
 
   if (!url || !user_id) {
     return res.status(400).json({
@@ -918,10 +965,20 @@ app.post('/api/scrape', async (req, res) => {
 
     ensureTaskNotStopped(scrapeTask);
 
-    const lastScrapedDate = await getLastScrapedDate({
+    const dbLastScrapedDate = await getLastScrapedDate({
       url,
       userId: user_id,
     });
+
+    const lastScrapedDate = custom_start_date || dbLastScrapedDate;
+
+    if (custom_start_date) {
+      console.log(`📅 Sử dụng mốc ngày tùy chọn từ người dùng: ${custom_start_date}`);
+    } else {
+      console.log(
+        `📅 Sử dụng mốc ngày tự động từ database: ${dbLastScrapedDate || 'Chưa có'}`,
+      );
+    }
 
     ensureTaskNotStopped(scrapeTask);
 
@@ -959,6 +1016,8 @@ app.post('/api/scrape', async (req, res) => {
       source_url: url,
       dataset_name: finalDatasetName,
       dataset_type: finalDatasetType,
+      custom_start_date: custom_start_date || null,
+      last_scraped_date_used: lastScrapedDate || null,
       data: result,
     });
   } catch (error) {

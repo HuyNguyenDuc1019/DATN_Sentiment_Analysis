@@ -6,10 +6,8 @@ export default function UrlInputPanel({
   loading,
   analyze,
   stop,
-  startDate,
-  setStartDate,
-  endDate,
-  setEndDate,
+  customDate,
+  setCustomDate,
 }) {
   return (
     <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col justify-center">
@@ -55,45 +53,25 @@ export default function UrlInputPanel({
           )}
         </div>
 
-        <div className="rounded-2xl border border-slate-700/80 bg-slate-900/40 p-4">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-200">
             <CalendarDays className="h-4 w-4 text-indigo-400" />
-            <span>Bộ lọc thời gian</span>
-            
+            <span>Mốc thời gian bắt đầu cào</span>
+            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+              Tùy chọn
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Ngày bắt đầu
-              </label>
-
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                disabled={loading}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm font-medium text-slate-200 outline-none transition disabled:cursor-not-allowed disabled:text-slate-500 focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Ngày kết thúc
-              </label>
-
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                disabled={loading}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm font-medium text-slate-200 outline-none transition disabled:cursor-not-allowed disabled:text-slate-500 focus:border-indigo-500"
-              />
-            </div>
-          </div>
+          <input
+            type="date"
+            value={customDate}
+            onChange={(event) => setCustomDate(event.target.value)}
+            disabled={loading}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm font-medium text-slate-200 outline-none transition disabled:cursor-not-allowed disabled:text-slate-500 focus:border-indigo-500"
+          />
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            Hai mốc ngày này hiện chỉ dùng để hiển thị giao diện, chưa áp dụng vào logic thu thập dữ liệu.
+            Bỏ trống nếu muốn tự động nối tiếp dữ liệu. Chỉ chọn ngày nếu quán đổi chủ hoặc menu.
           </p>
         </div>
 
