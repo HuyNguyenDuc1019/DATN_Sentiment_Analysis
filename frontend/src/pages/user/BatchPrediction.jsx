@@ -17,7 +17,19 @@ export default function BatchPrediction() {
   const inputRef = useRef(null);
   const { userProfile, refreshUserProfile } = useAuth();
   const { batch } = useTasks();
-  const { file, texts, column, columns, results, loading, selectFile, setColumn, analyze } = batch;
+
+  const {
+    file,
+    texts,
+    column,
+    columns,
+    results,
+    loading,
+    selectFile,
+    setColumn,
+    analyze,
+    stop,
+  } = batch;
 
   const [page, setPage] = useState(1);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -30,6 +42,7 @@ export default function BatchPrediction() {
   }, [file?.name, results.length]);
 
   const tableData = useMemo(() => normalizeBatchResults(results), [results]);
+
   const { positiveCount, negativeCount, averageConfidence } = useMemo(
     () => getBatchStats(tableData),
     [tableData],
@@ -82,7 +95,11 @@ export default function BatchPrediction() {
             <Sparkles className="h-3.5 w-3.5" />
             CSV Sentiment Batch
           </div>
-          <h1 className="text-2xl font-semibold tracking-wide text-white">Nhập phản hồi từ file</h1>
+
+          <h1 className="text-2xl font-semibold tracking-wide text-white">
+            Nhập phản hồi từ file
+          </h1>
+
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
             Tải file CSV, chọn cột chứa bình luận và để hệ thống phân tích hàng loạt. Kết quả sẽ được ghi nhận để cập nhật Tổng quan.
           </p>
@@ -97,7 +114,13 @@ export default function BatchPrediction() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
         <div className="space-y-6">
-          <UploadCard file={file} count={texts.length} inputRef={inputRef} onFile={handleFileSelect} isVip={isVip} />
+          <UploadCard
+            file={file}
+            count={texts.length}
+            inputRef={inputRef}
+            onFile={handleFileSelect}
+            isVip={isVip}
+          />
 
           <ConfigCard
             columns={columns}
@@ -106,6 +129,7 @@ export default function BatchPrediction() {
             disabled={!texts.length || loading}
             loading={loading}
             onAnalyze={handleAnalyze}
+            onStop={stop}
             isVip={isVip}
           />
 

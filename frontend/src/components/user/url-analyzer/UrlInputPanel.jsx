@@ -1,12 +1,11 @@
-import { BarChart2, CalendarDays, Link as LinkIcon, Search } from 'lucide-react';
+import { BarChart2, Link as LinkIcon, Search, Square } from 'lucide-react';
 
 export default function UrlInputPanel({
   url,
   setUrl,
   loading,
   analyze,
-  customDate,
-  setCustomDate,
+  stop,
 }) {
   return (
     <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col justify-center">
@@ -30,45 +29,34 @@ export default function UrlInputPanel({
             />
           </div>
 
-          <button
-            onClick={analyze}
-            disabled={loading}
-            className={`flex items-center justify-center gap-2 rounded-xl py-3 px-8 font-semibold text-white transition-all shadow-lg whitespace-nowrap ${
-              loading
-                ? 'cursor-wait border border-indigo-300/50 bg-indigo-600 shadow-indigo-600/30'
-                : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20 hover:shadow-indigo-500/30'
-            }`}
-          >
-            <BarChart2 className="w-5 h-5" />
-            {loading ? 'ĐANG THU THẬP...' : 'THU THẬP'}
-          </button>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-sm text-slate-300 mb-2">
-            <CalendarDays className="w-4 h-4 text-indigo-400" />
-            Mốc thời gian bắt đầu cào
-          </label>
-
-          <input
-            type="date"
-            value={customDate}
-            onChange={(event) => setCustomDate(event.target.value)}
-            disabled={loading}
-            className="w-full max-w-xs bg-slate-900 border border-slate-700 text-slate-200 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-60"
-          />
-
-          <p className="text-xs text-slate-500 mt-2">
-            Bỏ trống nếu muốn tự động cào tiếp nối dữ liệu cũ. Chọn ngày nếu muốn cào lại từ mốc thời gian cụ thể.
-          </p>
+          {loading ? (
+            <button
+              type="button"
+              onClick={stop}
+              className="flex items-center justify-center gap-2 rounded-xl py-3 px-8 font-semibold text-white transition-all shadow-lg whitespace-nowrap border border-rose-300/50 bg-rose-600 hover:bg-rose-500 shadow-rose-600/30"
+            >
+              <Square className="w-4 h-4" />
+              DỪNG
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={analyze}
+              className="flex items-center justify-center gap-2 rounded-xl py-3 px-8 font-semibold text-white transition-all shadow-lg whitespace-nowrap bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20 hover:shadow-indigo-500/30"
+            >
+              <BarChart2 className="w-5 h-5" />
+              THU THẬP
+            </button>
+          )}
         </div>
 
         {loading && (
           <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
             <div className="mb-2 flex flex-col gap-1 text-xs font-medium text-indigo-100 sm:flex-row sm:items-center sm:justify-between">
               <span>Đang nạp dữ liệu từ đường dẫn.</span>
+
               <span className="text-slate-300">
-                Bạn có thể chuyển trang, hệ thống vẫn tiếp tục xử lý.
+                Có thể bấm Dừng để ngắt tác vụ hiện tại.
               </span>
             </div>
 

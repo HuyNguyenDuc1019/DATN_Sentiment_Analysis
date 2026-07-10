@@ -1,13 +1,21 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
-import { analyzeUrl, predictBatch } from '../services/api';
+import { analyzeUrl, predictBatch, stopScrapeTask } from '../services/api';
 
 const TaskContext = createContext(null);
 
 const BACKGROUND_MESSAGE =
   'Đang nạp dữ liệu. Hệ thống sẽ phân tích ngầm, vui lòng xem kết quả tại trang Dashboard sau ít phút.';
+
+const createTaskId = () => {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 const detectUrlSource = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -21,10 +29,11 @@ const detectUrlSource = (value) => {
 
   if (
     normalized.includes('google.com/maps') ||
+    normalized.includes('www.google.com/maps') ||
+    normalized.includes('maps.google.com') ||
     normalized.includes('maps.app.goo.gl') ||
     normalized.includes('goo.gl/maps') ||
-    normalized.includes('google.com/search') ||
-    normalized.includes('maps')
+    normalized.includes('google.com/search')
   ) {
     return {
       type: 'google_maps',
@@ -41,6 +50,10 @@ const detectUrlSource = (value) => {
 export function TaskProvider({ children }) {
   const { user, userProfile } = useAuth();
 
+  const batchAbortRef = useRef(null);
+  const urlAbortRef = useRef(null);
+  const urlTaskIdRef = useRef(null);
+
   const [batchFile, setBatchFile] = useState(null);
   const [batchTexts, setBatchTexts] = useState([]);
   const [batchColumn, setBatchColumn] = useState('');
@@ -55,6 +68,13 @@ export function TaskProvider({ children }) {
   const [urlFilter, setUrlFilter] = useState('all');
 
   useEffect(() => {
+    batchAbortRef.current?.abort();
+    urlAbortRef.current?.abort();
+
+    if (urlTaskIdRef.current) {
+      stopScrapeTask(urlTaskIdRef.current);
+    }
+
     setBatchFile(null);
     setBatchTexts([]);
     setBatchColumn('');
@@ -67,6 +87,10 @@ export function TaskProvider({ children }) {
     setUrlCount(0);
     setUrlLoading(false);
     setUrlFilter('all');
+
+    batchAbortRef.current = null;
+    urlAbortRef.current = null;
+    urlTaskIdRef.current = null;
   }, [user?.id]);
 
   const selectBatchFile = (selected) => {
@@ -112,6 +136,32 @@ export function TaskProvider({ children }) {
     });
   };
 
+  const stopBatchPrediction = () => {
+    if (!batchLoading) return;
+
+    batchAbortRef.current?.abort();
+    batchAbortRef.current = null;
+
+    setBatchLoading(false);
+    toast.success('Đã dừng phân tích file.');
+  };
+
+  const stopUrlAnalysis = async () => {
+    if (!urlLoading) return;
+
+    urlAbortRef.current?.abort();
+
+    if (urlTaskIdRef.current) {
+      await stopScrapeTask(urlTaskIdRef.current);
+    }
+
+    urlAbortRef.current = null;
+    urlTaskIdRef.current = null;
+
+    setUrlLoading(false);
+    toast.success('Đã gửi lệnh dừng thu thập dữ liệu.');
+  };
+
   const runBatchPrediction = async () => {
     if (!user?.id) {
       toast.error('Vui lòng đăng nhập trước khi phân tích file.');
@@ -125,23 +175,31 @@ export function TaskProvider({ children }) {
 
     if (batchLoading) return;
 
+    const controller = new AbortController();
+    batchAbortRef.current = controller;
+
     setBatchLoading(true);
     const loadingToast = toast.loading(BACKGROUND_MESSAGE);
 
     try {
       const csvFileName = batchFile?.name || 'CSV_Upload';
 
-      const data = await predictBatch({
-        reviews: batchTexts.map((text) => ({
-          content: text,
-          review_date: new Date().toISOString(),
-        })),
-        user_id: user.id,
-        source_url: 'CSV_Upload',
-        dataset_name: csvFileName,
-        file_name: csvFileName,
-        dataset_type: 'csv',
-      });
+      const data = await predictBatch(
+        {
+          reviews: batchTexts.map((text) => ({
+            content: text,
+            review_date: new Date().toISOString(),
+          })),
+          user_id: user.id,
+          source_url: 'CSV_Upload',
+          dataset_name: csvFileName,
+          file_name: csvFileName,
+          dataset_type: 'csv',
+        },
+        {
+          signal: controller.signal,
+        },
+      );
 
       setBatchResults(data);
 
@@ -150,80 +208,101 @@ export function TaskProvider({ children }) {
         { id: loadingToast },
       );
     } catch (error) {
+      if (error.name === 'AbortError') {
+        toast.success('Đã dừng phân tích file.', { id: loadingToast });
+        return;
+      }
+
       toast.error(error.message || 'Không thể xử lý file CSV.', { id: loadingToast });
       throw error;
     } finally {
       setBatchLoading(false);
+      batchAbortRef.current = null;
     }
   };
 
-const runUrlAnalysis = async ({ customDate } = {}) => {
-  if (!user?.id) {
-    toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
-    return;
-  }
-
-  const cleanUrl = url.trim();
-
-  if (!/^https?:\/\//i.test(cleanUrl)) {
-    toast.error('Vui lòng nhập đường dẫn hợp lệ.');
-    return;
-  }
-
-  if (urlLoading) return;
-
-  const sourceInfo = detectUrlSource(cleanUrl);
-  const isVip = userProfile?.tier === 'vip';
-
-  if (sourceInfo.type === 'unknown') {
-    toast.error('Hệ thống hiện chỉ hỗ trợ link Foody và Google Maps.');
-    return;
-  }
-
-  if (sourceInfo.type === 'google_maps' && !isVip) {
-    toast.error('Tính năng phân tích Google Maps chỉ dành cho tài khoản VIP.');
-    return;
-  }
-
-  setUrlLoading(true);
-  const loadingToast = toast.loading(BACKGROUND_MESSAGE);
-
-  try {
-    const payload = {
-      url: cleanUrl,
-      user_id: user.id,
-      dataset_name: sourceInfo.name,
-      dataset_type: sourceInfo.type,
-    };
-
-    if (customDate) {
-      payload.custom_start_date = new Date(customDate).toISOString();
+  const runUrlAnalysis = async () => {
+    if (!user?.id) {
+      toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
+      return;
     }
 
-    const data = await analyzeUrl(payload);
+    const cleanUrl = url.trim();
 
-    const receivedCount = Number(data.count || data.results?.length || 0);
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      toast.error('Vui lòng nhập đường dẫn hợp lệ.');
+      return;
+    }
 
-    setUrlResults(data.results || []);
-    setUrlCount(receivedCount);
+    if (urlLoading) return;
 
-    const successMessage =
-      receivedCount > 0
-        ? `Đã tiếp nhận ${receivedCount} phản hồi từ ${sourceInfo.name}. Dashboard sẽ cập nhật sau ít phút.`
-        : `Đã kiểm tra ${sourceInfo.name}. Hiện chưa có phản hồi mới để cập nhật.`;
+    const sourceInfo = detectUrlSource(cleanUrl);
+    const isVip = userProfile?.tier === 'vip';
 
-    toast.success(successMessage, { id: loadingToast });
-  } catch (error) {
-    toast.error(
-      error.message === 'Failed to fetch'
-        ? 'Không kết nối được bộ thu thập dữ liệu tại cổng 3000.'
-        : error.message,
-      { id: loadingToast },
-    );
-  } finally {
-    setUrlLoading(false);
-  }
-};
+    if (sourceInfo.type === 'unknown') {
+      toast.error('Hệ thống hiện chỉ hỗ trợ link Foody và Google Maps.');
+      return;
+    }
+
+    if (sourceInfo.type === 'google_maps' && !isVip) {
+      toast.error('Tính năng phân tích Google Maps chỉ dành cho tài khoản VIP.');
+      return;
+    }
+
+    const controller = new AbortController();
+    const taskId = createTaskId();
+
+    urlAbortRef.current = controller;
+    urlTaskIdRef.current = taskId;
+
+    setUrlLoading(true);
+    const loadingToast = toast.loading(BACKGROUND_MESSAGE);
+
+    try {
+      const payload = {
+        task_id: taskId,
+        url: cleanUrl,
+        user_id: user.id,
+        dataset_name: sourceInfo.name,
+        dataset_type: sourceInfo.type,
+      };
+
+      console.log('Payload gửi xuống scraper:', payload);
+
+      const data = await analyzeUrl(payload, {
+        signal: controller.signal,
+      });
+
+      const receivedCount = Number(data.count || data.results?.length || 0);
+
+      setUrlResults(data.results || []);
+      setUrlCount(receivedCount);
+
+      const successMessage =
+        receivedCount > 0
+          ? `Đã tiếp nhận ${receivedCount} phản hồi từ ${sourceInfo.name}. Dashboard sẽ cập nhật sau ít phút.`
+          : `Đã kiểm tra ${sourceInfo.name}. Hiện chưa có phản hồi mới để cập nhật.`;
+
+      toast.success(successMessage, { id: loadingToast });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        toast.success('Đã dừng thu thập dữ liệu.', { id: loadingToast });
+        return;
+      }
+
+      toast.error(
+        error.message === 'Failed to fetch'
+          ? 'Không kết nối được bộ thu thập dữ liệu tại cổng 3000.'
+          : error.message,
+        { id: loadingToast },
+      );
+    } finally {
+      setUrlLoading(false);
+      urlAbortRef.current = null;
+      urlTaskIdRef.current = null;
+    }
+  };
+
   const value = useMemo(
     () => ({
       batch: {
@@ -236,6 +315,7 @@ const runUrlAnalysis = async ({ customDate } = {}) => {
         selectFile: selectBatchFile,
         setColumn: setBatchColumn,
         analyze: runBatchPrediction,
+        stop: stopBatchPrediction,
       },
       urlAnalyzer: {
         url,
@@ -246,6 +326,7 @@ const runUrlAnalysis = async ({ customDate } = {}) => {
         filter: urlFilter,
         setFilter: setUrlFilter,
         analyze: runUrlAnalysis,
+        stop: stopUrlAnalysis,
       },
     }),
     [

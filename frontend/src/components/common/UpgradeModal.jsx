@@ -1,125 +1,202 @@
 import React, { useState } from 'react';
-import { Crown, CheckCircle2, Loader2, X } from 'lucide-react';
+import { Crown, CheckCircle2, Loader2, X, CalendarClock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabaseClient';
+
+const API_BASE_URL =
+  import.meta.env.VITE_FASTAPI_URL ||
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_PYTHON_API ||
+  'http://localhost:8000';
 
 const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Nếu không mở thì không render gì cả
   if (!isOpen) return null;
 
-  const handleMockPayment = async () => {
-    setIsProcessing(true);
-    const paymentPromise = new Promise(resolve => setTimeout(resolve, 2000));
-    
-    toast.promise(paymentPromise, {
-      loading: 'Đang kết nối cổng thanh toán...',
-      success: 'Thanh toán thành công! Đang nâng cấp tài khoản...',
-      error: 'Thanh toán thất bại.',
-    });
+  const handleClose = () => {
+    if (isProcessing) return;
+    onClose?.();
+  };
 
-    await paymentPromise;
+  const handleMockPayment = async () => {
+    if (isProcessing) return;
+
+    setIsProcessing(true);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData?.user) throw new Error("Chưa đăng nhập!");
-      const userId = authData.user.id;
+      const paymentPromise = new Promise((resolve) => setTimeout(resolve, 2000));
 
-      const res = await fetch('http://localhost:8000/api/user/upgrade', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, amount: 99000 })
+      await toast.promise(paymentPromise, {
+        loading: 'Đang kết nối cổng thanh toán...',
+        success: 'Thanh toán thành công! Đang nâng cấp tài khoản...',
+        error: 'Thanh toán thất bại.',
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || "Lỗi từ máy chủ Backend");
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !authData?.user) {
+        throw new Error('Vui lòng đăng nhập trước khi nâng cấp VIP.');
       }
 
-      // Cập nhật tức thì AuthContext / UI khóa VIP nếu component cha truyền vào.
+      const userId = authData.user.id;
+
+      const res = await fetch(`${API_BASE_URL}/api/user/upgrade`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          amount: 99000,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || data?.success === false) {
+        throw new Error(
+          data?.detail ||
+            data?.message ||
+            data?.error ||
+            'Lỗi từ máy chủ Backend.',
+        );
+      }
+
       if (typeof onUpgraded === 'function') {
         await onUpgraded();
       }
 
-      toast.success('🎉 Chúc mừng! Bạn đã trở thành thành viên VIP.', { duration: 4000 });
-      onClose?.();
+      toast.success('🎉 Chúc mừng! Bạn đã trở thành thành viên VIP trong 30 ngày.', {
+        duration: 4000,
+      });
 
+      onClose?.();
     } catch (error) {
       console.error(error);
-      toast.error(error.message || "Có lỗi xảy ra trong quá trình nâng cấp.");
+      toast.error(error.message || 'Có lỗi xảy ra trong quá trình nâng cấp.');
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="max-w-md w-full bg-slate-800 rounded-2xl border border-indigo-500/30 p-8 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Nút đóng */}
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white z-10 p-1 bg-slate-700/50 rounded-full hover:bg-slate-600 transition-colors"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-indigo-500/30 bg-slate-800 p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <button
+          type="button"
+          onClick={handleClose}
+          disabled={isProcessing}
+          className="absolute right-4 top-4 z-10 rounded-full bg-slate-700/50 p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <X size={20} />
         </button>
 
-        {/* Hiệu ứng ánh sáng nền */}
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 rounded-full bg-indigo-500/20 blur-3xl"></div>
-        
-        <div className="flex items-center gap-3 mb-6 relative z-10">
-          <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400">
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-32 w-32 rounded-full bg-indigo-500/20 blur-3xl" />
+
+        <div className="relative z-10 mb-6 flex items-center gap-3">
+          <div className="rounded-xl bg-indigo-500/20 p-3 text-indigo-400">
             <Crown size={28} />
           </div>
-          <h2 className="text-2xl font-bold text-white">Gói Pro VIP</h2>
-        </div>
-        
-        <div className="mb-6 relative z-10">
-          <span className="text-4xl font-extrabold text-white">99.000đ</span>
-          <span className="text-slate-400"> / tháng</span>
+
+          <div>
+            <h2 className="text-2xl font-bold text-white">Gói Pro VIP</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Mở khóa toàn bộ tính năng trong 30 ngày.
+            </p>
+          </div>
         </div>
 
-        <ul className="space-y-4 mb-8 text-slate-300 relative z-10">
+        <div className="relative z-10 mb-6 rounded-2xl border border-indigo-500/20 bg-slate-900/40 p-5">
+          <div>
+            <span className="text-4xl font-extrabold text-white">99.000đ</span>
+            <span className="text-slate-400"> / 30 ngày</span>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+            <CalendarClock className="h-4 w-4" />
+            <span>
+              VIP bắt đầu ngay sau khi nâng cấp và hết hạn sau <strong>30 ngày</strong>.
+            </span>
+          </div>
+        </div>
+
+        <ul className="relative z-10 mb-8 space-y-4 text-slate-300">
           <li className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <span>Phân tích dữ liệu <strong>không giới hạn</strong> (Gói Free tối đa 100 lượt/ngày).</span>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Thời hạn VIP <strong>30 ngày</strong> kể từ lúc nâng cấp.
+            </span>
           </li>
+
           <li className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <span>Xử lý file dữ liệu cực lớn lên đến <strong>50MB</strong> (Gói Free tối đa 50 dòng/lần).</span>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Phân tích dữ liệu <strong>không giới hạn</strong>.
+            </span>
           </li>
+
           <li className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <span>Mở khóa tính năng <strong>Xuất báo cáo</strong> (Export CSV).</span>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Xử lý file dữ liệu lớn lên đến <strong>50MB</strong>.
+            </span>
           </li>
+
           <li className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <span>Sử dụng <strong>Từ điển Khía cạnh tùy chỉnh</strong> để bóc tách dữ liệu chuyên sâu.</span>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Mở khóa tính năng <strong>Xuất báo cáo</strong> Export CSV.
+            </span>
           </li>
+
           <li className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <span>Mở khóa hệ thống <strong>Cảnh báo khủng hoảng</strong> (Báo động đỏ) tức thời.</span>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Sử dụng <strong>Từ điển Khía cạnh tùy chỉnh</strong> để bóc tách dữ liệu chuyên sâu.
+            </span>
           </li>
+
           <li className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <span>Trực quan hóa dữ liệu với biểu đồ <strong>Đám mây từ khóa</strong> (Word Cloud).</span>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Mở khóa hệ thống <strong>Cảnh báo khủng hoảng</strong> tức thời.
+            </span>
           </li>
+
           <li className="flex items-start gap-3">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-          <span>
-    Mở khóa tính năng <strong>So sánh quán ăn</strong> để đối chiếu mức độ hài lòng,
-    điểm rủi ro và từ khóa nổi bật giữa nhiều quán.
-  </span>
-</li>
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Trực quan hóa dữ liệu với biểu đồ <strong>Đám mây từ khóa</strong>.
+            </span>
+          </li>
+
+          <li className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <span>
+              Mở khóa tính năng <strong>So sánh quán ăn</strong> để đối chiếu mức độ hài lòng,
+              điểm rủi ro và từ khóa nổi bật giữa nhiều quán.
+            </span>
+          </li>
         </ul>
 
-        <button 
+        <button
+          type="button"
           onClick={handleMockPayment}
           disabled={isProcessing}
-          className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-all duration-200 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/30 relative z-10"
+          className="relative z-10 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3.5 font-semibold text-white shadow-lg shadow-indigo-600/30 transition-all duration-200 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Nâng cấp ngay'}
+          {isProcessing ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Đang nâng cấp...
+            </>
+          ) : (
+            <>
+              <Crown className="h-5 w-5" />
+              Nâng cấp VIP 30 ngày
+            </>
+          )}
         </button>
       </div>
     </div>

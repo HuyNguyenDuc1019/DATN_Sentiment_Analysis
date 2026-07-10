@@ -287,12 +287,14 @@ export default function Settings() {
               )}
 
               {activeTab === 'billing' && (
-                <BillingTab
-                  isVip={isVip}
-                  onUpgrade={() => setIsUpgradeModalOpen(true)}
-                />
-              )}
-
+  <BillingTab
+    isVip={isVip}
+    profile={currentProfile}
+    vipStartedAt={currentProfile?.vip_started_at}
+    vipExpiresAt={currentProfile?.vip_expires_at}
+    onUpgrade={() => setIsUpgradeModalOpen(true)}
+  />
+)}
               {activeTab === 'data' && (
                 <DataSettingsTab
                   isVip={isVip}
