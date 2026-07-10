@@ -726,7 +726,42 @@ async function scrapeFoody(
     await browser.close();
   }
 }
+// ==========================================
+// HÀM HỖ TRỢ: Dịch chữ "4 tháng trước" thành Ngày chuẩn
+// ==========================================
+// ==========================================
+// HÀM HỖ TRỢ: Dịch chữ "4 tháng trước", "2 tuần trước" thành Ngày chuẩn
+// ==========================================
+function parseVietnameseDate(dateString) {
+  if (!dateString) return new Date();
+  
+  const now = new Date();
+  const str = dateString.toLowerCase();
+  
+  // Tìm con số trong chuỗi (vd: "4" trong "4 tháng trước")
+  const match = str.match(/(\d+)/); 
+  const num = match ? parseInt(match[1]) : 1;
+  
+  if (str.includes('phút') || str.includes('vừa xong')) {
+      now.setMinutes(now.getMinutes() - num);
+  } else if (str.includes('giờ') || str.includes('tiếng')) {
+      now.setHours(now.getHours() - num);
+  } else if (str.includes('ngày')) {
+      now.setDate(now.getDate() - num);
+  } else if (str.includes('tuần')) {
+      now.setDate(now.getDate() - (num * 7));
+  } else if (str.includes('tháng')) {
+      now.setMonth(now.getMonth() - num);
+  } else if (str.includes('năm')) {
+      now.setFullYear(now.getFullYear() - num);
+  }
+  
+  return now;
+}
 
+// ==========================================
+// CỖ MÁY CÀO GOOGLE MAPS (ĐÃ VÁ LỖI TOÀN DIỆN)
+// ==========================================
 async function scrapeGoogleMaps(
   url,
   userId,
@@ -769,6 +804,9 @@ async function scrapeGoogleMaps(
       if (rawReviews.length === 0) break;
 
       for (const item of rawReviews) {
+        // ------------------------------------------
+        // 1. TRẠM KIỂM DUYỆT NỘI DUNG
+        // ------------------------------------------
         let rawText = item.snippet || item.details || '';
 
         if (typeof rawText === 'object' && rawText !== null) {
@@ -783,13 +821,27 @@ async function scrapeGoogleMaps(
 
         const content = cleanReviewText(safeString);
 
-        if (!content) continue;
+        // Chặn thêm một lớp [object Object] cứng đầu nếu hàm clean lỡ bỏ sót
+        if (!content || content.includes('[object Object]')) continue;
 
-        const reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
+        // ------------------------------------------
+        // 2. TRẠM KIỂM DUYỆT THỜI GIAN
+        // ------------------------------------------
+        let reviewDate;
+        if (item.iso_date) {
+            reviewDate = new Date(item.iso_date); 
+        } else if (item.date) {
+            reviewDate = parseVietnameseDate(item.date); // Gọi hàm hỗ trợ dịch tiếng Việt
+        } else {
+            reviewDate = new Date(); 
+        }
 
+        // ------------------------------------------
+        // 3. SO SÁNH VỚI MỐC THỜI GIAN CUTOFF
+        // ------------------------------------------
         if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
           console.log(
-            `🛑 Đã chạm bình luận cũ (${reviewDate.toISOString()}) ở Trang ${pageCount}. Ngắt thu thập!`,
+            `🛑 Đã chạm bình luận cũ (Ngày: ${reviewDate.toISOString()}) ở Trang ${pageCount}. Ngắt thu thập!`,
           );
           isStop = true;
           break;
@@ -837,7 +889,6 @@ async function scrapeGoogleMaps(
     );
   }
 }
-
 app.post('/api/scrape', async (req, res) => {
   const { url, user_id, dataset_name, dataset_type, custom_start_date } = req.body;
 
