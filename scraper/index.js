@@ -136,7 +136,8 @@ function isValidComment(text) {
 function parseFoodyDate(dateStr) {
   if (!dateStr) return new Date();
 
-  const str = String(dateStr).toLowerCase().trim();
+  const raw = String(dateStr || '').trim();
+  const str = raw.toLowerCase();
   const now = new Date();
 
   if (str.includes('hôm nay') || str.includes('vừa xong')) {
@@ -148,24 +149,42 @@ function parseFoodyDate(dateStr) {
     return now;
   }
 
-  if (str.includes('ngày trước')) {
-    const days = parseInt(str, 10) || 0;
-    now.setDate(now.getDate() - days);
+  const relativeMatch = str.match(/(\d+)\s*(phút|giờ|tiếng|ngày|tuần|tháng|năm)\s*trước/);
+
+  if (relativeMatch) {
+    const num = parseInt(relativeMatch[1], 10);
+    const unit = relativeMatch[2];
+
+    if (unit.includes('phút')) {
+      now.setMinutes(now.getMinutes() - num);
+    } else if (unit.includes('giờ') || unit.includes('tiếng')) {
+      now.setHours(now.getHours() - num);
+    } else if (unit.includes('ngày')) {
+      now.setDate(now.getDate() - num);
+    } else if (unit.includes('tuần')) {
+      now.setDate(now.getDate() - num * 7);
+    } else if (unit.includes('tháng')) {
+      now.setMonth(now.getMonth() - num);
+    } else if (unit.includes('năm')) {
+      now.setFullYear(now.getFullYear() - num);
+    }
+
     return now;
   }
 
-  if (str.includes('tháng trước')) {
-    const months = parseInt(str, 10) || 0;
-    now.setMonth(now.getMonth() - months);
-    return now;
+  const dateMatch = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+
+  if (dateMatch) {
+    const day = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    const year = Number(dateMatch[3]);
+    const hour = Number(dateMatch[4] || 0);
+    const minute = Number(dateMatch[5] || 0);
+
+    return new Date(year, month - 1, day, hour, minute);
   }
 
-  const parts = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-
-  if (parts) {
-    return new Date(parts[3], parts[2] - 1, parts[1]);
-  }
-
+  console.log('⚠️ Không parse được ngày Foody, dùng ngày hiện tại:', raw);
   return now;
 }
 
@@ -320,16 +339,245 @@ async function sendReviewsToPredictBatch({
   }
 }
 
+async function scrapeFoodyForCompare(url) {
+  const cachedReviews = getCompareCache(url);
+
+  if (cachedReviews) {
+    console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận cho ${url}`);
+    return cachedReviews;
+  }
+
+  console.log('⚖️ Đang cào Foody cho chức năng so sánh, không lưu DB...');
+  console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
+
+  const browser = await puppeteer.launch({
+    headless: false,
+    defaultViewport: null,
+  });
+
+  const page = await browser.newPage();
+
+  try {
+    console.log(`🌐 Đang truy cập trang: ${url}`);
+
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: 60000,
+    });
+
+    console.log('⏳ Đang đợi Foody khởi tạo giao diện...');
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    console.log('⏳ Đang tìm và click nút "Xem thêm bình luận" cho so sánh...');
+
+    let hasMoreComments = true;
+    let clickCount = 0;
+
+    while (hasMoreComments && clickCount < 3) {
+      try {
+        await page.waitForSelector('a.fd-btn-more', {
+          timeout: 1500,
+        });
+
+        const clicked = await page.evaluate(() => {
+          const buttons = document.querySelectorAll('a.fd-btn-more');
+
+          for (const btn of buttons) {
+            if (
+              btn.innerText.includes('Xem thêm bình luận') ||
+              btn.textContent.includes('Xem thêm bình luận')
+            ) {
+              btn.click();
+              return true;
+            }
+          }
+
+          return false;
+        });
+
+        if (!clicked) {
+          console.log('✅ Đã hết nút "Xem thêm bình luận" hoặc đã mở đủ.');
+          hasMoreComments = false;
+          break;
+        }
+
+        clickCount += 1;
+        console.log(`👉 Compare đã click "Xem thêm" lần ${clickCount}...`);
+
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      } catch {
+        console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
+        hasMoreComments = false;
+      }
+    }
+
+    console.log('🔍 Bắt đầu bóc tách bình luận cho so sánh...');
+
+    const rawReviews = await page.evaluate(() => {
+      const commentItems = document.querySelectorAll('.item-comment, .review-item');
+      const results = [];
+
+      commentItems.forEach((item) => {
+        const textNode = item.querySelector('.rd-des');
+        const timeNode = item.querySelector('.ru-time, .time, span[datetime], .date');
+
+        if (textNode) {
+          results.push({
+            text: textNode.innerText || textNode.textContent,
+            date_str: timeNode ? timeNode.innerText || timeNode.textContent : null,
+          });
+        }
+      });
+
+      if (results.length === 0) {
+        document.querySelectorAll('.rd-des').forEach((node) => {
+          results.push({
+            text: node.innerText,
+            date_str: null,
+          });
+        });
+      }
+
+      return results;
+    });
+
+    const cleanReviews = [];
+
+    for (const item of rawReviews) {
+      const formattedText = cleanReviewText(item.text);
+
+      if (isValidComment(formattedText)) {
+        const reviewDate = parseFoodyDate(item.date_str);
+
+        cleanReviews.push({
+          content: formattedText,
+          review_date: reviewDate.toISOString(),
+        });
+      }
+    }
+
+    const limitedReviews = cleanReviews.slice(0, COMPARE_MAX_REVIEWS);
+
+    setCompareCache(url, limitedReviews);
+
+    console.log(
+      `💎 Compare Foody: Thu thập ${cleanReviews.length}, gửi ${limitedReviews.length} bình luận, cache 15 phút!`,
+    );
+
+    return limitedReviews;
+  } finally {
+    await browser.close();
+  }
+}
+
+async function scrapeGoogleMapsForCompare(url) {
+  const cachedReviews = getCompareCache(url);
+
+  if (cachedReviews) {
+    console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận Google Maps`);
+    return cachedReviews;
+  }
+
+  console.log('⚖️ Đang cào Google Maps cho chức năng so sánh, không lưu DB...');
+
+  if (!SERPAPI_KEY) {
+    throw new Error(
+      'Thiếu SERPAPI_KEY. Hãy tạo file .env trong thư mục scraper hoặc set biến môi trường trước khi chạy node index.js.',
+    );
+  }
+
+  const searchQuery = extractGoogleMapsSearchQuery(url);
+
+  try {
+    console.log('🔍 Bước 1: Tìm ID quán Google Maps cho Compare...');
+
+    const searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
+      searchQuery,
+    )}&api_key=${SERPAPI_KEY}&hl=vi`;
+
+    const searchRes = await axios.get(searchUrl);
+    const data = searchRes.data;
+
+    let dataId = null;
+
+    if (data.place_results && data.place_results.data_id) {
+      dataId = data.place_results.data_id;
+    } else if (data.local_results && data.local_results.length > 0) {
+      dataId = data.local_results[0].data_id;
+    }
+
+    if (!dataId) {
+      throw new Error(`Không tìm thấy địa điểm trên Google Maps cho từ khóa: ${searchQuery}`);
+    }
+
+    console.log('🔍 Bước 2: Tải bình luận Google Maps cho Compare...');
+
+    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
+
+    const reviewRes = await axios.get(reviewUrl);
+    const rawReviews = reviewRes.data.reviews;
+
+    if (!rawReviews || rawReviews.length === 0) {
+      return [];
+    }
+
+    const cleanReviews = [];
+
+    for (const item of rawReviews) {
+      let rawText = item.snippet || item.details || '';
+
+      if (typeof rawText === 'object' && rawText !== null) {
+        rawText = rawText.translated || rawText.original || rawText.text || '';
+      }
+
+      const content = cleanReviewText(String(rawText));
+
+      if (!content || content.includes('[object Object]')) continue;
+
+      const reviewDate = item.iso_date
+        ? new Date(item.iso_date)
+        : item.date
+          ? parseVietnameseDate(item.date)
+          : new Date();
+
+      cleanReviews.push({
+        content,
+        review_date: reviewDate.toISOString(),
+      });
+    }
+
+    const limitedReviews = cleanReviews.slice(0, COMPARE_MAX_REVIEWS);
+
+    setCompareCache(url, limitedReviews);
+
+    console.log(
+      `💎 Compare Google Maps: Thu thập ${cleanReviews.length}, xuất ${limitedReviews.length} bình luận, cache 15 phút!`,
+    );
+
+    return limitedReviews;
+  } catch (error) {
+    console.error('🔥 Lỗi cào Google Maps Compare:', error.response?.data || error.message);
+
+    throw new Error(
+      error.response?.data?.error ||
+        error.response?.data?.message ||
+        'Lỗi khi gọi API Google Maps SerpApi.',
+    );
+  }
+}
+
 async function scrapeFoody(
   url,
   userId,
   lastScrapedDate,
+  endScrapedDate = null,
   datasetName = 'Foody',
   datasetType = 'foody',
   scrapeTask = null,
 ) {
   console.log(`🤖 Nhận lệnh cào Foody từ User ID: ${userId}`);
-  console.log(`⏱️ Mốc thời gian bắt đầu cào: ${lastScrapedDate || 'Chưa từng cào'}`);
+  console.log(`⏱️ Mốc thời gian bắt đầu cào: ${lastScrapedDate || 'Không có'}`);
+  console.log(`⏱️ Mốc thời gian kết thúc cào: ${endScrapedDate || 'Không giới hạn'}`);
   console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
 
   ensureTaskNotStopped(scrapeTask);
@@ -440,6 +688,17 @@ async function scrapeFoody(
     const cleanReviews = [];
     const seenContents = new Set();
     const startDate = lastScrapedDate ? new Date(lastScrapedDate) : null;
+    const endDate = endScrapedDate ? new Date(endScrapedDate) : null;
+
+    console.log(
+      '📅 Foody startDate thật sự đang dùng:',
+      startDate ? startDate.toISOString() : 'Không có',
+    );
+
+    console.log(
+      '📅 Foody endDate thật sự đang dùng:',
+      endDate ? endDate.toISOString() : 'Không có',
+    );
 
     for (const item of rawReviews) {
       ensureTaskNotStopped(scrapeTask);
@@ -452,9 +711,18 @@ async function scrapeFoody(
 
       const reviewDate = parseFoodyDate(item.date_str);
 
+      console.log('🧾 Review date_str:', item.date_str, '=>', reviewDate.toISOString());
+
       if (startDate && reviewDate < startDate) {
         console.log(
-          `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc ${startDate.toISOString()}`,
+          `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc bắt đầu ${startDate.toISOString()}`,
+        );
+        continue;
+      }
+
+      if (endDate && reviewDate > endDate) {
+        console.log(
+          `⏭️ Bỏ qua bình luận mới hơn mốc kết thúc (${reviewDate.toISOString()}) vì lớn hơn ${endDate.toISOString()}`,
         );
         continue;
       }
@@ -491,270 +759,18 @@ async function scrapeFoody(
   }
 }
 
-async function scrapeGoogleMapsForCompare(url) {
-  const cachedReviews = getCompareCache(url);
-
-  if (cachedReviews) {
-    console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận Google Maps`);
-    return cachedReviews;
-  }
-
-  console.log('⚖️ Đang cào Google Maps cho chức năng so sánh, không lưu DB...');
-
-  if (!SERPAPI_KEY) {
-    throw new Error(
-      'Thiếu SERPAPI_KEY. Hãy tạo file .env trong thư mục scraper hoặc set biến môi trường trước khi chạy node index.js.',
-    );
-  }
-
-  const searchQuery = extractGoogleMapsSearchQuery(url);
-
-  try {
-    console.log('🔍 Bước 1: Tìm ID quán Google Maps cho Compare...');
-
-    const searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
-      searchQuery,
-    )}&api_key=${SERPAPI_KEY}&hl=vi`;
-
-    const searchRes = await axios.get(searchUrl);
-    const data = searchRes.data;
-
-    let dataId = null;
-
-    if (data.place_results && data.place_results.data_id) {
-      dataId = data.place_results.data_id;
-    } else if (data.local_results && data.local_results.length > 0) {
-      dataId = data.local_results[0].data_id;
-    }
-
-    if (!dataId) {
-      throw new Error(`Không tìm thấy địa điểm trên Google Maps cho từ khóa: ${searchQuery}`);
-    }
-
-    console.log('🔍 Bước 2: Tải bình luận Google Maps cho Compare...');
-
-    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
-
-    const reviewRes = await axios.get(reviewUrl);
-    const rawReviews = reviewRes.data.reviews;
-
-    if (!rawReviews || rawReviews.length === 0) {
-      return [];
-    }
-
-    const cleanReviews = [];
-
-    for (const item of rawReviews) {
-      let rawText = item.snippet || item.details || '';
-
-      if (typeof rawText === 'object' && rawText !== null) {
-        rawText = rawText.translated || rawText.original || rawText.text || '';
-      }
-
-      const content = cleanReviewText(String(rawText));
-
-      if (!content || content.includes('[object Object]')) continue;
-
-      const reviewDate = item.iso_date
-        ? new Date(item.iso_date)
-        : item.date
-          ? parseVietnameseDate(item.date)
-          : new Date();
-
-      cleanReviews.push({
-        content,
-        review_date: reviewDate.toISOString(),
-      });
-    }
-
-    const limitedReviews = cleanReviews.slice(0, COMPARE_MAX_REVIEWS);
-
-    setCompareCache(url, limitedReviews);
-
-    console.log(
-      `💎 Compare Google Maps: Thu thập ${cleanReviews.length}, xuất ${limitedReviews.length} bình luận, cache 15 phút!`,
-    );
-
-    return limitedReviews;
-  } catch (error) {
-    console.error('🔥 Lỗi cào Google Maps Compare:', error.response?.data || error.message);
-
-    throw new Error(
-      error.response?.data?.error ||
-        error.response?.data?.message ||
-        'Lỗi khi gọi API Google Maps SerpApi.',
-    );
-  }
-}
-
-async function scrapeFoody(
-  url,
-  userId,
-  lastScrapedDate,
-  datasetName = 'Foody',
-  datasetType = 'foody',
-  scrapeTask = null,
-) {
-  console.log(`🤖 Nhận lệnh cào Foody từ User ID: ${userId}`);
-  console.log(`⏱️ Mốc thời gian dừng cào: ${lastScrapedDate || 'Chưa từng cào'}`);
-  console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
-
-  ensureTaskNotStopped(scrapeTask);
-
-  const browser = await puppeteer.launch({
-    headless: false,
-    defaultViewport: null,
-  });
-
-  const page = await browser.newPage();
-
-  try {
-    ensureTaskNotStopped(scrapeTask);
-
-    console.log(`🌐 Đang truy cập trang: ${url}`);
-
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 60000,
-    });
-
-    ensureTaskNotStopped(scrapeTask);
-
-    console.log('⏳ Đang đợi Foody khởi tạo giao diện...');
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    ensureTaskNotStopped(scrapeTask);
-
-    console.log('⏳ Đang tìm và tự động click nút "Xem thêm bình luận"...');
-
-    let hasMoreComments = true;
-    let clickCount = 0;
-
-    while (hasMoreComments && clickCount < 50) {
-      ensureTaskNotStopped(scrapeTask);
-
-      try {
-        await page.waitForSelector('a.fd-btn-more', {
-          timeout: 2000,
-        });
-
-        ensureTaskNotStopped(scrapeTask);
-
-        const clicked = await page.evaluate(() => {
-          const buttons = document.querySelectorAll('a.fd-btn-more');
-
-          for (const btn of buttons) {
-            if (
-              btn.innerText.includes('Xem thêm bình luận') ||
-              btn.textContent.includes('Xem thêm bình luận')
-            ) {
-              btn.click();
-              return true;
-            }
-          }
-
-          return false;
-        });
-
-        if (!clicked) {
-          console.log('✅ Đã hết nút "Xem thêm bình luận" hoặc đã mở đủ.');
-          hasMoreComments = false;
-          break;
-        }
-
-        clickCount += 1;
-        console.log(`👉 Đã click "Xem thêm" lần ${clickCount}...`);
-
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      } catch {
-        console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
-        hasMoreComments = false;
-      }
-    }
-
-    ensureTaskNotStopped(scrapeTask);
-
-    console.log('🔍 Bắt đầu bóc tách nội dung và ngày đăng...');
-
-    const rawReviews = await page.evaluate(() => {
-      const commentItems = document.querySelectorAll('.item-comment, .review-item');
-      const results = [];
-
-      commentItems.forEach((item) => {
-        const textNode = item.querySelector('.rd-des');
-        const timeNode = item.querySelector('.ru-time, .time, span[datetime], .date');
-
-        if (textNode) {
-          results.push({
-            text: textNode.innerText || textNode.textContent,
-            date_str: timeNode ? timeNode.innerText || timeNode.textContent : null,
-          });
-        }
-      });
-
-      if (results.length === 0) {
-        document.querySelectorAll('.rd-des').forEach((node) => {
-          results.push({
-            text: node.innerText,
-            date_str: null,
-          });
-        });
-      }
-
-      return results;
-    });
-
-    const cleanReviews = [];
-
-    for (const item of rawReviews) {
-      ensureTaskNotStopped(scrapeTask);
-
-      const formattedText = cleanReviewText(item.text);
-
-      if (isValidComment(formattedText)) {
-        const reviewDate = parseFoodyDate(item.date_str);
-
-        if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
-          console.log(
-            `🛑 Đã chạm bình luận cũ (${reviewDate.toISOString()}). Ngắt thu thập dữ liệu!`,
-          );
-          break;
-        }
-
-        cleanReviews.push({
-          content: formattedText,
-          review_date: reviewDate.toISOString(),
-        });
-      }
-    }
-
-    ensureTaskNotStopped(scrapeTask);
-
-    console.log(`💎 Thành phẩm Foody: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`);
-
-    return sendReviewsToPredictBatch({
-      cleanReviews,
-      userId,
-      url,
-      datasetName,
-      datasetType,
-      scrapeTask,
-    });
-  } finally {
-    await browser.close();
-  }
-}
-
 async function scrapeGoogleMaps(
   url,
   userId,
   lastScrapedDate,
+  endScrapedDate = null,
   datasetName = 'Google Maps',
   datasetType = 'google_maps',
   scrapeTask = null,
 ) {
   console.log(`🤖 Nhận lệnh cào Google Maps từ User ID: ${userId}`);
-  console.log(`⏱️ Mốc thời gian dừng cào: ${lastScrapedDate || 'Chưa từng cào'}`);
+  console.log(`⏱️ Mốc thời gian bắt đầu cào: ${lastScrapedDate || 'Không có'}`);
+  console.log(`⏱️ Mốc thời gian kết thúc cào: ${endScrapedDate || 'Không giới hạn'}`);
 
   ensureTaskNotStopped(scrapeTask);
 
@@ -798,11 +814,15 @@ async function scrapeGoogleMaps(
     console.log(`✅ Tìm thấy mã quán data_id: ${dataId}. Bắt đầu tải bình luận...`);
 
     const cleanReviews = [];
+    const seenContents = new Set();
+
+    const startDate = lastScrapedDate ? new Date(lastScrapedDate) : null;
+    const endDate = endScrapedDate ? new Date(endScrapedDate) : null;
+
     let nextToken = null;
     let pageCount = 0;
-    let isStop = false;
 
-    while (!isStop && pageCount < 10) {
+    while (pageCount < 10) {
       ensureTaskNotStopped(scrapeTask);
 
       pageCount += 1;
@@ -857,13 +877,30 @@ async function scrapeGoogleMaps(
           reviewDate = new Date();
         }
 
-        if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
+        console.log('🧾 Google review date:', item.iso_date || item.date, '=>', reviewDate.toISOString());
+
+        if (startDate && reviewDate < startDate) {
           console.log(
-            `🛑 Đã chạm bình luận cũ (Ngày: ${reviewDate.toISOString()}) ở trang ${pageCount}. Ngắt thu thập!`,
+            `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc bắt đầu ${startDate.toISOString()}`,
           );
-          isStop = true;
-          break;
+          continue;
         }
+
+        if (endDate && reviewDate > endDate) {
+          console.log(
+            `⏭️ Bỏ qua bình luận mới hơn mốc kết thúc (${reviewDate.toISOString()}) vì lớn hơn ${endDate.toISOString()}`,
+          );
+          continue;
+        }
+
+        const contentKey = content.toLowerCase().replace(/\s+/g, ' ').trim();
+
+        if (seenContents.has(contentKey)) {
+          console.log('⏭️ Bỏ qua bình luận Google Maps trùng nội dung.');
+          continue;
+        }
+
+        seenContents.add(contentKey);
 
         cleanReviews.push({
           content,
@@ -873,7 +910,7 @@ async function scrapeGoogleMaps(
 
       ensureTaskNotStopped(scrapeTask);
 
-      if (!isStop && reviewRes.data.serpapi_pagination?.next_page_token) {
+      if (reviewRes.data.serpapi_pagination?.next_page_token) {
         nextToken = reviewRes.data.serpapi_pagination.next_page_token;
 
         await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -884,7 +921,7 @@ async function scrapeGoogleMaps(
 
     if (!cleanReviews.length) {
       return {
-        message: 'Quán này không có bình luận nào mới kể từ lần cào trước.',
+        message: 'Quán này không có bình luận nào mới trong khoảng thời gian đã chọn.',
         results: [],
         count: 0,
       };
@@ -942,7 +979,10 @@ app.post('/api/scrape', async (req, res) => {
     dataset_name,
     dataset_type,
     custom_start_date,
+    custom_end_date,
   } = req.body;
+
+  console.log('📦 Body nhận từ Frontend:', req.body);
 
   if (!url || !user_id) {
     return res.status(400).json({
@@ -971,14 +1011,13 @@ app.post('/api/scrape', async (req, res) => {
     });
 
     const lastScrapedDate = custom_start_date || dbLastScrapedDate;
+    const endScrapedDate = custom_end_date || null;
 
-    if (custom_start_date) {
-      console.log(`📅 Sử dụng mốc ngày tùy chọn từ người dùng: ${custom_start_date}`);
-    } else {
-      console.log(
-        `📅 Sử dụng mốc ngày tự động từ database: ${dbLastScrapedDate || 'Chưa có'}`,
-      );
-    }
+    console.log('📅 custom_start_date:', custom_start_date || 'Không có');
+    console.log('📅 custom_end_date:', custom_end_date || 'Không có');
+    console.log('📅 dbLastScrapedDate:', dbLastScrapedDate || 'Không có');
+    console.log('📅 Mốc bắt đầu được dùng:', lastScrapedDate || 'Không có');
+    console.log('📅 Mốc kết thúc được dùng:', endScrapedDate || 'Không có');
 
     ensureTaskNotStopped(scrapeTask);
 
@@ -994,6 +1033,7 @@ app.post('/api/scrape', async (req, res) => {
         url,
         user_id,
         lastScrapedDate,
+        endScrapedDate,
         finalDatasetName,
         finalDatasetType,
         scrapeTask,
@@ -1005,6 +1045,7 @@ app.post('/api/scrape', async (req, res) => {
         url,
         user_id,
         lastScrapedDate,
+        endScrapedDate,
         finalDatasetName,
         finalDatasetType,
         scrapeTask,
@@ -1017,7 +1058,9 @@ app.post('/api/scrape', async (req, res) => {
       dataset_name: finalDatasetName,
       dataset_type: finalDatasetType,
       custom_start_date: custom_start_date || null,
+      custom_end_date: custom_end_date || null,
       last_scraped_date_used: lastScrapedDate || null,
+      end_scraped_date_used: endScrapedDate || null,
       data: result,
     });
   } catch (error) {

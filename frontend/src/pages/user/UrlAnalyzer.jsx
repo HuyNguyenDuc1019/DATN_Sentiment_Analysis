@@ -27,8 +27,8 @@ export default function UrlAnalyzer() {
 
   const [page, setPage] = useState(1);
 
-  // Mốc ngày bắt đầu cào tùy chọn
-  const [customDate, setCustomDate] = useState('');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   const pageSize = 6;
   const receivedCount = Number(count || results.length || 0);
@@ -76,10 +76,17 @@ export default function UrlAnalyzer() {
           url={url}
           setUrl={setUrl}
           loading={loading}
-          analyze={() => analyze(customDate)}
+          analyze={() =>
+            analyze({
+              customStartDate,
+              customEndDate,
+            })
+          }
           stop={stop}
-          customDate={customDate}
-          setCustomDate={setCustomDate}
+          customStartDate={customStartDate}
+          setCustomStartDate={setCustomStartDate}
+          customEndDate={customEndDate}
+          setCustomEndDate={setCustomEndDate}
         />
 
         <ResponseCounterCard receivedCount={receivedCount} />
