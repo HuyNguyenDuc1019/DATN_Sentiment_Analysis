@@ -27,6 +27,10 @@ export default function UrlAnalyzer() {
 
   const [page, setPage] = useState(1);
 
+  // Chỉ dùng để hiển thị UI, chưa gắn logic cào theo ngày
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   const pageSize = 6;
   const receivedCount = Number(count || results.length || 0);
 
@@ -75,13 +79,19 @@ export default function UrlAnalyzer() {
           loading={loading}
           analyze={analyze}
           stop={stop}
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
         />
 
         <ResponseCounterCard receivedCount={receivedCount} />
       </div>
 
       <div>
-        <h2 className="text-lg font-medium text-white mb-4">Thông tin vừa thu thập</h2>
+        <h2 className="text-lg font-medium text-white mb-4">
+          Thông tin vừa thu thập
+        </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <UrlStatsCard
