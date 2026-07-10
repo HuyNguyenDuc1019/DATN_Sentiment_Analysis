@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 from app.database import supabase
@@ -29,10 +29,17 @@ class UserSettingsUpdate(BaseModel):
 @router.put("/upgrade")
 async def upgrade_to_vip(req: UpgradeRequest):
     try:
+        now = datetime.utcnow()
+        vip_expires_at = now + timedelta(days=30)
+
         update_res = (
             supabase
             .table("profiles")
-            .update({"tier": "vip"})
+            .update({
+                "tier": "vip",
+                "vip_started_at": now.isoformat(),
+                "vip_expires_at": vip_expires_at.isoformat(),
+            })
             .eq("id", req.user_id)
             .execute()
         )
@@ -44,6 +51,7 @@ async def upgrade_to_vip(req: UpgradeRequest):
             "user_id": req.user_id,
             "amount": req.amount,
             "status": "paid",
+            "created_at": now.isoformat(),
         }
 
         try:
@@ -53,15 +61,16 @@ async def upgrade_to_vip(req: UpgradeRequest):
 
         return {
             "status": "success",
-            "message": "Nâng cấp VIP thành công!",
+            "message": "Nâng cấp VIP thành công! Tài khoản có hiệu lực 30 ngày.",
             "profile": update_res.data[0],
+            "vip_started_at": now.isoformat(),
+            "vip_expires_at": vip_expires_at.isoformat(),
         }
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/settings")
 async def get_user_settings(user_id: str):

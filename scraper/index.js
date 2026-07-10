@@ -19,6 +19,51 @@ const compareCache = new Map();
 const COMPARE_CACHE_TTL_MS = 15 * 60 * 1000;
 const COMPARE_MAX_REVIEWS = 25;
 
+const runningScrapeTasks = new Map();
+
+function createScrapeTask(taskId) {
+  if (!taskId) return null;
+
+  const task = {
+    id: taskId,
+    stopped: false,
+    createdAt: Date.now(),
+  };
+
+  runningScrapeTasks.set(taskId, task);
+
+  return task;
+}
+
+function getScrapeTask(taskId) {
+  if (!taskId) return null;
+  return runningScrapeTasks.get(taskId) || null;
+}
+
+function stopScrapeTask(taskId) {
+  const task = getScrapeTask(taskId);
+
+  if (!task) {
+    return false;
+  }
+
+  task.stopped = true;
+  return true;
+}
+
+function removeScrapeTask(taskId) {
+  if (!taskId) return;
+  runningScrapeTasks.delete(taskId);
+}
+
+function ensureTaskNotStopped(task) {
+  if (task?.stopped) {
+    const error = new Error('Tác vụ thu thập dữ liệu đã được dừng.');
+    error.status = 499;
+    throw error;
+  }
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -124,6 +169,41 @@ function parseFoodyDate(dateStr) {
   return now;
 }
 
+function parseVietnameseDate(dateString) {
+  if (!dateString) return new Date();
+
+  const now = new Date();
+  const str = String(dateString).toLowerCase().trim();
+
+  if (str.includes('hôm nay') || str.includes('vừa xong')) {
+    return now;
+  }
+
+  if (str.includes('hôm qua')) {
+    now.setDate(now.getDate() - 1);
+    return now;
+  }
+
+  const match = str.match(/(\d+)/);
+  const num = match ? parseInt(match[1], 10) : 1;
+
+  if (str.includes('phút')) {
+    now.setMinutes(now.getMinutes() - num);
+  } else if (str.includes('giờ') || str.includes('tiếng')) {
+    now.setHours(now.getHours() - num);
+  } else if (str.includes('ngày')) {
+    now.setDate(now.getDate() - num);
+  } else if (str.includes('tuần')) {
+    now.setDate(now.getDate() - num * 7);
+  } else if (str.includes('tháng')) {
+    now.setMonth(now.getMonth() - num);
+  } else if (str.includes('năm')) {
+    now.setFullYear(now.getFullYear() - num);
+  }
+
+  return now;
+}
+
 function cleanReviewText(text) {
   return String(text || '')
     .replace(/[\r\n]+/g, ' ')
@@ -170,156 +250,6 @@ function extractGoogleMapsSearchQuery(url) {
   return searchQuery;
 }
 
-function extractGoogleMapsPlaceInfo(url) {
-  const rawUrl = String(url || '').trim();
-
-  let query = extractGoogleMapsSearchQuery(rawUrl);
-  let latitude = null;
-  let longitude = null;
-
-  try {
-    const decodedUrl = decodeURIComponent(rawUrl);
-
-    const coordMatch = decodedUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-
-    if (coordMatch) {
-      latitude = Number(coordMatch[1]);
-      longitude = Number(coordMatch[2]);
-    }
-
-    if (decodedUrl.includes('/place/')) {
-      const placeName = decodedUrl.split('/place/')[1].split('/')[0];
-      query = placeName.replace(/\+/g, ' ').trim();
-    }
-  } catch {
-    console.log('⚠️ Không thể tách tọa độ Google Maps, dùng từ khóa gốc.');
-  }
-
-  return {
-    query,
-    latitude,
-    longitude,
-  };
-}
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  if (
-    lat1 === null ||
-    lon1 === null ||
-    lat2 === null ||
-    lon2 === null ||
-    Number.isNaN(lat1) ||
-    Number.isNaN(lon1) ||
-    Number.isNaN(lat2) ||
-    Number.isNaN(lon2)
-  ) {
-    return Number.MAX_SAFE_INTEGER;
-  }
-
-  const earthRadiusKm = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusKm * c;
-}
-
-function pickBestGoogleMapsResult(data, placeInfo) {
-  if (data.place_results && data.place_results.data_id) {
-    const gps = data.place_results.gps_coordinates || {};
-
-    if (placeInfo.latitude !== null && placeInfo.longitude !== null && gps.latitude && gps.longitude) {
-      const distance = calculateDistance(
-        placeInfo.latitude,
-        placeInfo.longitude,
-        Number(gps.latitude),
-        Number(gps.longitude),
-      );
-
-      console.log(
-        `📍 Exact Match: ${data.place_results.title || 'Không rõ tên'} - cách tọa độ URL ${distance.toFixed(3)} km`,
-      );
-    }
-
-    return data.place_results.data_id;
-  }
-
-  const localResults = data.local_results || [];
-
-  if (!localResults.length) {
-    return null;
-  }
-
-  if (placeInfo.latitude !== null && placeInfo.longitude !== null) {
-    const sorted = localResults
-      .filter((item) => item.data_id)
-      .map((item) => {
-        const gps = item.gps_coordinates || {};
-
-        const distance = calculateDistance(
-          placeInfo.latitude,
-          placeInfo.longitude,
-          Number(gps.latitude),
-          Number(gps.longitude),
-        );
-
-        return {
-          ...item,
-          distance,
-        };
-      })
-      .sort((a, b) => a.distance - b.distance);
-
-    if (sorted.length > 0) {
-      console.log(
-        `📍 Đã chọn địa điểm gần tọa độ URL nhất: ${sorted[0].title || 'Không rõ tên'} - cách ${sorted[0].distance.toFixed(3)} km`,
-      );
-
-      return sorted[0].data_id;
-    }
-  }
-
-  console.log('⚠️ Không có tọa độ URL, dùng kết quả local_results đầu tiên.');
-  return localResults[0].data_id || null;
-}
-
-async function findGoogleMapsDataId(url, logLabel = 'Google Maps') {
-  const placeInfo = extractGoogleMapsPlaceInfo(url);
-  const searchQuery = placeInfo.query;
-
-  console.log(`🔍 Bước 1: Tìm ID quán ${logLabel} cho từ khóa: ${searchQuery}...`);
-
-  let searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
-    searchQuery,
-  )}&api_key=${SERPAPI_KEY}&hl=vi`;
-
-  if (placeInfo.latitude !== null && placeInfo.longitude !== null) {
-    searchUrl += `&ll=@${placeInfo.latitude},${placeInfo.longitude},16z`;
-    console.log(`📍 Tọa độ từ URL: ${placeInfo.latitude}, ${placeInfo.longitude}`);
-  }
-
-  const searchRes = await axios.get(searchUrl);
-  const data = searchRes.data;
-
-  const dataId = pickBestGoogleMapsResult(data, placeInfo);
-
-  if (!dataId) {
-    throw new Error(`Không tìm thấy địa điểm trên Google Maps cho từ khóa: ${searchQuery}`);
-  }
-
-  console.log(`✅ Đã chọn data_id: ${dataId}`);
-
-  return dataId;
-}
-
 async function getLastScrapedDate({ url, userId }) {
   try {
     console.log('⏳ Đang hỏi FastAPI mốc thời gian cào lần cuối...');
@@ -344,16 +274,23 @@ async function sendReviewsToPredictBatch({
   url,
   datasetName,
   datasetType,
+  scrapeTask = null,
 }) {
+  ensureTaskNotStopped(scrapeTask);
+
   if (!cleanReviews.length) {
     return {
       message: 'Quán này không có bình luận nào mới kể từ lần cào trước.',
+      results: [],
+      count: 0,
     };
   }
 
   console.log('🚀 Đang gửi dữ liệu sang FastAPI để AI phân tích...');
 
   try {
+    ensureTaskNotStopped(scrapeTask);
+
     const response = await axios.post(`${PYTHON_API}/predict/batch`, {
       reviews: cleanReviews,
       user_id: userId,
@@ -361,6 +298,8 @@ async function sendReviewsToPredictBatch({
       dataset_name: datasetName,
       dataset_type: datasetType,
     });
+
+    ensureTaskNotStopped(scrapeTask);
 
     console.log('🎉 AI và Database đã xử lý xong!');
     return response.data;
@@ -528,12 +467,33 @@ async function scrapeGoogleMapsForCompare(url) {
     );
   }
 
+  const searchQuery = extractGoogleMapsSearchQuery(url);
+
   try {
-    const dataId = await findGoogleMapsDataId(url, 'Google Maps Compare');
+    console.log('🔍 Bước 1: Tìm ID quán Google Maps cho Compare...');
+
+    const searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
+      searchQuery,
+    )}&api_key=${SERPAPI_KEY}&hl=vi`;
+
+    const searchRes = await axios.get(searchUrl);
+    const data = searchRes.data;
+
+    let dataId = null;
+
+    if (data.place_results && data.place_results.data_id) {
+      dataId = data.place_results.data_id;
+    } else if (data.local_results && data.local_results.length > 0) {
+      dataId = data.local_results[0].data_id;
+    }
+
+    if (!dataId) {
+      throw new Error(`Không tìm thấy địa điểm trên Google Maps cho từ khóa: ${searchQuery}`);
+    }
 
     console.log('🔍 Bước 2: Tải bình luận Google Maps cho Compare...');
 
-    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi&sort_by=newestFirst`;
+    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
 
     const reviewRes = await axios.get(reviewUrl);
     const rawReviews = reviewRes.data.reviews;
@@ -551,17 +511,15 @@ async function scrapeGoogleMapsForCompare(url) {
         rawText = rawText.translated || rawText.original || rawText.text || '';
       }
 
-      let safeString = String(rawText);
+      const content = cleanReviewText(String(rawText));
 
-      if (safeString === '[object Object]') {
-        safeString = '';
-      }
+      if (!content || content.includes('[object Object]')) continue;
 
-      const content = cleanReviewText(safeString);
-
-      if (!content) continue;
-
-      const reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
+      const reviewDate = item.iso_date
+        ? new Date(item.iso_date)
+        : item.date
+          ? parseVietnameseDate(item.date)
+          : new Date();
 
       cleanReviews.push({
         content,
@@ -595,10 +553,13 @@ async function scrapeFoody(
   lastScrapedDate,
   datasetName = 'Foody',
   datasetType = 'foody',
+  scrapeTask = null,
 ) {
   console.log(`🤖 Nhận lệnh cào Foody từ User ID: ${userId}`);
   console.log(`⏱️ Mốc thời gian dừng cào: ${lastScrapedDate || 'Chưa từng cào'}`);
   console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
+
+  ensureTaskNotStopped(scrapeTask);
 
   const browser = await puppeteer.launch({
     headless: false,
@@ -608,6 +569,8 @@ async function scrapeFoody(
   const page = await browser.newPage();
 
   try {
+    ensureTaskNotStopped(scrapeTask);
+
     console.log(`🌐 Đang truy cập trang: ${url}`);
 
     await page.goto(url, {
@@ -615,8 +578,12 @@ async function scrapeFoody(
       timeout: 60000,
     });
 
+    ensureTaskNotStopped(scrapeTask);
+
     console.log('⏳ Đang đợi Foody khởi tạo giao diện...');
     await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    ensureTaskNotStopped(scrapeTask);
 
     console.log('⏳ Đang tìm và tự động click nút "Xem thêm bình luận"...');
 
@@ -624,10 +591,14 @@ async function scrapeFoody(
     let clickCount = 0;
 
     while (hasMoreComments && clickCount < 50) {
+      ensureTaskNotStopped(scrapeTask);
+
       try {
         await page.waitForSelector('a.fd-btn-more', {
           timeout: 2000,
         });
+
+        ensureTaskNotStopped(scrapeTask);
 
         const clicked = await page.evaluate(() => {
           const buttons = document.querySelectorAll('a.fd-btn-more');
@@ -660,6 +631,8 @@ async function scrapeFoody(
         hasMoreComments = false;
       }
     }
+
+    ensureTaskNotStopped(scrapeTask);
 
     console.log('🔍 Bắt đầu bóc tách nội dung và ngày đăng...');
 
@@ -694,6 +667,8 @@ async function scrapeFoody(
     const cleanReviews = [];
 
     for (const item of rawReviews) {
+      ensureTaskNotStopped(scrapeTask);
+
       const formattedText = cleanReviewText(item.text);
 
       if (isValidComment(formattedText)) {
@@ -713,6 +688,8 @@ async function scrapeFoody(
       }
     }
 
+    ensureTaskNotStopped(scrapeTask);
+
     console.log(`💎 Thành phẩm Foody: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`);
 
     return sendReviewsToPredictBatch({
@@ -721,56 +698,25 @@ async function scrapeFoody(
       url,
       datasetName,
       datasetType,
+      scrapeTask,
     });
   } finally {
     await browser.close();
   }
 }
-// ==========================================
-// HÀM HỖ TRỢ: Dịch chữ "4 tháng trước" thành Ngày chuẩn
-// ==========================================
-// ==========================================
-// HÀM HỖ TRỢ: Dịch chữ "4 tháng trước", "2 tuần trước" thành Ngày chuẩn
-// ==========================================
-function parseVietnameseDate(dateString) {
-  if (!dateString) return new Date();
-  
-  const now = new Date();
-  const str = dateString.toLowerCase();
-  
-  // Tìm con số trong chuỗi (vd: "4" trong "4 tháng trước")
-  const match = str.match(/(\d+)/); 
-  const num = match ? parseInt(match[1]) : 1;
-  
-  if (str.includes('phút') || str.includes('vừa xong')) {
-      now.setMinutes(now.getMinutes() - num);
-  } else if (str.includes('giờ') || str.includes('tiếng')) {
-      now.setHours(now.getHours() - num);
-  } else if (str.includes('ngày')) {
-      now.setDate(now.getDate() - num);
-  } else if (str.includes('tuần')) {
-      now.setDate(now.getDate() - (num * 7));
-  } else if (str.includes('tháng')) {
-      now.setMonth(now.getMonth() - num);
-  } else if (str.includes('năm')) {
-      now.setFullYear(now.getFullYear() - num);
-  }
-  
-  return now;
-}
 
-// ==========================================
-// CỖ MÁY CÀO GOOGLE MAPS (ĐÃ VÁ LỖI TOÀN DIỆN)
-// ==========================================
 async function scrapeGoogleMaps(
   url,
   userId,
   lastScrapedDate,
   datasetName = 'Google Maps',
   datasetType = 'google_maps',
+  scrapeTask = null,
 ) {
   console.log(`🤖 Nhận lệnh cào Google Maps từ User ID: ${userId}`);
   console.log(`⏱️ Mốc thời gian dừng cào: ${lastScrapedDate || 'Chưa từng cào'}`);
+
+  ensureTaskNotStopped(scrapeTask);
 
   if (!SERPAPI_KEY) {
     throw new Error(
@@ -778,19 +724,48 @@ async function scrapeGoogleMaps(
     );
   }
 
+  const searchQuery = extractGoogleMapsSearchQuery(url);
+
   try {
-    const dataId = await findGoogleMapsDataId(url, 'Google Maps');
+    console.log(`🔍 Bước 1: Tìm ID quán trên Google Maps cho từ khóa: ${searchQuery}...`);
+
+    ensureTaskNotStopped(scrapeTask);
+
+    const searchUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
+      searchQuery,
+    )}&api_key=${SERPAPI_KEY}&hl=vi`;
+
+    const searchRes = await axios.get(searchUrl);
+
+    ensureTaskNotStopped(scrapeTask);
+
+    const data = searchRes.data;
+
+    let dataId = null;
+
+    if (data.place_results && data.place_results.data_id) {
+      dataId = data.place_results.data_id;
+      console.log('👉 Bắt được quán ở chế độ Exact Match.');
+    } else if (data.local_results && data.local_results.length > 0) {
+      dataId = data.local_results[0].data_id;
+      console.log('👉 Bắt được quán ở chế độ List Match.');
+    }
+
+    if (!dataId) {
+      throw new Error(`Không tìm thấy địa điểm trên Google Maps cho từ khóa: ${searchQuery}`);
+    }
 
     console.log(`✅ Tìm thấy mã quán data_id: ${dataId}. Bắt đầu tải bình luận...`);
 
     const cleanReviews = [];
-    let nextToken = '';
+    let nextToken = null;
     let pageCount = 0;
     let isStop = false;
 
-    while (pageCount < 5 && !isStop) {
+    while (!isStop && pageCount < 10) {
+      ensureTaskNotStopped(scrapeTask);
+
       pageCount += 1;
-      console.log(`⏳ Đang cào dữ liệu Trang ${pageCount}...`);
 
       let reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi&sort_by=newestFirst`;
 
@@ -798,15 +773,22 @@ async function scrapeGoogleMaps(
         reviewUrl += `&next_page_token=${encodeURIComponent(nextToken)}`;
       }
 
+      console.log(`📄 Đang tải trang bình luận Google Maps số ${pageCount}...`);
+
       const reviewRes = await axios.get(reviewUrl);
+
+      ensureTaskNotStopped(scrapeTask);
+
       const rawReviews = reviewRes.data.reviews || [];
 
-      if (rawReviews.length === 0) break;
+      if (!rawReviews.length) {
+        console.log('✅ Không còn bình luận Google Maps để tải.');
+        break;
+      }
 
       for (const item of rawReviews) {
-        // ------------------------------------------
-        // 1. TRẠM KIỂM DUYỆT NỘI DUNG
-        // ------------------------------------------
+        ensureTaskNotStopped(scrapeTask);
+
         let rawText = item.snippet || item.details || '';
 
         if (typeof rawText === 'object' && rawText !== null) {
@@ -821,27 +803,23 @@ async function scrapeGoogleMaps(
 
         const content = cleanReviewText(safeString);
 
-        // Chặn thêm một lớp [object Object] cứng đầu nếu hàm clean lỡ bỏ sót
-        if (!content || content.includes('[object Object]')) continue;
-
-        // ------------------------------------------
-        // 2. TRẠM KIỂM DUYỆT THỜI GIAN
-        // ------------------------------------------
-        let reviewDate;
-        if (item.iso_date) {
-            reviewDate = new Date(item.iso_date); 
-        } else if (item.date) {
-            reviewDate = parseVietnameseDate(item.date); // Gọi hàm hỗ trợ dịch tiếng Việt
-        } else {
-            reviewDate = new Date(); 
+        if (!content || content.includes('[object Object]')) {
+          continue;
         }
 
-        // ------------------------------------------
-        // 3. SO SÁNH VỚI MỐC THỜI GIAN CUTOFF
-        // ------------------------------------------
+        let reviewDate;
+
+        if (item.iso_date) {
+          reviewDate = new Date(item.iso_date);
+        } else if (item.date) {
+          reviewDate = parseVietnameseDate(item.date);
+        } else {
+          reviewDate = new Date();
+        }
+
         if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
           console.log(
-            `🛑 Đã chạm bình luận cũ (Ngày: ${reviewDate.toISOString()}) ở Trang ${pageCount}. Ngắt thu thập!`,
+            `🛑 Đã chạm bình luận cũ (Ngày: ${reviewDate.toISOString()}) ở trang ${pageCount}. Ngắt thu thập!`,
           );
           isStop = true;
           break;
@@ -853,23 +831,29 @@ async function scrapeGoogleMaps(
         });
       }
 
+      ensureTaskNotStopped(scrapeTask);
+
       if (!isStop && reviewRes.data.serpapi_pagination?.next_page_token) {
         nextToken = reviewRes.data.serpapi_pagination.next_page_token;
+
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       } else {
         break;
       }
     }
 
-    if (cleanReviews.length === 0) {
+    if (!cleanReviews.length) {
       return {
-        message: 'Quán này không có bình luận nào mới.',
+        message: 'Quán này không có bình luận nào mới kể từ lần cào trước.',
         results: [],
         count: 0,
       };
     }
 
+    ensureTaskNotStopped(scrapeTask);
+
     console.log(
-      `💎 Thành phẩm Google Maps: Lật ${pageCount} trang, thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`,
+      `💎 Thành phẩm Google Maps: Thu thập được ${cleanReviews.length} bình luận mới hợp lệ!`,
     );
 
     return sendReviewsToPredictBatch({
@@ -878,6 +862,7 @@ async function scrapeGoogleMaps(
       url,
       datasetName,
       datasetType,
+      scrapeTask,
     });
   } catch (error) {
     console.error('🔥 Lỗi cào Google Maps:', error.response?.data || error.message);
@@ -889,8 +874,28 @@ async function scrapeGoogleMaps(
     );
   }
 }
+
+app.post('/api/scrape/stop', (req, res) => {
+  const { task_id } = req.body;
+
+  if (!task_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Thiếu task_id.',
+    });
+  }
+
+  const stopped = stopScrapeTask(task_id);
+
+  return res.json({
+    success: true,
+    stopped,
+    task_id,
+  });
+});
+
 app.post('/api/scrape', async (req, res) => {
-  const { url, user_id, dataset_name, dataset_type, custom_start_date } = req.body;
+  const { task_id, url, user_id, dataset_name, dataset_type } = req.body;
 
   if (!url || !user_id) {
     return res.status(400).json({
@@ -898,6 +903,8 @@ app.post('/api/scrape', async (req, res) => {
       error: 'Thiếu url hoặc user_id',
     });
   }
+
+  const scrapeTask = createScrapeTask(task_id);
 
   try {
     const sourceInfo = detectUrlSource(url);
@@ -909,18 +916,14 @@ app.post('/api/scrape', async (req, res) => {
       });
     }
 
-    let cutoffDate = null;
+    ensureTaskNotStopped(scrapeTask);
 
-    if (custom_start_date) {
-      console.log(`🕒 User ép buộc mốc thời gian cào từ ngày: ${custom_start_date}`);
-      cutoffDate = custom_start_date;
-    } else {
-      console.log('⏳ Không có mốc tùy chọn. Đang hỏi Database mốc thời gian cào lần cuối...');
-      cutoffDate = await getLastScrapedDate({
-        url,
-        userId: user_id,
-      });
-    }
+    const lastScrapedDate = await getLastScrapedDate({
+      url,
+      userId: user_id,
+    });
+
+    ensureTaskNotStopped(scrapeTask);
 
     const finalDatasetName = dataset_name || sourceInfo.name;
     const finalDatasetType = dataset_type || sourceInfo.type;
@@ -933,9 +936,10 @@ app.post('/api/scrape', async (req, res) => {
       result = await scrapeFoody(
         url,
         user_id,
-        cutoffDate,
+        lastScrapedDate,
         finalDatasetName,
         finalDatasetType,
+        scrapeTask,
       );
     } else if (sourceInfo.type === 'google_maps') {
       console.log('👉 Phát hiện link Google Maps. Đang gọi Bot SerpApi...');
@@ -943,9 +947,10 @@ app.post('/api/scrape', async (req, res) => {
       result = await scrapeGoogleMaps(
         url,
         user_id,
-        cutoffDate,
+        lastScrapedDate,
         finalDatasetName,
         finalDatasetType,
+        scrapeTask,
       );
     }
 
@@ -965,6 +970,8 @@ app.post('/api/scrape', async (req, res) => {
       detail: error.message,
       status: error.status || 500,
     });
+  } finally {
+    removeScrapeTask(task_id);
   }
 });
 

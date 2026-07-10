@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from collections import Counter
+from datetime import datetime, timezone
 import unicodedata
 import re
 import time
+
 from app.database import supabase
 
 router = APIRouter(tags=["Dashboard & Alerts"])
@@ -46,10 +48,6 @@ def normalize_text(value):
 
 
 def is_negative_label(value):
-    """
-    Chỉ xem là tiêu cực khi nhãn AI thật sự là negative / 0.
-    Không cảnh báo bình luận tích cực dù có keyword nhạy cảm.
-    """
     if value in [0, "0", False]:
         return True
 
@@ -140,10 +138,7 @@ def parse_time(value):
         return 0
 
     try:
-        # Supabase thường trả ISO string.
-        # Thay Z để Python đọc được timezone UTC.
         value = str(value).replace("Z", "+00:00")
-        from datetime import datetime
         return datetime.fromisoformat(value).timestamp()
     except Exception:
         return 0
@@ -180,13 +175,6 @@ def calculate_alert_score(item):
 
 
 def sort_alerts_stable(item):
-    """
-    Sort ổn định:
-    - Điểm cảnh báo cao trước
-    - Ngày mới trước
-    - Confidence cao trước
-    - id/content để tránh nhảy lung tung
-    """
     return (
         -calculate_alert_score(item),
         -get_review_time(item),
@@ -216,11 +204,6 @@ def unique_by_content(items):
 
 
 def build_alerts(rows, limit=20):
-    """
-    Tầng 1: tiêu cực + is_action_required
-    Tầng 2: tiêu cực + keyword nguy hiểm
-    Tầng 3: tiêu cực còn lại
-    """
     negative_rows = [
         item for item in rows
         if is_negative_label(item.get("ai_label")) and get_content_key(item)
@@ -266,6 +249,47 @@ def build_alerts(rows, limit=20):
     return picked[:limit]
 
 
+def is_vip_still_active(vip_expires_at):
+    if not vip_expires_at:
+        return True
+
+    try:
+        expires_at = datetime.fromisoformat(
+            str(vip_expires_at).replace("Z", "+00:00")
+        )
+
+        return expires_at >= datetime.now(timezone.utc)
+    except Exception:
+        return True
+
+
+def get_user_access_info(user_id: str):
+    profile_res = (
+        supabase
+        .table("profiles")
+        .select("tier, role, vip_expires_at")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+
+    profile = profile_res.data or {}
+
+    tier = profile.get("tier")
+    role = profile.get("role")
+    vip_expires_at = profile.get("vip_expires_at")
+
+    is_admin = role == "admin"
+    is_vip = tier == "vip" and is_vip_still_active(vip_expires_at)
+
+    return {
+        "profile": profile,
+        "is_admin": is_admin,
+        "is_vip": is_vip,
+        "can_use_vip_feature": is_admin or is_vip,
+    }
+
+
 @router.get("/api/last-scraped")
 async def get_last_scraped(source_url: str, user_id: str):
     try:
@@ -299,34 +323,22 @@ async def get_last_scraped(source_url: str, user_id: str):
 @router.get("/api/dashboard/alerts")
 async def get_dashboard_alerts(source_url: str, user_id: str):
     try:
-        profile = (
-            supabase
-            .table("profiles")
-            .select("tier")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
+        access = get_user_access_info(user_id)
 
-        is_vip = profile.data and profile.data.get("tier") == "vip"
-
-        if not is_vip:
+        if not access["can_use_vip_feature"]:
             raise HTTPException(
                 status_code=403,
-                detail="Tính năng Cảnh báo Đỏ chỉ dành cho tài khoản VIP.",
+                detail="Tính năng Cảnh báo Đỏ chỉ dành cho tài khoản VIP hoặc Admin.",
             )
 
-        # Lấy nhiều hơn 20 để còn lọc trùng, lọc tiêu cực, chấm điểm.
-        # Không chỉ lấy is_action_required nữa, vì nếu không đủ thì cần bổ sung
-        # các bình luận tiêu cực khác.
         query = (
             supabase
             .table("scraped_reviews")
             .select(
-    "id, content, review_date, created_at, keywords, "
-    "ai_label, confidence, is_action_required, source_url, "
-    "dataset_type, dataset_name"
-)
+                "id, content, review_date, created_at, keywords, "
+                "ai_label, confidence, is_action_required, source_url, "
+                "dataset_type, dataset_name"
+            )
             .eq("user_id", user_id)
             .order("review_date", desc=True)
             .limit(300)
@@ -355,16 +367,8 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
 @router.get("/api/dashboard/keyword-analytics")
 async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
     try:
-        profile_res = (
-            supabase
-            .table("profiles")
-            .select("tier")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-
-        is_vip = profile_res.data and profile_res.data.get("tier") == "vip"
+        access = get_user_access_info(user_id)
+        can_use_vip_feature = access["can_use_vip_feature"]
 
         query = (
             supabase
@@ -422,7 +426,7 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
 
         wordcloud_data = []
 
-        if is_vip:
+        if can_use_vip_feature:
             for kw, count in pos_counts.most_common(20):
                 wordcloud_data.append({
                     "text": kw.capitalize(),

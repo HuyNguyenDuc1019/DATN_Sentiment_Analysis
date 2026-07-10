@@ -6,6 +6,7 @@ const normalizeLabel = (value) => {
   if (value === 0 || value === '0') return 0;
 
   const text = String(value ?? '').trim().toLowerCase();
+
   return [
     'positive',
     'pos',
@@ -61,6 +62,7 @@ const extractCount = (payload, depth = 0) => {
 
 const getErrorMessage = (data, fallback) => {
   const raw = data?.detail ?? data?.error ?? data?.message ?? data;
+
   if (!raw) return fallback;
   if (typeof raw === 'string') return raw;
 
@@ -80,7 +82,7 @@ const getErrorMessage = (data, fallback) => {
   return String(raw);
 };
 
-const post = async (url, body) => {
+const post = async (url, body, options = {}) => {
   let response;
   let data;
 
@@ -89,9 +91,15 @@ const post = async (url, body) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: options.signal,
     });
+
     data = await response.json().catch(() => null);
-  } catch {
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
+
     throw new Error('Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.');
   }
 
@@ -134,13 +142,13 @@ const get = async (url, params = {}) => {
   return data;
 };
 
-export const predictBatch = async (payload) => {
-  const data = await post(`${PYTHON_API}/predict/batch`, payload);
+export const predictBatch = async (payload, options = {}) => {
+  const data = await post(`${PYTHON_API}/predict/batch`, payload, options);
   return extractResults(data).map(normalizeResult).filter((item) => item.text);
 };
 
-export const analyzeUrl = async (payload) => {
-  const data = await post(`${SCRAPER_API}/api/scrape`, payload);
+export const analyzeUrl = async (payload, options = {}) => {
+  const data = await post(`${SCRAPER_API}/api/scrape`, payload, options);
   const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
   const count = results.length || extractCount(data);
 
@@ -149,6 +157,14 @@ export const analyzeUrl = async (payload) => {
     count,
     raw: data,
   };
+};
+
+export const stopScrapeTask = async (taskId) => {
+  if (!taskId) return null;
+
+  return post(`${SCRAPER_API}/api/scrape/stop`, {
+    task_id: taskId,
+  });
 };
 
 export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);

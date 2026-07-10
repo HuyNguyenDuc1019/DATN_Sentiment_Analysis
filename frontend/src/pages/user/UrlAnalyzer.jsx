@@ -12,10 +12,20 @@ import { normalizeConfidence } from '../../utils/user/urlAnalyzerUtils';
 
 export default function UrlAnalyzer() {
   const { urlAnalyzer } = useTasks();
-  const { url, setUrl, results, count, loading, filter, setFilter, analyze } = urlAnalyzer;
+
+  const {
+    url,
+    setUrl,
+    results,
+    count,
+    loading,
+    filter,
+    setFilter,
+    analyze,
+    stop,
+  } = urlAnalyzer;
 
   const [page, setPage] = useState(1);
-  const [customDate, setCustomDate] = useState('');
 
   const pageSize = 6;
   const receivedCount = Number(count || results.length || 0);
@@ -46,10 +56,6 @@ export default function UrlAnalyzer() {
     setPage(1);
   }, [filter, results.length]);
 
-  const handleAnalyze = () => {
-    analyze({ customDate });
-  };
-
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
       <div>
@@ -67,9 +73,8 @@ export default function UrlAnalyzer() {
           url={url}
           setUrl={setUrl}
           loading={loading}
-          analyze={handleAnalyze}
-          customDate={customDate}
-          setCustomDate={setCustomDate}
+          analyze={analyze}
+          stop={stop}
         />
 
         <ResponseCounterCard receivedCount={receivedCount} />

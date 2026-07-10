@@ -52,10 +52,12 @@ export function AuthProvider({ children }) {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, avatar_url, role, status, tier, created_at')
-        .eq('id', targetUserId)
-        .maybeSingle();
+  .from('profiles')
+  .select(
+    'id, email, full_name, avatar_url, role, status, tier, vip_started_at, vip_expires_at, created_at',
+  )
+  .eq('id', targetUserId)
+  .maybeSingle();
 
       if (error) throw error;
 
