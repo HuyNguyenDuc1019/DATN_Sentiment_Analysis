@@ -21,13 +21,39 @@ import {
 } from '../../utils/admin/transactionUtils';
 
 import {
+  cancelAdminTransaction,
+  confirmAdminTransaction,
   copyTextToClipboard,
   fetchAdminTransactions,
 } from '../../services/admin/transactionService';
 
+const normalizeTransactionResponse = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.transactions)) return response.transactions;
+  if (Array.isArray(response?.items)) return response.items;
+
+  return [];
+};
+
+const getProfileInfo = (item) => {
+  const profile = item?.profiles || item?.profile || item?.user_profile || null;
+
+  return {
+    email: profile?.email || item?.email || 'N/A',
+    fullName:
+      profile?.full_name ||
+      profile?.fullName ||
+      item?.full_name ||
+      item?.fullName ||
+      'N/A',
+  };
+};
+
 export default function AdminTransactions() {
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [startDateFilter, setStartDateFilter] = useState('');
@@ -40,18 +66,25 @@ export default function AdminTransactions() {
   const fetchTransactions = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchAdminTransactions();
 
-      const formattedData = data.map((item) => ({
-        ...item,
-        email: item.profiles?.email || 'N/A',
-        fullName: item.profiles?.full_name || 'N/A',
-      }));
+      const response = await fetchAdminTransactions();
+      const transactionList = normalizeTransactionResponse(response);
+
+      const formattedData = transactionList.map((item) => {
+        const profileInfo = getProfileInfo(item);
+
+        return {
+          ...item,
+          email: profileInfo.email,
+          fullName: profileInfo.fullName,
+        };
+      });
 
       setTransactions(formattedData);
     } catch (error) {
       console.error(error);
-      toast.error('Không thể tải danh sách giao dịch.');
+      toast.error(error.message || 'Không thể tải danh sách giao dịch.');
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +113,11 @@ export default function AdminTransactions() {
   const summary = useMemo(() => buildTransactionSummary(filteredData), [filteredData]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
-  const paginatedData = filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const paginatedData = filteredData.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
 
   const hasActiveFilter =
     searchTerm.trim() ||
@@ -135,6 +172,50 @@ export default function AdminTransactions() {
     }
   };
 
+  const handleConfirmTransaction = async (transaction) => {
+    const ok = window.confirm(
+      `Xác nhận giao dịch ${transaction.payment_code || transaction.id} và nâng cấp VIP cho người dùng?`,
+    );
+
+    if (!ok) return;
+
+    try {
+      setActionLoadingId(transaction.id);
+
+      await confirmAdminTransaction(transaction.id);
+      await fetchTransactions();
+
+      toast.success('Đã xác nhận giao dịch và nâng cấp VIP.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || 'Không thể xác nhận giao dịch.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleCancelTransaction = async (transaction) => {
+    const ok = window.confirm(
+      `Bạn chắc chắn muốn hủy giao dịch ${transaction.payment_code || transaction.id}?`,
+    );
+
+    if (!ok) return;
+
+    try {
+      setActionLoadingId(transaction.id);
+
+      await cancelAdminTransaction(transaction.id);
+      await fetchTransactions();
+
+      toast.success('Đã hủy giao dịch.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || 'Không thể hủy giao dịch.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const exportCsv = () => {
     try {
       exportTransactionsCsv(filteredData);
@@ -178,16 +259,21 @@ export default function AdminTransactions() {
           filteredData={filteredData}
           paginatedData={paginatedData}
           sortConfig={sortConfig}
+          actionLoadingId={actionLoadingId}
           onSort={handleSort}
           getSortLabel={(key) => getSortLabel(sortConfig, key)}
           onCopyTransactionId={copyTransactionId}
           onSelectTransaction={setSelectedTransaction}
+          onConfirmTransaction={handleConfirmTransaction}
+          onCancelTransaction={handleCancelTransaction}
         />
 
         {!isLoading && filteredData.length > 0 && (
           <div className="admin-transactions-pagination px-4 py-3 border-t border-slate-700 bg-slate-800/50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-400">
-              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1} - {Math.min(currentPage * PAGE_SIZE, filteredData.length)} trong {filteredData.length} giao dịch
+              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1} -{' '}
+              {Math.min(currentPage * PAGE_SIZE, filteredData.length)} trong{' '}
+              {filteredData.length} giao dịch
             </p>
 
             <Pagination
@@ -204,6 +290,9 @@ export default function AdminTransactions() {
           transaction={selectedTransaction}
           onClose={() => setSelectedTransaction(null)}
           onCopyTransactionId={copyTransactionId}
+          onConfirmTransaction={handleConfirmTransaction}
+          onCancelTransaction={handleCancelTransaction}
+          actionLoadingId={actionLoadingId}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
         />

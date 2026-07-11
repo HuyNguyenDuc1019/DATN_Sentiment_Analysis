@@ -1,46 +1,57 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
   Copy,
   Crown,
   Loader2,
+  PartyPopper,
   QrCode,
   ShieldCheck,
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../../services/supabaseClient';
 
-const API_BASE_URL =
-  import.meta.env.VITE_FASTAPI_URL ||
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_PYTHON_API ||
-  'http://localhost:8000';
+import {
+  createVipPayment,
+  confirmVipMockPayment,
+} from '../../services/api';
 
-const PLAN_AMOUNT = 99000;
-const PLAN_DURATION_DAYS = 30;
-const PLAN_NAME = 'VIP 30 ngày';
+import { useAuth } from '../../contexts/AuthContext';
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString('vi-VN') + 'đ';
 }
 
-const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
+function unwrapPaymentPayload(response) {
+  return response?.data && typeof response.data === 'object'
+    ? response.data
+    : response;
+}
+
+function normalizeQrImage(value) {
+  if (!value) return '';
+
+  const text = String(value);
+
+  if (text.startsWith('data:image')) {
+    return text;
+  }
+
+  return `data:image/png;base64,${text}`;
+}
+
+const UpgradeModal = ({ isOpen, onClose, userId, onUpgraded }) => {
+  const { user, refreshUserProfile } = useAuth();
+
+  const effectiveUserId = userId || user?.id;
+
   const [step, setStep] = useState('plan');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentData, setPaymentData] = useState(null);
-  const [confirmResult, setConfirmResult] = useState(null);
 
-  const bankInfo = paymentData?.bank_info;
-
-  const fakeQrBlocks = useMemo(() => {
-    const seed = String(paymentData?.payment_code || 'VIP000000');
-    return Array.from({ length: 81 }, (_, index) => {
-      const code = seed.charCodeAt(index % seed.length);
-      return (code + index * 7) % 3 !== 0;
-    });
-  }, [paymentData?.payment_code]);
+  const [paymentCode, setPaymentCode] = useState('');
+  const [qrImage, setQrImage] = useState('');
+  const [amount, setAmount] = useState(0);
 
   if (!isOpen) return null;
 
@@ -48,129 +59,157 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
     if (isProcessing) return;
 
     setStep('plan');
-    setPaymentData(null);
-    setConfirmResult(null);
+    setPaymentCode('');
+    setQrImage('');
+    setAmount(0);
+
     onClose?.();
   };
 
   const copyText = async (value, message) => {
+    if (!value) {
+      toast.error('Không có nội dung để sao chép.');
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(String(value || ''));
+      await navigator.clipboard.writeText(String(value));
       toast.success(message || 'Đã sao chép.');
     } catch {
       toast.error('Không thể sao chép.');
     }
   };
 
-  const createPayment = async () => {
-    if (isProcessing) return;
+  const refreshVipStateInBackground = () => {
+    Promise.resolve()
+      .then(async () => {
+        if (typeof onUpgraded === 'function') {
+          await onUpgraded();
+          return;
+        }
 
-    setIsProcessing(true);
-
-    try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-
-      if (authError || !authData?.user) {
-        throw new Error('Vui lòng đăng nhập trước khi nâng cấp VIP.');
-      }
-
-      const userId = authData.user.id;
-
-      const res = await fetch(`${API_BASE_URL}/api/payment/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          amount: PLAN_AMOUNT,
-          plan_name: PLAN_NAME,
-          duration_days: PLAN_DURATION_DAYS,
-          payment_method: 'mock_bank_transfer',
-        }),
+        if (typeof refreshUserProfile === 'function') {
+          await refreshUserProfile();
+        }
+      })
+      .catch((error) => {
+        console.error('Không thể refresh profile sau khi nâng VIP:', error);
       });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || data?.success === false) {
-        throw new Error(
-          data?.detail ||
-            data?.message ||
-            data?.error ||
-            'Không thể tạo giao dịch thanh toán.',
-        );
-      }
-
-      setPaymentData({
-        ...data,
-        user_id: userId,
-      });
-
-      setStep('payment');
-      toast.success('Đã tạo giao dịch chờ thanh toán.');
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message || 'Có lỗi xảy ra khi tạo giao dịch.');
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
-  const confirmPayment = async () => {
+  const handleCreatePayment = async () => {
     if (isProcessing) return;
 
-    if (!paymentData?.transaction_id || !paymentData?.user_id) {
-      toast.error('Thiếu thông tin giao dịch.');
+    if (!effectiveUserId) {
+      toast.error('Vui lòng đăng nhập trước khi nâng cấp VIP.');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      const paymentPromise = new Promise((resolve) => setTimeout(resolve, 1800));
+      const response = await createVipPayment(effectiveUserId);
+      const data = unwrapPaymentPayload(response);
 
-      await toast.promise(paymentPromise, {
-        loading: 'Đang xác nhận thanh toán...',
-        success: 'Thanh toán hợp lệ! Đang kích hoạt VIP...',
-        error: 'Thanh toán thất bại.',
-      });
+      console.log('Payment create response:', response);
 
-      const res = await fetch(`${API_BASE_URL}/api/payment/confirm`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          transaction_id: paymentData.transaction_id,
-          user_id: paymentData.user_id,
-        }),
-      });
+      const nextPaymentCode =
+        data?.payment_code ||
+        data?.paymentCode ||
+        response?.payment_code ||
+        response?.paymentCode ||
+        '';
 
-      const data = await res.json().catch(() => null);
+      const nextQrImage = normalizeQrImage(
+        data?.qr_image ||
+          data?.qrImage ||
+          data?.qr_code ||
+          data?.qrCode ||
+          response?.qr_image ||
+          response?.qrImage ||
+          response?.qr_code ||
+          response?.qrCode ||
+          '',
+      );
 
-      if (!res.ok || data?.success === false) {
+      const nextAmount =
+        data?.amount ||
+        response?.amount ||
+        99000;
+
+      if (!nextPaymentCode) {
         throw new Error(
-          data?.detail ||
-            data?.message ||
-            data?.error ||
-            'Không thể xác nhận thanh toán.',
+          data?.message ||
+            response?.message ||
+            'Backend đã tạo giao dịch nhưng chưa trả về payment_code.',
         );
       }
 
-      setConfirmResult(data);
+      setPaymentCode(nextPaymentCode);
+      setQrImage(nextQrImage);
+      setAmount(Number(nextAmount || 0));
 
-      if (typeof onUpgraded === 'function') {
-        await onUpgraded();
+      setStep('payment');
+
+      toast.success(
+        data?.message ||
+          response?.message ||
+          'Đã tạo đơn hàng pending thành công.',
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || 'Có lỗi xảy ra khi tạo đơn thanh toán.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleMockWebhook = async () => {
+    if (isProcessing) return;
+
+    if (!paymentCode) {
+      toast.error('Thiếu mã thanh toán.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const response = await confirmVipMockPayment(paymentCode);
+      const data = unwrapPaymentPayload(response);
+
+      console.log('Mock webhook response:', response);
+
+      const isSuccess =
+        response?.success === true ||
+        data?.success === true ||
+        response?.status === 'success' ||
+        data?.status === 'success' ||
+        Boolean(response?.message || data?.message);
+
+      if (!isSuccess) {
+        throw new Error(
+          data?.message ||
+            response?.message ||
+            'Thanh toán mô phỏng thất bại.',
+        );
       }
 
       setStep('success');
 
-      toast.success('🎉 VIP 30 ngày đã được kích hoạt.', {
-        duration: 4000,
-      });
+      toast.success(
+        data?.message ||
+          response?.message ||
+          'Thanh toán thành công, tài khoản đã lên VIP!',
+        {
+          duration: 4000,
+        },
+      );
+
+      refreshVipStateInBackground();
     } catch (error) {
       console.error(error);
-      toast.error(error.message || 'Có lỗi xảy ra khi xác nhận thanh toán.');
+      toast.error(error.message || 'Có lỗi xảy ra khi thanh toán.');
     } finally {
       setIsProcessing(false);
     }
@@ -197,9 +236,12 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
             </div>
 
             <div>
-              <h2 className="text-2xl font-bold text-white">Thanh toán VIP</h2>
+              <h2 className="text-2xl font-bold text-white">
+                Thanh toán VIP
+              </h2>
+
               <p className="mt-1 text-sm text-slate-400">
-                Tạo giao dịch, thanh toán mock và kích hoạt VIP 30 ngày.
+                Quét QR và kích hoạt VIP cho demo báo cáo.
               </p>
             </div>
           </div>
@@ -222,7 +264,7 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
                   : 'border-slate-700 bg-slate-900/40 text-slate-400'
               }`}
             >
-              2. Thanh toán
+              2. Quét QR
             </div>
 
             <div
@@ -242,53 +284,46 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
             <div className="mb-6 rounded-2xl border border-indigo-500/20 bg-slate-900/40 p-5">
               <div>
                 <span className="text-4xl font-extrabold text-white">
-                  {formatMoney(PLAN_AMOUNT)}
+                  99.000đ
                 </span>
-                <span className="text-slate-400"> / 30 ngày</span>
+
+                <span className="text-slate-400"> / gói VIP</span>
               </div>
 
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                Gói Pro VIP mở khóa toàn bộ tính năng nâng cao trong vòng 30 ngày kể từ lúc xác nhận thanh toán.
+                Gói VIP mở khóa các tính năng nâng cao.
               </p>
             </div>
 
             <ul className="mb-8 space-y-4 text-slate-300">
               <li className="flex items-start gap-3">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <span>Phân tích dữ liệu không giới hạn.</span>
+                <span>Mở khóa phân tích Google Maps.</span>
               </li>
 
               <li className="flex items-start gap-3">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <span>Xử lý file dữ liệu lớn lên đến 50MB.</span>
+                <span>Mở khóa Dashboard nâng cao và cảnh báo.</span>
               </li>
 
-              <li className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <span>Mở khóa cảnh báo khủng hoảng, Word Cloud và so sánh quán ăn.</span>
-              </li>
-
-              <li className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <span>Lưu lịch sử giao dịch để Admin quản lý.</span>
-              </li>
+              
             </ul>
 
             <button
               type="button"
-              onClick={createPayment}
+              onClick={handleCreatePayment}
               disabled={isProcessing}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3.5 font-semibold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Đang tạo giao dịch...
+                  Đang tạo mã QR...
                 </>
               ) : (
                 <>
-                  <Crown className="h-5 w-5" />
-                  Tạo giao dịch VIP
+                  <QrCode className="h-5 w-5" />
+                  Nâng cấp VIP
                 </>
               )}
             </button>
@@ -310,83 +345,64 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
             <div className="mb-5 rounded-2xl border border-slate-700 bg-slate-900/50 p-5">
               <div className="mb-4 flex items-center gap-2 text-indigo-200">
                 <QrCode className="h-5 w-5" />
-                <h3 className="font-bold">QR thanh toán giả lập</h3>
+                <h3 className="font-bold">Mã QR thanh toán</h3>
               </div>
 
-              <div className="mx-auto grid h-44 w-44 grid-cols-9 gap-1 rounded-xl border border-slate-600 bg-white p-3">
-                {fakeQrBlocks.map((active, index) => (
-                  <div
-                    key={index}
-                    className={active ? 'rounded-sm bg-slate-900' : 'rounded-sm bg-white'}
+              <div className="mx-auto flex min-h-64 w-full max-w-xs items-center justify-center rounded-2xl border border-slate-600 bg-white p-4">
+                {qrImage ? (
+                  <img
+                    src={qrImage}
+                    alt="QR thanh toán VIP"
+                    className="h-60 w-60 object-contain"
                   />
-                ))}
+                ) : (
+                  <div className="text-center text-sm text-slate-500">
+                    Backend chưa trả về qr_image hoặc qr_code.
+                  </div>
+                )}
               </div>
 
-              <p className="mt-4 text-center text-xs text-slate-500">
-                QR giả lập cho demo đồ án, không kết nối cổng thanh toán thật.
-              </p>
+              
             </div>
 
             <div className="mb-5 space-y-3 rounded-2xl border border-slate-700 bg-slate-900/50 p-5 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Ngân hàng</span>
-                <span className="font-semibold text-white">{bankInfo?.bank_name || 'MB Bank'}</span>
-              </div>
+                <span className="text-slate-400">Mã thanh toán</span>
 
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Chủ tài khoản</span>
-                <span className="font-semibold text-white">
-                  {bankInfo?.account_name || 'ALMOTION SYSTEM'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Số tài khoản</span>
                 <button
                   type="button"
-                  onClick={() => copyText(bankInfo?.account_number, 'Đã sao chép số tài khoản.')}
-                  className="inline-flex items-center gap-2 font-semibold text-white hover:text-indigo-300"
+                  onClick={() => copyText(paymentCode, 'Đã sao chép mã thanh toán.')}
+                  className="inline-flex items-center gap-2 font-semibold text-amber-300 hover:text-amber-200"
                 >
-                  {bankInfo?.account_number || '0123456789'}
+                  {paymentCode || 'Không có'}
                   <Copy className="h-3.5 w-3.5" />
                 </button>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-400">Số tiền</span>
-                <span className="font-semibold text-white">
-                  {formatMoney(paymentData?.amount || PLAN_AMOUNT)}
-                </span>
-              </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Nội dung</span>
-                <button
-                  type="button"
-                  onClick={() => copyText(paymentData?.payment_code, 'Đã sao chép mã thanh toán.')}
-                  className="inline-flex items-center gap-2 font-semibold text-amber-300 hover:text-amber-200"
-                >
-                  {paymentData?.payment_code}
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
+                <span className="font-semibold text-white">
+                  {formatMoney(amount)}
+                </span>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={confirmPayment}
+              onClick={handleMockWebhook}
               disabled={isProcessing}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 font-semibold text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Đang xác nhận...
+                  Đang thực hiện thanh toán...
                 </>
               ) : (
                 <>
                   <ShieldCheck className="h-5 w-5" />
-                  Tôi đã thanh toán
+                  Xác nhận thanh toán
                 </>
               )}
             </button>
@@ -396,23 +412,16 @@ const UpgradeModal = ({ isOpen, onClose, onUpgraded }) => {
         {step === 'success' && (
           <div className="relative z-10 text-center">
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-300">
-              <CheckCircle2 className="h-10 w-10" />
+              <PartyPopper className="h-10 w-10" />
             </div>
 
-            <h3 className="text-2xl font-bold text-white">Kích hoạt VIP thành công</h3>
+            <h3 className="text-2xl font-bold text-white">
+              Nâng cấp VIP thành công!
+            </h3>
 
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              Tài khoản của bạn đã được nâng cấp lên VIP trong 30 ngày.
+              Tài khoản của bạn đã được cập nhật quyền VIP. Giao diện sẽ nhận quyền mới ngay mà không cần F5.
             </p>
-
-            {confirmResult?.vip_expires_at && (
-              <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                Hạn VIP đến:{' '}
-                <strong>
-                  {new Date(confirmResult.vip_expires_at).toLocaleDateString('vi-VN')}
-                </strong>
-              </div>
-            )}
 
             <button
               type="button"

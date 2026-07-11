@@ -1,28 +1,101 @@
-import { supabase } from '../supabaseClient';
-
 const API_BASE_URL = 'http://localhost:8000';
 
-export async function getCurrentAdminId() {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+const getErrorMessage = (data, fallback) => {
+  const raw = data?.detail ?? data?.error ?? data?.message ?? data;
 
-  if (authError || !authData?.user) {
-    throw new Error('Chưa đăng nhập!');
+  if (!raw) return fallback;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object') return raw.message || raw.msg || JSON.stringify(raw);
+
+  return String(raw);
+};
+
+export const getAdminId = () => {
+  return (
+    localStorage.getItem('admin_id') ||
+    localStorage.getItem('user_id') ||
+    localStorage.getItem('id') ||
+    localStorage.getItem('userId')
+  );
+};
+
+export const fetchAdminTransactions = async () => {
+  const adminId = getAdminId();
+
+  const url = new URL(`${API_BASE_URL}/api/admin/transactions`);
+
+  if (adminId) {
+    url.searchParams.set('admin_id', adminId);
   }
 
-  return authData.user.id;
-}
+  const response = await fetch(url.toString());
+  const data = await response.json().catch(() => null);
 
-export async function fetchAdminTransactions() {
-  const adminId = await getCurrentAdminId();
-  const response = await fetch(`${API_BASE_URL}/api/admin/transactions?admin_id=${adminId}`);
-
-  if (!response.ok) {
-    throw new Error('Lỗi tải dữ liệu từ máy chủ');
+  if (!response.ok || data?.success === false) {
+    throw new Error(getErrorMessage(data, 'Không thể tải danh sách giao dịch.'));
   }
 
-  return response.json();
-}
+  return data;
+};
 
-export async function copyTextToClipboard(text) {
-  return navigator.clipboard.writeText(text);
-}
+export const confirmAdminTransaction = async (transactionId) => {
+  const adminId = getAdminId();
+
+  const url = new URL(`${API_BASE_URL}/api/admin/transactions/confirm`);
+
+  if (adminId) {
+    url.searchParams.set('admin_id', adminId);
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      admin_id: adminId,
+      transaction_id: transactionId,
+    }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(getErrorMessage(data, 'Không thể xác nhận giao dịch.'));
+  }
+
+  return data;
+};
+
+export const cancelAdminTransaction = async (transactionId) => {
+  const adminId = getAdminId();
+
+  const url = new URL(`${API_BASE_URL}/api/admin/transactions/cancel`);
+
+  if (adminId) {
+    url.searchParams.set('admin_id', adminId);
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      admin_id: adminId,
+      transaction_id: transactionId,
+    }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || data?.success === false) {
+    throw new Error(getErrorMessage(data, 'Không thể hủy giao dịch.'));
+  }
+
+  return data;
+};
+
+export const copyTextToClipboard = async (text) => {
+  await navigator.clipboard.writeText(String(text || ''));
+};

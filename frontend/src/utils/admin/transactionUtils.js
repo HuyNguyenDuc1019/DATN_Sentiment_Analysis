@@ -6,6 +6,10 @@ export function getStatusLabel(status) {
       return 'Thành công';
     case 'cancelled':
       return 'Đã hủy';
+    case 'expired':
+      return 'Hết hạn';
+    case 'pending':
+      return 'Đang xử lý';
     default:
       return 'Đang xử lý';
   }
@@ -20,7 +24,14 @@ export function formatCurrency(amount) {
 
 export function formatDate(value) {
   if (!value) return 'N/A';
-  return new Date(value).toLocaleString('vi-VN');
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'N/A';
+  }
+
+  return date.toLocaleString('vi-VN');
 }
 
 export function toDateInputValue(date) {
@@ -73,6 +84,7 @@ export function isInDateRange(value, startDateFilter, endDateFilter) {
   if (!value) return false;
 
   const createdAt = new Date(value);
+
   if (Number.isNaN(createdAt.getTime())) return false;
 
   if (startDateFilter) {
@@ -98,10 +110,17 @@ export function filterTransactions({
   const keyword = searchTerm.trim().toLowerCase();
 
   return transactions.filter((transaction) => {
+    const id = String(transaction.id || '').toLowerCase();
+    const paymentCode = String(transaction.payment_code || '').toLowerCase();
+    const email = String(transaction.email || '').toLowerCase();
+    const fullName = String(transaction.fullName || '').toLowerCase();
+
     const matchKeyword =
-      transaction.id.toLowerCase().includes(keyword) ||
-      transaction.email.toLowerCase().includes(keyword) ||
-      transaction.fullName.toLowerCase().includes(keyword);
+      !keyword ||
+      id.includes(keyword) ||
+      paymentCode.includes(keyword) ||
+      email.includes(keyword) ||
+      fullName.includes(keyword);
 
     const matchStatus = statusFilter === 'all' || transaction.status === statusFilter;
     const matchDate = isInDateRange(transaction.created_at, startDateFilter, endDateFilter);
@@ -131,7 +150,9 @@ export function buildTransactionSummary(filteredData) {
   return {
     total: filteredData.length,
     paid: paidItems.length,
-    pending: filteredData.filter((item) => item.status !== 'paid' && item.status !== 'cancelled').length,
+    pending: filteredData.filter(
+      (item) => item.status !== 'paid' && item.status !== 'cancelled',
+    ).length,
     cancelled: filteredData.filter((item) => item.status === 'cancelled').length,
     revenue: paidItems.reduce((sum, item) => sum + Number(item.amount || 0), 0),
   };
@@ -148,17 +169,32 @@ export function exportTransactionsCsv(filteredData) {
     throw new Error('Không có dữ liệu để xuất CSV.');
   }
 
-  const headers = ['Mã giao dịch', 'Người dùng', 'Email', 'Số tiền', 'Trạng thái', 'Ngày tạo'];
+  const headers = [
+    'Mã giao dịch',
+    'Mã thanh toán',
+    'Người dùng',
+    'Email',
+    'Số tiền',
+    'Trạng thái',
+    'Ngày tạo',
+    'Ngày thanh toán',
+    'Ngày hết hạn VIP',
+  ];
+
   const rows = filteredData.map((transaction) => [
     transaction.id,
+    transaction.payment_code || '',
     transaction.fullName,
     transaction.email,
     Number(transaction.amount || 0),
     getStatusLabel(transaction.status),
     formatDate(transaction.created_at),
+    formatDate(transaction.paid_at),
+    formatDate(transaction.expires_at),
   ]);
 
   const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
   const csvContent = [headers, ...rows]
     .map((row) => row.map(escapeCsv).join(','))
     .join('\n');
@@ -166,6 +202,7 @@ export function exportTransactionsCsv(filteredData) {
   const blob = new Blob(['\ufeff' + csvContent], {
     type: 'text/csv;charset=utf-8;',
   });
+
   const url = URL.createObjectURL(blob);
   const date = new Date().toISOString().slice(0, 10);
   const link = document.createElement('a');

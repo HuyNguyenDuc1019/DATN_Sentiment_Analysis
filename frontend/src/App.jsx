@@ -22,6 +22,8 @@ import Profile from './pages/user/Profile';
 import RestaurantCompare from './pages/user/RestaurantCompare';
 import UpgradeVIP from './pages/user/UpgradeVIP';
 
+import VnpayReturn from './pages/payment/VnpayReturn';
+
 import AdminLayout from './components/layout/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminFeedback from './pages/admin/AdminFeedback';
@@ -40,6 +42,8 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
           </Route>
+
+          <Route path="/payment/vnpay-return" element={<VnpayReturn />} />
 
           <Route path="/admin" element={<AdminProtectedRoute />}>
             <Route element={<AdminLayout />}>
@@ -63,6 +67,7 @@ function App() {
               <Route path="/report" element={<Report />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/upgrade-vip" element={<UpgradeVIP />} />
             </Route>
           </Route>
 

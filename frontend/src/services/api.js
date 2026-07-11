@@ -47,7 +47,15 @@ const extractCount = (payload, depth = 0) => {
   if (!payload || depth > 6) return 0;
   if (Array.isArray(payload)) return payload.length;
 
-  for (const key of ['count', 'total', 'saved_count', 'savedCount', 'inserted', 'inserted_count', 'review_count']) {
+  for (const key of [
+    'count',
+    'total',
+    'saved_count',
+    'savedCount',
+    'inserted',
+    'inserted_count',
+    'review_count',
+  ]) {
     const value = Number(payload[key]);
     if (Number.isFinite(value) && value >= 0) return value;
   }
@@ -126,7 +134,10 @@ const get = async (url, params = {}) => {
   let data;
 
   try {
-    response = await fetch(`${url}?${query.toString()}`);
+    const queryString = query.toString();
+    const finalUrl = queryString ? `${url}?${queryString}` : url;
+
+    response = await fetch(finalUrl);
     data = await response.json().catch(() => null);
   } catch {
     throw new Error('Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.');
@@ -144,12 +155,19 @@ const get = async (url, params = {}) => {
 
 export const predictBatch = async (payload, options = {}) => {
   const data = await post(`${PYTHON_API}/predict/batch`, payload, options);
-  return extractResults(data).map(normalizeResult).filter((item) => item.text);
+
+  return extractResults(data)
+    .map(normalizeResult)
+    .filter((item) => item.text);
 };
 
 export const analyzeUrl = async (payload, options = {}) => {
   const data = await post(`${SCRAPER_API}/api/scrape`, payload, options);
-  const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
+
+  const results = extractResults(data)
+    .map(normalizeResult)
+    .filter((item) => item.text);
+
   const count = results.length || extractCount(data);
 
   return {
@@ -167,16 +185,32 @@ export const stopScrapeTask = async (taskId) => {
   });
 };
 
-export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);
+export const submitFeedback = (payload) => {
+  return post(`${PYTHON_API}/feedback`, payload);
+};
 
-export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) =>
-  get(`${PYTHON_API}/api/dashboard/alerts`, {
+export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) => {
+  return get(`${PYTHON_API}/api/dashboard/alerts`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
   });
+};
 
-export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) =>
-  get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
+export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) => {
+  return get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
   });
+};
+
+export const createVipPayment = async (userId) => {
+  return post(`${PYTHON_API}/api/payment/create`, {
+    user_id: userId,
+  });
+};
+
+export const confirmVipMockPayment = async (paymentCode) => {
+  return post(`${PYTHON_API}/api/payment/mock-webhook`, {
+    payment_code: paymentCode,
+  });
+};

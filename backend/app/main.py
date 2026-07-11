@@ -3,8 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from app.predictor import SentimentPredictor
-
-# Import routers
 from app.api.routers import (
     admin,
     user,
@@ -24,8 +22,8 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
@@ -52,7 +50,6 @@ async def load_model():
         print(f"❌ Lỗi khi tải mô hình: {e}")
 
 
-# Include routers
 app.include_router(admin.router)
 app.include_router(user.router)
 app.include_router(predict.router)
