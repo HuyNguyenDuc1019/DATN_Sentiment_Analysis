@@ -133,6 +133,7 @@ function isValidComment(text) {
   return true;
 }
 
+// 👉 ĐÃ SỬA: Hàm tự động bổ sung năm hiện tại nếu Foody giấu năm
 function parseFoodyDate(dateStr) {
   if (!dateStr) return new Date();
 
@@ -172,12 +173,14 @@ function parseFoodyDate(dateStr) {
     return now;
   }
 
-  const dateMatch = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+  // Regex mới: Cho phép (\d{4}) là tùy chọn
+  const dateMatch = raw.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?(?:\s+(\d{1,2}):(\d{1,2}))?/);
 
   if (dateMatch) {
     const day = Number(dateMatch[1]);
     const month = Number(dateMatch[2]);
-    const year = Number(dateMatch[3]);
+    // Nếu Foody không hiển thị năm (dateMatch[3] undefined), tự động lấy năm hiện tại
+    const year = dateMatch[3] ? Number(dateMatch[3]) : new Date().getFullYear();
     const hour = Number(dateMatch[4] || 0);
     const minute = Number(dateMatch[5] || 0);
 
@@ -700,6 +703,8 @@ async function scrapeFoody(
       endDate ? endDate.toISOString() : 'Không có',
     );
 
+    let consecutiveOldReviews = 0; // 👉 Thêm biến đếm số lượng bình luận cũ
+
     for (const item of rawReviews) {
       ensureTaskNotStopped(scrapeTask);
 
@@ -713,11 +718,20 @@ async function scrapeFoody(
 
       console.log('🧾 Review date_str:', item.date_str, '=>', reviewDate.toISOString());
 
+      // 👉 LOGIC NGẮT THỜI GIAN MỚI (FOODY)
       if (startDate && reviewDate < startDate) {
+        consecutiveOldReviews++;
         console.log(
-          `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc bắt đầu ${startDate.toISOString()}`,
+          `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc bắt đầu ${startDate.toISOString()}. Đã gặp ${consecutiveOldReviews}/3.`
         );
+        
+        if (consecutiveOldReviews >= 3) {
+          console.log(`🛑 Đã chạm 3 bình luận cũ liên tiếp trên Foody. Dừng quét!`);
+          break; // Ngắt vòng lặp for
+        }
         continue;
+      } else {
+        consecutiveOldReviews = 0; // Reset nếu gặp bình luận mới
       }
 
       if (endDate && reviewDate > endDate) {
@@ -846,6 +860,8 @@ async function scrapeGoogleMaps(
         break;
       }
 
+      let consecutiveOldReviews = 0; // 👉 Thêm biến đếm số lượng bình luận cũ
+
       for (const item of rawReviews) {
         ensureTaskNotStopped(scrapeTask);
 
@@ -879,11 +895,21 @@ async function scrapeGoogleMaps(
 
         console.log('🧾 Google review date:', item.iso_date || item.date, '=>', reviewDate.toISOString());
 
+        // 👉 LOGIC NGẮT THỜI GIAN MỚI (GOOGLE MAPS)
         if (startDate && reviewDate < startDate) {
+          consecutiveOldReviews++;
           console.log(
-            `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc bắt đầu ${startDate.toISOString()}`,
+            `⏭️ Bỏ qua bình luận cũ (${reviewDate.toISOString()}) vì nhỏ hơn mốc bắt đầu ${startDate.toISOString()}. Đã gặp ${consecutiveOldReviews}/3.`
           );
+
+          if (consecutiveOldReviews >= 3) {
+            console.log(`🛑 Đã chạm 3 bình luận cũ liên tiếp trên Google Maps. Dừng lật trang!`);
+            pageCount = 99; // Ép pageCount lớn hơn 10 để thoát vòng lặp while bên ngoài
+            break; // Thoát vòng lặp for
+          }
           continue;
+        } else {
+          consecutiveOldReviews = 0; // Reset nếu gặp bình luận mới
         }
 
         if (endDate && reviewDate > endDate) {
@@ -910,7 +936,7 @@ async function scrapeGoogleMaps(
 
       ensureTaskNotStopped(scrapeTask);
 
-      if (reviewRes.data.serpapi_pagination?.next_page_token) {
+      if (pageCount < 10 && reviewRes.data.serpapi_pagination?.next_page_token) {
         nextToken = reviewRes.data.serpapi_pagination.next_page_token;
 
         await new Promise((resolve) => setTimeout(resolve, 1500));
