@@ -13,11 +13,11 @@ export default function ForgotPasswordFormCard({
   onSubmit,
 }) {
   return (
-    <div className="w-full max-w-md">
-      <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-8 shadow-2xl">
+    <div className="w-full max-w-[500px]">
+      <div className="rounded-[2rem] border border-slate-800/80 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-9">
         <AuthBrand />
 
-        <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-5">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
           <Mail className="w-6 h-6" />
         </div>
 
@@ -30,7 +30,7 @@ export default function ForgotPasswordFormCard({
 
         <form className="space-y-5" onSubmit={onSubmit}>
           <AuthInput
-            label="Email doanh nghiệp"
+            label="Email"
             type="email"
             value={email}
             onChange={onEmailChange}
@@ -39,7 +39,7 @@ export default function ForgotPasswordFormCard({
           />
 
           {sent && (
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300 leading-relaxed">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm leading-relaxed text-emerald-300">
               Link đặt lại mật khẩu đã được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.
             </div>
           )}

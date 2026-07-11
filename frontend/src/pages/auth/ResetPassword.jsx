@@ -109,7 +109,7 @@ export default function ResetPassword() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0f172a] text-slate-200 grid place-items-center p-6 font-sans">
+    <main className="grid h-screen place-items-center overflow-y-auto bg-slate-950 p-5 font-sans text-slate-200 sm:p-8">
       <ResetPasswordFormCard
         password={password}
         confirmPassword={confirmPassword}

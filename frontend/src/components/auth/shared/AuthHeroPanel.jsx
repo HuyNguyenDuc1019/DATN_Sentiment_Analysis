@@ -8,14 +8,14 @@ export default function AuthHeroPanel({
   variant = 'chart',
 }) {
   return (
-    <div className="hidden lg:flex w-1/2 relative flex-col justify-center bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#0f172a] p-16 overflow-hidden">
+    <div className="relative m-6 ml-0 hidden min-h-[calc(100vh-3rem)] flex-1 flex-col justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-indigo-600 via-indigo-800 to-slate-950 p-12 shadow-2xl shadow-indigo-950/40 lg:flex xl:p-16">
       <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
       <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
       <div className="absolute top-1/4 right-0 w-[600px] h-[600px] border border-white/5 rounded-full translate-x-1/2" />
       <div className="absolute bottom-1/4 right-0 w-[400px] h-[400px] border border-white/10 rounded-full translate-x-1/3" />
 
       <div className="relative z-10 max-w-lg mb-16">
-        <h2 className="text-4xl font-bold text-white leading-tight mb-4 drop-shadow-md">
+        <h2 className="mb-4 text-4xl font-black leading-tight tracking-tight text-white drop-shadow-md xl:text-5xl">
           {title}
         </h2>
         <p className="text-indigo-200/80 text-sm leading-relaxed">
@@ -23,7 +23,7 @@ export default function AuthHeroPanel({
         </p>
       </div>
 
-      <div className="relative z-10 w-full max-w-sm mx-auto">
+      <div className="relative z-10 mx-auto w-full max-w-md">
         {variant === 'recovery' ? <RecoveryCard /> : <ChartCard />}
 
         {variant === 'recovery' ? (
@@ -42,7 +42,7 @@ export default function AuthHeroPanel({
 function ChartCard() {
   return (
     <div
-      className="bg-slate-800/40 backdrop-blur-xl border border-slate-600/50 rounded-2xl p-6 shadow-2xl relative z-10"
+      className="relative z-10 rounded-3xl border border-white/15 bg-slate-950/35 p-7 shadow-2xl backdrop-blur-xl"
       style={{ animation: 'float 6s ease-in-out infinite' }}
     >
       <div className="flex justify-between items-center mb-6">
@@ -66,7 +66,7 @@ function ChartCard() {
 function RecoveryCard() {
   return (
     <div
-      className="bg-slate-800/40 backdrop-blur-xl border border-slate-600/50 rounded-2xl p-6 shadow-2xl relative z-10"
+      className="relative z-10 rounded-3xl border border-white/15 bg-slate-950/35 p-7 shadow-2xl backdrop-blur-xl"
       style={{ animation: 'float 6s ease-in-out infinite' }}
     >
       <div className="flex items-center gap-3 mb-5">

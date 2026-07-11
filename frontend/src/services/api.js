@@ -203,14 +203,9 @@ export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) => {
   });
 };
 
-export const createVipPayment = async (userId) => {
-  return post(`${PYTHON_API}/api/payment/create`, {
+export const createVipPayment = async (userId, amount = 50000) => {
+  return post(`${PYTHON_API}/payment/create`, {
     user_id: userId,
-  });
-};
-
-export const confirmVipMockPayment = async (paymentCode) => {
-  return post(`${PYTHON_API}/api/payment/mock-webhook`, {
-    payment_code: paymentCode,
+    amount,
   });
 };

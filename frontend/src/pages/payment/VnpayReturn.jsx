@@ -13,12 +13,15 @@ import {
 import confetti from 'canvas-confetti';
 
 import { useAuth } from '../../contexts/AuthContext';
+import { verifyVnpayPayment } from '../../services/paymentService';
 
 export default function VnpayReturn() {
   const [searchParams] = useSearchParams();
   const { refreshUserProfile } = useAuth();
 
   const [isRefreshing, setIsRefreshing] = useState(true);
+  const [verificationStatus, setVerificationStatus] = useState('checking');
+  const [verificationError, setVerificationError] = useState('');
 
   const responseCode = searchParams.get('vnp_ResponseCode');
   const transactionStatus = searchParams.get('vnp_TransactionStatus');
@@ -30,7 +33,9 @@ export default function VnpayReturn() {
   const payDate = searchParams.get('vnp_PayDate');
   const transactionNo = searchParams.get('vnp_TransactionNo');
 
-  const isSuccess = responseCode === '00';
+  const callbackQuery = searchParams.toString();
+  const isChecking = verificationStatus === 'checking';
+  const isSuccess = verificationStatus === 'success';
 
   const formattedAmount = useMemo(() => {
     const rawAmount = Number(amount || 0) / 100;
@@ -44,7 +49,11 @@ export default function VnpayReturn() {
   useEffect(() => {
     const run = async () => {
       try {
-        if (isSuccess) {
+        const result = await verifyVnpayPayment(callbackQuery);
+
+        if (result?.success) {
+          setVerificationStatus('success');
+
           confetti({
             particleCount: 120,
             spread: 80,
@@ -62,24 +71,31 @@ export default function VnpayReturn() {
           if (typeof refreshUserProfile === 'function') {
             await refreshUserProfile();
           }
+        } else {
+          setVerificationStatus('failed');
+          setVerificationError(result?.message || 'Giao dịch VNPay không thành công.');
         }
       } catch (error) {
         console.error('Không thể refresh profile sau thanh toán:', error);
+        setVerificationStatus('failed');
+        setVerificationError(error?.message || 'Không thể xác minh giao dịch VNPay.');
       } finally {
         setIsRefreshing(false);
       }
     };
 
     run();
-  }, [isSuccess, refreshUserProfile]);
+  }, [callbackQuery, refreshUserProfile]);
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+    <div className="h-screen overflow-y-auto overscroll-y-contain bg-slate-950 px-4 py-8 text-white">
       <div className="mx-auto flex min-h-[85vh] max-w-5xl items-center justify-center">
         <div className="w-full overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl shadow-black/40">
           <div
             className={`relative overflow-hidden px-6 py-10 text-center md:px-10 ${
-              isSuccess
+              isChecking
+                ? 'bg-gradient-to-br from-indigo-500/20 via-slate-900 to-sky-500/20'
+                : isSuccess
                 ? 'bg-gradient-to-br from-emerald-500/20 via-slate-900 to-indigo-500/20'
                 : 'bg-gradient-to-br from-rose-500/20 via-slate-900 to-slate-800'
             }`}
@@ -89,23 +105,37 @@ export default function VnpayReturn() {
 
             <div
               className={`relative z-10 mx-auto flex h-24 w-24 items-center justify-center rounded-full ${
-                isSuccess
+                isChecking
+                  ? 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/30'
+                  : isSuccess
                   ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30'
                   : 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30'
               }`}
             >
-              {isSuccess ? <CheckCircle2 size={52} /> : <XCircle size={52} />}
+              {isChecking ? (
+                <Loader2 size={52} className="animate-spin" />
+              ) : isSuccess ? (
+                <CheckCircle2 size={52} />
+              ) : (
+                <XCircle size={52} />
+              )}
             </div>
 
             <div className="relative z-10">
               <h1 className="mt-6 text-3xl font-extrabold md:text-4xl">
-                {isSuccess ? 'Thanh toán thành công!' : 'Thanh toán thất bại'}
+                {isChecking
+                  ? 'Đang xác minh thanh toán...'
+                  : isSuccess
+                    ? 'Thanh toán thành công!'
+                    : 'Thanh toán thất bại'}
               </h1>
 
               <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                {isSuccess
-                  ? 'Tài khoản của bạn đã được nâng cấp VIP. Backend đã xử lý giao dịch qua IPN hoặc luồng xác nhận thanh toán.'
-                  : 'Giao dịch đã bị hủy, thất bại hoặc chưa được xác nhận bởi VNPay Sandbox.'}
+                {isChecking
+                  ? 'Hệ thống đang xác minh chữ ký và cập nhật trạng thái giao dịch.'
+                  : isSuccess
+                  ? 'Tài khoản của bạn đã được nâng cấp VIP. Hệ thống sẽ đồng bộ huy hiệu VIP ngay sau khi nhận trạng thái từ backend.'
+                  : verificationError || 'Giao dịch đã bị hủy, thất bại hoặc chưa được xác nhận bởi VNPay Sandbox.'}
               </p>
 
               {isSuccess && (
@@ -162,9 +192,10 @@ export default function VnpayReturn() {
                   <StatusRow
                     active
                     success={isSuccess}
-                    failed={!isSuccess}
-                    title={isSuccess ? 'Thanh toán hợp lệ' : 'Thanh toán không thành công'}
-                    desc={`Mã phản hồi: ${responseCode || 'N/A'}`}
+                    failed={!isChecking && !isSuccess}
+                    loading={isChecking}
+                    title={isChecking ? 'Đang xác minh với backend' : isSuccess ? 'Thanh toán hợp lệ' : 'Thanh toán không thành công'}
+                    desc={isChecking ? 'Đang kiểm tra chữ ký, mã đơn và số tiền.' : `Mã phản hồi: ${responseCode || 'N/A'}`}
                   />
 
                   <StatusRow
@@ -216,20 +247,14 @@ export default function VnpayReturn() {
 
           <div className="flex flex-col gap-3 border-t border-slate-800 px-6 py-6 sm:flex-row sm:justify-center md:px-10">
             <Link
-              to="/"
+              to="/dashboard"
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-500"
             >
               <Home size={17} />
-              Về trang chủ
+              Về Dashboard
             </Link>
 
-            <Link
-              to="/upgrade-vip"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 px-5 py-3 text-sm font-bold text-slate-200 transition hover:bg-slate-800"
-            >
-              {isSuccess ? <ArrowLeft size={17} /> : <RefreshCcw size={17} />}
-              {isSuccess ? 'Xem gói VIP' : 'Thanh toán lại'}
-            </Link>
+            
           </div>
         </div>
       </div>

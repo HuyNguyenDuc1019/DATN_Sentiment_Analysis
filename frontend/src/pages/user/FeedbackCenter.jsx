@@ -334,7 +334,7 @@ export default function FeedbackCenter() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-5rem)] flex-col overflow-visible p-6 font-sans animate-in fade-in duration-500 lg:p-8">
+    <div className="flex min-h-[calc(100vh-5rem)] flex-col overflow-visible p-4 font-sans animate-in fade-in duration-500 lg:p-6">
       <FeedbackHeader />
 
       <FeedbackToolbar
@@ -370,7 +370,7 @@ export default function FeedbackCenter() {
         />
       )}
 
-      <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid flex-1 grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col lg:col-span-2">
           <ReviewTaskPanel
             item={item}

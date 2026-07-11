@@ -30,3 +30,16 @@ export const createVnpayPayment = async ({ userId, amount = 50000 }) => {
 
   return data;
 };
+
+export const verifyVnpayPayment = async (queryString) => {
+  const response = await fetch(
+    `${API_BASE_URL}/payment/vnpay-return?${String(queryString || '')}`,
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(data, 'Không thể xác minh giao dịch VNPay.'));
+  }
+
+  return data;
+};

@@ -11,7 +11,7 @@ export default function AuthPasswordInput({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-300 mb-2">
+      <label className="mb-2 block text-sm font-semibold text-slate-300">
         {label}
       </label>
 
@@ -22,17 +22,17 @@ export default function AuthPasswordInput({
           onChange={(event) => onChange(event.target.value)}
           placeholder="••••••••"
           autoComplete={autoComplete}
-          className={`w-full bg-slate-900/80 border border-slate-700 rounded-lg py-3 px-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all ${showToggle ? 'pr-11' : ''}`}
+          className={`h-[52px] w-full rounded-2xl border border-slate-700/80 bg-slate-950/70 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 ${showToggle ? 'pr-12' : ''}`}
         />
 
         {showToggle && (
           <button
             type="button"
             onClick={onToggle}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none"
+            className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
             aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
           >
-            {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {visible ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
           </button>
         )}
       </div>

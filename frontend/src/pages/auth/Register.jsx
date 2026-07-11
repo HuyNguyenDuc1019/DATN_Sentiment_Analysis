@@ -84,8 +84,8 @@ export default function RegisterScreen() {
     <>
       <AuthAnimationStyle />
 
-      <div className="min-h-screen w-full flex font-sans text-slate-200 bg-[#0f172a] overflow-hidden">
-        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative z-10 overflow-y-auto">
+      <div className="flex h-screen w-full overflow-y-auto bg-slate-950 font-sans text-slate-200">
+        <div className="relative z-10 flex w-full items-center justify-center px-5 py-8 sm:px-8 lg:w-[46%] lg:px-12">
           <RegisterFormCard
             form={form}
             loading={loading}
