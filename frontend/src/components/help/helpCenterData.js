@@ -1,134 +1,289 @@
 export const helpTopics = [
   {
-    id: 'quick',
+    id: 'start',
     icon: 'search',
-    title: 'Bắt đầu kiểm tra quán',
-    desc: 'Dán link hoặc tải file bình luận để xem quán được khen chê gì.',
+    title: 'Bắt đầu',
+    desc: 'Cách đưa dữ liệu vào hệ thống.',
   },
   {
-    id: 'read',
+    id: 'result',
     icon: 'dashboard',
-    title: 'Cách đọc kết quả',
-    desc: 'Hiểu tỷ lệ hài lòng, cảnh báo, xu hướng và từ khóa nổi bật.',
+    title: 'Đọc kết quả',
+    desc: 'Hiểu cảm xúc, cảnh báo, từ khóa.',
   },
   {
-    id: 'decision',
-    icon: 'thumbsUp',
-    title: 'Quyết định có nên đi',
-    desc: 'Nhìn nhanh dấu hiệu nên thử hoặc nên cân nhắc trước khi đến.',
+    id: 'vip',
+    icon: 'crown',
+    title: 'VIP & thanh toán',
+    desc: 'Mở khóa tính năng nâng cao.',
+  },
+  {
+    id: 'admin',
+    icon: 'shield',
+    title: 'Quản trị',
+    desc: 'Dành cho admin và dữ liệu AI.',
   },
   {
     id: 'problem',
     icon: 'alert',
-    title: 'Khi kết quả bất thường',
-    desc: 'Giải thích trường hợp không có dữ liệu hoặc phản hồi chưa cập nhật.',
+    title: 'Lỗi thường gặp',
+    desc: 'Cách xử lý khi dữ liệu bất thường.',
   },
 ];
 
 export const helpQuestions = [
   {
-    id: 'worth',
-    topic: 'decision',
-    question: 'Làm sao biết quán này có đáng ăn không?',
-    answer: `Để biết một quán có đáng ăn hay không, bạn nên xem theo 3 lớp thông tin thay vì chỉ đọc vài bình luận đầu tiên.
-
-Đầu tiên hãy nhìn tỷ lệ khách hài lòng. Nếu tỷ lệ này cao, nghĩa là phần lớn bình luận đang nghiêng về trải nghiệm tốt. Nhưng con số này chưa đủ để kết luận ngay, vì có quán được khen nhiều nhưng vẫn tồn tại vài vấn đề quan trọng như phục vụ chậm, món không ổn định hoặc giá cao.
-
-Tiếp theo hãy xem khu vực cảnh báo. Đây là nơi gom các phản hồi có khả năng ảnh hưởng trực tiếp đến quyết định đi ăn, ví dụ khách than chờ lâu, món nguội, món không như hình, nhân viên khó chịu hoặc vệ sinh chưa ổn. Nếu cùng một vấn đề xuất hiện nhiều lần, bạn nên cân nhắc kỹ.
-
-Cuối cùng hãy xem bản đồ từ khóa và bảng khen/chê. Nếu các từ tích cực như ngon, sạch, phục vụ tốt, giá hợp lý xuất hiện nhiều hơn các từ tiêu cực, quán có tín hiệu đáng thử. Nếu các từ tiêu cực lặp lại mạnh, bạn nên đọc kỹ bình luận trước khi quyết định.`,
+    id: 'url-check',
+    topic: 'start',
+    question: 'Kiểm tra quán bằng link như thế nào?',
+    summary: 'Dán link quán để hệ thống tự thu thập và phân tích bình luận.',
+    steps: [
+      'Vào mục Phân tích URL.',
+      'Dán link Foody hoặc Google Maps.',
+      'Chọn khoảng thời gian nếu cần.',
+      'Bấm Thu thập dữ liệu và chờ kết quả.',
+    ],
+    tip: 'Sau khi xử lý xong, dữ liệu sẽ được lưu vào Dashboard và Báo cáo.',
   },
   {
-    id: 'link',
-    topic: 'quick',
-    question: 'Tôi kiểm tra một quán bằng link như thế nào?',
-    answer: `Bạn vào mục Trình phân tích URL, dán đường dẫn của quán Foody hoặc gian hàng cần kiểm tra, sau đó bấm nút Thu thập.
-
-Sau khi bấm, hệ thống sẽ bắt đầu đọc các bình luận trên đường dẫn đó. Nếu dữ liệu nhiều, quá trình này có thể mất một lúc. Bạn không cần đứng yên ở trang đó, vẫn có thể chuyển sang Bảng điều khiển, Báo cáo hoặc các mục khác để tiếp tục xem dữ liệu.
-
-Khi hệ thống xử lý xong, kết quả sẽ được lưu lại theo tài khoản đang đăng nhập. Bạn có thể xem kết luận nhanh ở Bảng điều khiển: tổng số phản hồi, tỷ lệ hài lòng, cảnh báo cần chú ý và xu hướng gần đây. Nếu muốn nhìn kỹ hơn từng nguồn dữ liệu, từ khóa và biểu đồ, hãy chuyển sang trang Báo cáo.
-
-Nếu một đường dẫn đã từng được thu thập trước đó, hệ thống có thể chỉ lấy những bình luận mới để tránh trùng dữ liệu.`,
+    id: 'csv-check',
+    topic: 'start',
+    question: 'Phân tích bằng file CSV như thế nào?',
+    summary: 'Dùng file CSV để kiểm tra nhiều bình luận cùng lúc.',
+    steps: [
+      'Vào mục Dự đoán hàng loạt.',
+      'Tải file CSV có cột bình luận.',
+      'Kiểm tra bảng xem trước.',
+      'Bấm Bắt đầu xử lý.',
+    ],
+    tip: 'Tên cột nên là content, comment, review hoặc bình luận.',
   },
   {
-    id: 'csv',
-    topic: 'quick',
-    question: 'Nếu tôi có file bình luận thì làm sao?',
-    answer: `Nếu bạn đã có sẵn danh sách bình luận trong file, hãy vào mục Dự đoán hàng loạt và chọn file CSV.
-
-File nên có một cột chứa nội dung bình luận rõ ràng. Tên cột có thể là content, comment, review, bình luận hoặc nội dung. Sau khi tải file lên, hãy xem bảng xem trước ở bên phải để kiểm tra hệ thống đã đọc đúng bình luận chưa.
-
-Nếu bảng xem trước hiển thị đúng nội dung, bạn bấm Bắt đầu xử lý. Hệ thống sẽ ghi nhận nhiều bình luận cùng lúc, phù hợp khi bạn đã có dữ liệu từ Excel, Google Sheet, Foody hoặc một nguồn khác.
-
-Sau khi xử lý xong, dữ liệu trong file cũng được tính vào Bảng điều khiển và Báo cáo. Nhờ vậy bạn có thể so sánh dữ liệu từ file CSV với dữ liệu thu thập từ đường dẫn.`,
+    id: 'data-source',
+    topic: 'start',
+    question: 'Hệ thống lấy dữ liệu từ đâu?',
+    summary: 'Dữ liệu đến từ link quán, file CSV hoặc dữ liệu đã lưu trước đó.',
+    steps: [
+      'Link quán dùng để thu thập bình luận online.',
+      'CSV dùng để phân tích dữ liệu có sẵn.',
+      'Kết quả được lưu theo tài khoản đăng nhập.',
+      'Dashboard tổng hợp lại các dữ liệu đã xử lý.',
+    ],
+    tip: 'Mỗi tài khoản chỉ xem dữ liệu thuộc về tài khoản đó.',
   },
   {
-    id: 'satisfaction',
-    topic: 'read',
-    question: 'Tỷ lệ hài lòng nên hiểu như thế nào?',
-    answer: `Tỷ lệ hài lòng là tỷ lệ bình luận có xu hướng tốt trong toàn bộ dữ liệu đã ghi nhận. Ví dụ nếu hệ thống có 100 bình luận và 75 bình luận là khen, tỷ lệ hài lòng sẽ khoảng 75%.
-
-Chỉ số này giúp bạn nắm nhanh cảm nhận chung của khách. Tỷ lệ càng cao thì khả năng quán đang được khách đánh giá tốt càng lớn. Tuy nhiên, bạn không nên dùng riêng chỉ số này để quyết định.
-
-Một quán có tỷ lệ hài lòng cao vẫn có thể có vấn đề đáng chú ý, chẳng hạn khách rất khen món ăn nhưng lại chê chờ lâu hoặc phục vụ chưa tốt. Vì vậy sau khi xem tỷ lệ hài lòng, bạn nên kiểm tra thêm cảnh báo cần xử lý, bản đồ từ khóa và bảng xếp hạng khen/chê.
-
-Cách đọc hợp lý là: tỷ lệ hài lòng cho bạn biết bức tranh tổng thể, còn cảnh báo và từ khóa giúp bạn hiểu lý do đằng sau con số đó.`,
+    id: 'sentiment-score',
+    topic: 'result',
+    question: 'Tỷ lệ hài lòng là gì?',
+    summary: 'Là tỷ lệ bình luận được AI đánh giá là tích cực.',
+    steps: [
+      'Tỷ lệ cao nghĩa là quán được khen nhiều.',
+      'Tỷ lệ thấp nghĩa là có nhiều phản hồi tiêu cực.',
+      'Không nên chỉ nhìn mỗi con số này.',
+      'Hãy xem thêm cảnh báo và từ khóa nổi bật.',
+    ],
+    tip: 'Một quán được khen món ăn vẫn có thể bị chê phục vụ hoặc chờ lâu.',
   },
   {
-    id: 'warning',
-    topic: 'read',
-    question: 'Cảnh báo cần xử lý có ý nghĩa gì?',
-    answer: `Cảnh báo cần xử lý là nhóm bình luận có dấu hiệu tiêu cực hoặc có khả năng làm người dùng cân nhắc lại trước khi đến quán.
-
-Ví dụ: khách nói món không ngon, đồ ăn nguội, chờ quá lâu, nhân viên phục vụ kém, giá cao, quán không sạch, không gian chật hoặc trải nghiệm không giống quảng cáo. Những phản hồi này được đưa lên đầu để bạn không cần đọc hàng trăm bình luận mới thấy vấn đề.
-
-Quan trọng nhất là xem vấn đề có lặp lại hay không. Nếu chỉ một người phàn nàn thì có thể đó là trải nghiệm cá nhân. Nhưng nếu nhiều người cùng nhắc đến một vấn đề như chờ lâu hoặc phục vụ kém, đó là tín hiệu cần chú ý.
-
-Với người dùng đang chọn quán ăn, mục cảnh báo giúp trả lời câu hỏi: “Nếu mình đến quán này thì có rủi ro gì cần biết trước?”.`,
+    id: 'warning-meaning',
+    topic: 'result',
+    question: 'Cảnh báo cần xử lý nghĩa là gì?',
+    summary: 'Là nhóm bình luận có dấu hiệu tiêu cực hoặc cần chú ý.',
+    steps: [
+      'Xem vấn đề nào bị nhắc lại nhiều lần.',
+      'Chú ý các lỗi như chờ lâu, món nguội, phục vụ kém.',
+      'Một phản hồi xấu chưa chắc đáng lo.',
+      'Nhiều người cùng chê một điểm thì nên cân nhắc.',
+    ],
+    tip: 'Cảnh báo giúp người dùng biết rủi ro trước khi đến quán.',
   },
   {
-    id: 'keywords',
-    topic: 'read',
-    question: 'Bản đồ từ khóa giúp gì cho tôi?',
-    answer: `Bản đồ từ khóa giúp bạn nhìn nhanh những điều khách nhắc đến nhiều nhất về quán. Từ càng lớn thì càng xuất hiện nhiều trong bình luận.
-
-Nếu các từ màu xanh nổi bật, đó thường là những điểm được khách khen như ngon, sạch, phục vụ tốt, rộng rãi, giá hợp lý hoặc lên món nhanh. Nếu các từ màu đỏ nổi bật, đó thường là vấn đề bị phàn nàn như chờ lâu, không ngon, mắc, thái độ kém, nóng, ồn hoặc món nguội.
-
-Khi bạn không có thời gian đọc từng bình luận, bản đồ từ khóa đóng vai trò như bản tóm tắt nhanh. Chỉ cần nhìn vài từ lớn nhất, bạn có thể biết khách đang nhớ đến quán vì điều gì.
-
-Nên đọc bản đồ từ khóa cùng với tỷ lệ hài lòng. Ví dụ tỷ lệ hài lòng cao và từ khóa lớn là ngon, sạch, phục vụ tốt thì tín hiệu rất tích cực. Ngược lại nếu tỷ lệ hài lòng thấp và từ khóa lớn là chờ lâu, không ngon, giá cao thì nên cân nhắc.`,
+    id: 'keyword-map',
+    topic: 'result',
+    question: 'Bản đồ từ khóa dùng để làm gì?',
+    summary: 'Giúp nhìn nhanh khách đang nhắc nhiều nhất đến điều gì.',
+    steps: [
+      'Từ nổi bật nghĩa là được nhắc nhiều.',
+      'Từ tích cực cho biết điểm mạnh của quán.',
+      'Từ tiêu cực cho biết vấn đề cần chú ý.',
+      'Nên đọc cùng tỷ lệ hài lòng.',
+    ],
+    tip: 'Nhìn vài từ khóa lớn là có thể biết quán được khen hay chê điểm nào.',
   },
   {
-    id: 'zero',
+    id: 'report-page',
+    topic: 'result',
+    question: 'Trang Báo cáo khác gì Dashboard?',
+    summary: 'Dashboard xem nhanh, Báo cáo xem chi tiết hơn.',
+    steps: [
+      'Dashboard hiển thị tổng quan nhanh.',
+      'Báo cáo hiển thị biểu đồ và xu hướng.',
+      'Báo cáo phù hợp để xem sâu theo nguồn dữ liệu.',
+      'Dùng Báo cáo khi cần trình bày kết quả trong đồ án.',
+    ],
+    tip: 'Dashboard dành cho quyết định nhanh, Báo cáo dành cho phân tích chi tiết.',
+  },
+  {
+    id: 'worth-eat',
+    topic: 'result',
+    question: 'Làm sao biết quán có đáng ăn không?',
+    summary: 'Xem tổng hợp tỷ lệ hài lòng, cảnh báo và từ khóa.',
+    steps: [
+      'Tỷ lệ hài lòng cao là tín hiệu tốt.',
+      'Cảnh báo ít và không lặp lại là ổn.',
+      'Từ khóa tích cực nhiều hơn tiêu cực.',
+      'Đọc thêm vài bình luận tiêu biểu.',
+    ],
+    tip: 'Đừng quyết định chỉ dựa trên một bình luận duy nhất.',
+  },
+  {
+    id: 'vip-benefit',
+    topic: 'vip',
+    question: 'Tài khoản VIP có gì hơn Free?',
+    summary: 'VIP mở khóa nhiều tính năng nâng cao hơn tài khoản Free.',
+    steps: [
+      'Tăng giới hạn phân tích dữ liệu.',
+      'Mở khóa so sánh nhiều quán.',
+      'Dùng được các báo cáo nâng cao.',
+      'Ưu tiên trải nghiệm tính năng mới.',
+    ],
+    tip: 'VIP phù hợp khi cần phân tích nhiều dữ liệu cho đồ án hoặc demo.',
+  },
+  {
+    id: 'vnpay-flow',
+    topic: 'vip',
+    question: 'Thanh toán VIP hoạt động như thế nào?',
+    summary: 'Người dùng được chuyển sang cổng VNPay Sandbox để thanh toán thử.',
+    steps: [
+      'Bấm Nâng cấp VIP.',
+      'Hệ thống tạo đơn thanh toán.',
+      'Chuyển sang VNPay Sandbox.',
+      'Thanh toán xong sẽ quay lại trang kết quả.',
+    ],
+    tip: 'VNPay Sandbox là môi trường test, không mất tiền thật.',
+  },
+  {
+    id: 'payment-failed',
+    topic: 'vip',
+    question: 'Vì sao thanh toán hiển thị thất bại?',
+    summary: 'Có thể người dùng hủy, nhập sai thông tin hoặc VNPay trả mã lỗi.',
+    steps: [
+      'Kiểm tra mã phản hồi trên trang kết quả.',
+      'Nếu mã là 00 thì thành công.',
+      'Nếu khác 00 thì giao dịch thất bại hoặc bị hủy.',
+      'Có thể bấm Thanh toán lại để tạo đơn mới.',
+    ],
+    tip: 'Không nên refresh lại trang lỗi cũ, hãy tạo giao dịch mới.',
+  },
+  {
+    id: 'admin-feedback',
+    topic: 'admin',
+    question: 'Admin dùng phản hồi người dùng để làm gì?',
+    summary: 'Admin xem các phản hồi AI sai để cải thiện dữ liệu huấn luyện.',
+    steps: [
+      'Người dùng gửi phản hồi khi AI dự đoán sai.',
+      'Admin kiểm tra nội dung phản hồi.',
+      'Admin duyệt hoặc từ chối phản hồi.',
+      'Dữ liệu đúng có thể dùng để xuất dataset.',
+    ],
+    tip: 'Đây là phần giúp đồ án có hướng MLOps và cải thiện mô hình AI.',
+  },
+  {
+    id: 'admin-user',
+    topic: 'admin',
+    question: 'Admin quản lý người dùng như thế nào?',
+    summary: 'Admin có thể xem, lọc, khóa, mở khóa và kiểm tra trạng thái tài khoản.',
+    steps: [
+      'Vào mục Quản lý Người dùng.',
+      'Tìm kiếm theo tên hoặc email.',
+      'Xem trạng thái Free, VIP hoặc bị khóa.',
+      'Thực hiện thao tác quản trị khi cần.',
+    ],
+    tip: 'Các thao tác quan trọng nên được ghi lại trong lịch sử hoạt động admin.',
+  },
+  {
+    id: 'admin-transaction',
+    topic: 'admin',
+    question: 'Admin xem giao dịch VIP ở đâu?',
+    summary: 'Trang Quản lý Giao dịch dùng để theo dõi lịch sử nâng cấp VIP.',
+    steps: [
+      'Vào mục Quản lý Giao dịch.',
+      'Xem tổng giao dịch, trạng thái và doanh thu.',
+      'Lọc theo ngày hoặc trạng thái.',
+      'Bấm chi tiết để xem thông tin giao dịch.',
+    ],
+    tip: 'Giao dịch thành công sẽ có trạng thái paid hoặc Thành công.',
+  },
+  {
+    id: 'zero-result',
     topic: 'problem',
-    question: 'Vì sao phân tích URL trả về 0 phản hồi?',
-    answer: `Khi hệ thống trả về 0 phản hồi, điều đó không nhất thiết là lỗi. Có vài trường hợp thường gặp.
-
-Trường hợp thứ nhất: đường dẫn này đã từng được thu thập trước đó và hiện chưa có bình luận mới. Để tránh trùng dữ liệu, hệ thống có thể bỏ qua các bình luận đã lưu rồi.
-
-Trường hợp thứ hai: trang hiện không có bình luận công khai, bình luận bị ẩn, hoặc nội dung tải quá chậm khiến bộ thu thập không đọc được.
-
-Trường hợp thứ ba: đường dẫn không đúng loại trang mà hệ thống hỗ trợ, ví dụ link bị rút gọn, link yêu cầu đăng nhập hoặc link không phải trang quán/gian hàng có bình luận.
-
-Với người dùng, thông báo thân thiện nên hiểu là: hệ thống đã kiểm tra đường dẫn này, nhưng hiện chưa có phản hồi mới để cập nhật.`,
+    question: 'Vì sao phân tích URL ra 0 phản hồi?',
+    summary: 'Có thể chưa có bình luận mới hoặc link không đọc được.',
+    steps: [
+      'Link đã từng được quét nên không có dữ liệu mới.',
+      'Trang không có bình luận công khai.',
+      'Link bị rút gọn hoặc yêu cầu đăng nhập.',
+      'Nguồn chưa được hệ thống hỗ trợ.',
+    ],
+    tip: 'Hãy dùng link trực tiếp của quán thay vì link rút gọn.',
   },
   {
-    id: 'late',
+    id: 'dashboard-late',
     topic: 'problem',
-    question: 'Vì sao Bảng điều khiển chưa cập nhật ngay?',
-    answer: `Bảng điều khiển có thể chưa cập nhật ngay vì một số thao tác được chạy ngầm để bạn vẫn dùng được giao diện bình thường.
-
-Ví dụ khi bạn thu thập bình luận từ một đường dẫn hoặc tải lên file CSV lớn, hệ thống cần thời gian để đọc dữ liệu, ghi nhận kết quả và tổng hợp lại các chỉ số. Trong lúc đó bạn vẫn có thể chuyển trang, xem báo cáo cũ hoặc tiếp tục thao tác.
-
-Nếu vừa xử lý xong mà số liệu chưa đổi, bạn có thể đợi một chút rồi bấm làm mới dữ liệu. Nếu hệ thống báo không có phản hồi mới, số liệu có thể giữ nguyên vì không có bình luận mới được thêm vào.
-
-Nói ngắn gọn: Bảng điều khiển là nơi xem kết quả sau khi dữ liệu đã được ghi nhận xong, nên đôi khi sẽ cập nhật chậm hơn thao tác thu thập một chút.`,
+    question: 'Vì sao Dashboard chưa cập nhật ngay?',
+    summary: 'Một số dữ liệu cần thời gian xử lý và lưu vào hệ thống.',
+    steps: [
+      'Đợi vài giây sau khi xử lý xong.',
+      'Bấm làm mới dữ liệu.',
+      'Kiểm tra xem có phản hồi mới không.',
+      'Nếu vẫn không đổi, thử mở lại trang.',
+    ],
+    tip: 'File lớn hoặc URL nhiều bình luận có thể cập nhật chậm hơn.',
+  },
+  {
+    id: 'ai-wrong',
+    topic: 'problem',
+    question: 'Nếu AI dự đoán sai thì làm sao?',
+    summary: 'Người dùng có thể gửi phản hồi để admin kiểm tra lại.',
+    steps: [
+      'Mở kết quả bình luận cần góp ý.',
+      'Chọn gửi phản hồi.',
+      'Nhập nhãn đúng hoặc lý do.',
+      'Admin sẽ kiểm tra trong trang Quản lý Phản hồi.',
+    ],
+    tip: 'AI có thể sai với câu mỉa mai, viết tắt hoặc bình luận quá ngắn.',
   },
 ];
 
 export const helpQuickLinks = [
-  { to: '/url-analyzer', label: 'Kiểm tra bằng link quán', desc: 'Dán đường dẫn để thu thập bình luận.' },
-  { to: '/batch-prediction', label: 'Kiểm tra bằng file CSV', desc: 'Tải file bình luận để phân tích hàng loạt.' },
-  { to: '/dashboard', label: 'Xem kết luận nhanh', desc: 'Xem tỷ lệ hài lòng và cảnh báo.' },
-  { to: '/report', label: 'Xem báo cáo chi tiết', desc: 'Xem biểu đồ và bản đồ từ khóa.' },
+  {
+    to: '/url-analyzer',
+    label: 'Phân tích URL',
+    desc: 'Dán link quán',
+  },
+  {
+    to: '/batch-prediction',
+    label: 'Phân tích CSV',
+    desc: 'Tải file bình luận',
+  },
+  {
+    to: '/dashboard',
+    label: 'Dashboard',
+    desc: 'Xem kết luận nhanh',
+  },
+  {
+    to: '/report',
+    label: 'Báo cáo',
+    desc: 'Biểu đồ và từ khóa',
+  },
+  {
+    to: '/compare',
+    label: 'So sánh quán',
+    desc: 'Đối chiếu nhiều địa điểm',
+  },
+  {
+    to: '/upgrade-vip',
+    label: 'Nâng cấp VIP',
+    desc: 'Mở khóa tính năng',
+  },
 ];
