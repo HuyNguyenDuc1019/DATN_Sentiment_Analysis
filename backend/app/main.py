@@ -39,7 +39,7 @@ app.add_middleware(
 async def load_model():
     model_dir = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
-        "phobert_saved_model",
+        "phobert_v2",  
     )
 
     try:

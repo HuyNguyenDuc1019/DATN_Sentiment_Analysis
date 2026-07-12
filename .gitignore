@@ -6,9 +6,11 @@ venv/
 frontend/node_modules/
 node_modules/
 
-# Bỏ qua các file trọng số AI quá nặng (tránh lỗi GitHub)
-backend/phobert_saved_model/*.bin
-backend/phobert_saved_model/*.safetensors
+# Bỏ qua các file trọng số AI quá nặng (tránh lỗi vượt quá 100MB của GitHub)
+backend/phobert_v1/*.bin
+backend/phobert_v1/*.safetensors
+backend/phobert_v2/*.bin
+backend/phobert_v2/*.safetensors
 ml_training/*.pkl
 
 # Bỏ qua các file cache của hệ thống
