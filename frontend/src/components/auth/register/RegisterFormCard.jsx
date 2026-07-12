@@ -16,8 +16,8 @@ export default function RegisterFormCard({
   onToggleConfirmPassword,
 }) {
   return (
-    <div className="my-8 w-full max-w-[520px]">
-      <div className="rounded-[2rem] border border-slate-800/80 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-9">
+    <div className="w-full max-w-[520px]">
+      <div className="auth-form-card rounded-[1.75rem] border border-cyan-200/15 bg-[#03183f]/30 p-6 shadow-xl shadow-black/15 backdrop-blur-xl sm:p-8">
         <AuthBrand />
 
         <div className="mb-8">
@@ -36,7 +36,7 @@ export default function RegisterFormCard({
           />
 
           <AuthInput
-            label="Email"
+            label="Email doanh nghiệp"
             type="email"
             value={form.email}
             onChange={onChange('email')}

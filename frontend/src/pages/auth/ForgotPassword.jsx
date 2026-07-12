@@ -2,17 +2,9 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 
 import ForgotPasswordFormCard from '../../components/auth/forgot-password/ForgotPasswordFormCard';
-import AuthHeroPanel from '../../components/auth/shared/AuthHeroPanel';
-
-import {
-  normalizeEmail,
-  validateForgotPasswordForm,
-} from '../../utils/auth/authValidation';
-
-import {
-  getForgotPasswordError,
-  sendPasswordResetEmail,
-} from '../../services/auth/authService';
+import AuthPageShell from '../../components/auth/shared/AuthPageShell';
+import { normalizeEmail, validateForgotPasswordForm } from '../../utils/auth/authValidation';
+import { getForgotPasswordError, sendPasswordResetEmail } from '../../services/auth/authService';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -26,17 +18,14 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     const normalizedEmail = normalizeEmail(email);
     const validationError = validateForgotPasswordForm(normalizedEmail);
-
     if (validationError) {
       toast.error(validationError);
       return;
     }
 
     setLoading(true);
-
     try {
       await sendPasswordResetEmail(normalizedEmail);
       setSent(true);
@@ -50,43 +39,18 @@ export default function ForgotPassword() {
   };
 
   return (
-    <>
-      <AuthAnimationStyle />
-
-      <div className="flex h-screen w-full overflow-y-auto bg-slate-950 font-sans text-slate-200">
-        <div className="relative z-10 flex w-full items-center justify-center px-5 py-8 sm:px-8 lg:w-[46%] lg:px-12">
-          <ForgotPasswordFormCard
-            email={email}
-            loading={loading}
-            sent={sent}
-            onEmailChange={handleEmailChange}
-            onSubmit={handleSubmit}
-          />
-        </div>
-
-        <AuthHeroPanel
-          title="Khôi phục quyền truy cập tài khoản"
-          description="Bảo vệ dữ liệu phân tích của bạn bằng quy trình đặt lại mật khẩu qua email xác thực."
-          variant="recovery"
-        />
-      </div>
-    </>
-  );
-}
-
-function AuthAnimationStyle() {
-  return (
-    <style>
-      {`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-15px); }
-        }
-        @keyframes float-delayed {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-      `}
-    </style>
+    <AuthPageShell
+      eyebrow="Khôi phục tài khoản"
+      title="Trở lại không gian phân tích của bạn"
+      description="Liên kết bảo mật sẽ được gửi tới email để bạn nhanh chóng tiếp tục theo dõi và phân tích phản hồi khách hàng."
+    >
+      <ForgotPasswordFormCard
+        email={email}
+        loading={loading}
+        sent={sent}
+        onEmailChange={handleEmailChange}
+        onSubmit={handleSubmit}
+      />
+    </AuthPageShell>
   );
 }

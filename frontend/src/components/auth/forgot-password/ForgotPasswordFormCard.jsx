@@ -14,7 +14,7 @@ export default function ForgotPasswordFormCard({
 }) {
   return (
     <div className="w-full max-w-[500px]">
-      <div className="rounded-[2rem] border border-slate-800/80 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-9">
+      <div className="auth-form-card rounded-[1.75rem] border border-cyan-200/15 bg-[#03183f]/30 p-6 shadow-xl shadow-black/15 backdrop-blur-xl sm:p-8">
         <AuthBrand />
 
         <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
@@ -30,7 +30,7 @@ export default function ForgotPasswordFormCard({
 
         <form className="space-y-5" onSubmit={onSubmit}>
           <AuthInput
-            label="Email"
+            label="Email doanh nghiệp"
             type="email"
             value={email}
             onChange={onEmailChange}

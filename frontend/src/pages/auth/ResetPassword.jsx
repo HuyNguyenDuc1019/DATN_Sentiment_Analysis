@@ -3,18 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import ResetPasswordFormCard from '../../components/auth/reset-password/ResetPasswordFormCard';
-
+import AuthPageShell from '../../components/auth/shared/AuthPageShell';
 import { validateResetPasswordForm } from '../../utils/auth/authValidation';
-
-import {
-  getResetPasswordError,
-  prepareRecoverySession,
-  updateRecoveryPassword,
-} from '../../services/auth/authService';
+import { getResetPasswordError, prepareRecoverySession, updateRecoveryPassword } from '../../services/auth/authService';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
-
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,80 +16,53 @@ export default function ResetPassword() {
   const [linkReady, setLinkReady] = useState(false);
   const [linkError, setLinkError] = useState('');
 
-  const params = useMemo(() => {
-    const query = new URLSearchParams(window.location.search);
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-
-    return {
-      query,
-      hash,
-    };
-  }, []);
+  const params = useMemo(() => ({
+    query: new URLSearchParams(window.location.search),
+    hash: new URLSearchParams(window.location.hash.replace(/^#/, '')),
+  }), []);
 
   useEffect(() => {
     let mounted = true;
-
     async function run() {
       setCheckingLink(true);
       setLinkError('');
-
       try {
         await prepareRecoverySession(params);
-
         if (!mounted) return;
-
         setLinkReady(true);
-
         const type = params.hash.get('type') || params.query.get('type');
-
-        if (type === 'recovery') {
-          window.history.replaceState({}, document.title, '/reset-password');
-        }
+        if (type === 'recovery') window.history.replaceState({}, document.title, '/reset-password');
       } catch (error) {
         console.error('Prepare recovery session failed:', error);
-
         if (!mounted) return;
-
         setLinkReady(false);
         setLinkError(
           error?.message === 'missing_recovery_session'
-            ? 'Không tìm thấy phiên đặt lại mật khẩu. Vui lòng bấm lại link trong email hoặc yêu cầu gửi link mới.'
+            ? 'Không tìm thấy phiên đặt lại mật khẩu. Vui lòng mở lại liên kết trong email hoặc yêu cầu gửi liên kết mới.'
             : getResetPasswordError(error),
         );
       } finally {
-        if (mounted) {
-          setCheckingLink(false);
-        }
+        if (mounted) setCheckingLink(false);
       }
     }
-
     run();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [params]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     if (!linkReady) {
-      toast.error('Link đặt lại mật khẩu chưa sẵn sàng. Vui lòng mở lại link trong email.');
+      toast.error('Liên kết đặt lại mật khẩu chưa sẵn sàng. Vui lòng mở lại liên kết trong email.');
       return;
     }
 
-    const validationError = validateResetPasswordForm({
-      password,
-      confirmPassword,
-    });
-
+    const validationError = validateResetPasswordForm({ password, confirmPassword });
     if (validationError) {
       toast.error(validationError);
       return;
     }
 
     setLoading(true);
-
     try {
       await updateRecoveryPassword(password);
       toast.success('Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.');
@@ -109,7 +76,11 @@ export default function ResetPassword() {
   };
 
   return (
-    <main className="grid h-screen place-items-center overflow-y-auto bg-slate-950 p-5 font-sans text-slate-200 sm:p-8">
+    <AuthPageShell
+      eyebrow="Bảo mật tài khoản"
+      title="Thiết lập lại quyền truy cập an toàn"
+      description="Tạo mật khẩu mới để bảo vệ dữ liệu phân tích và tiếp tục sử dụng hệ thống Almotion."
+    >
       <ResetPasswordFormCard
         password={password}
         confirmPassword={confirmPassword}
@@ -120,15 +91,7 @@ export default function ResetPassword() {
         onConfirmPasswordChange={setConfirmPassword}
         onSubmit={handleSubmit}
       />
-
-      {linkError && (
-        <Link
-          to="/forgot-password"
-          className="sr-only"
-        >
-          Gửi lại link đặt mật khẩu
-        </Link>
-      )}
-    </main>
+      {linkError && <Link to="/forgot-password" className="sr-only">Gửi lại liên kết đặt mật khẩu</Link>}
+    </AuthPageShell>
   );
 }

@@ -34,7 +34,7 @@ export default function LoginFormCard({
         </div>
       </div>
 
-      <div className="rounded-[2rem] border border-slate-800/80 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-9">
+      <div className="auth-form-card rounded-[1.75rem] border border-cyan-200/15 bg-[#03183f]/30 p-6 shadow-xl shadow-black/15 backdrop-blur-xl sm:p-8">
         <div className="mb-8">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300">
             <ShieldCheck className="h-3.5 w-3.5" />
