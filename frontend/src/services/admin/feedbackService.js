@@ -92,6 +92,28 @@ export async function fetchAdminFeedback(adminId) {
   return response.json();
 }
 
+export async function autoReviewSafeFeedback({ adminId, limit = 1000 }) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/admin/feedback/auto-review?admin_id=${encodeURIComponent(adminId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        admin_id: adminId,
+        limit,
+      }),
+    },
+  );
+
+  const data = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(data?.detail || 'Không thể tự động xử lý phản hồi.');
+  }
+
+  return data;
+}
+
 export async function fetchFeedbackConfidenceMap(input) {
   /**
    * Hỗ trợ 2 kiểu gọi:

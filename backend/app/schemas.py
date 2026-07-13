@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 
 # ==========================================
@@ -33,6 +33,9 @@ class FeedbackRequest(BaseModel):
     old_ai_label: int
     corrected_label: int
     user_id: str
+    scraped_review_id: Optional[str] = None
+    status: str = "corrected"
+    include_retrain: bool = False
 
 # ==========================================
 # CẤU TRÚC DỮ LIỆU DÀNH CHO ADMIN

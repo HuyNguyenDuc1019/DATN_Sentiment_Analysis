@@ -54,6 +54,11 @@ class AdminFeedbackExportSelected(BaseModel):
     feedback_ids: list[str]
 
 
+class AdminFeedbackAutoReview(BaseModel):
+    admin_id: str
+    limit: int = 1000
+
+
 class AdminRetrainFlagRequest(BaseModel):
     admin_id: str
     feedback_id: str
@@ -315,6 +320,60 @@ async def get_admin_feedbacks(admin_id: str = Depends(verify_admin)):
     except Exception as e:
         print(f"⚠️ LỖI API FEEDBACK: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/feedback/auto-review")
+async def auto_review_feedback(
+    request: AdminFeedbackAutoReview,
+    admin_id: str = Depends(verify_admin),
+):
+    """Duyệt tự động các trường hợp người dùng xác nhận nhãn AI không đổi.
+
+    Mọi trường hợp người dùng sửa nhãn vẫn được giữ ở trạng thái pending để
+    admin kiểm tra. Quy tắc này giảm thao tác nhưng không tự duyệt dữ liệu có
+    xung đột giữa AI và con người.
+    """
+    try:
+        safe_limit = min(max(int(request.limit or 1000), 1), 5000)
+        response = (
+            supabase
+            .table("feedback_data")
+            .select("id, old_ai_label, corrected_label")
+            .eq("status", "pending")
+            .limit(safe_limit)
+            .execute()
+        )
+
+        rows = response.data or []
+        safe_ids = [
+            row["id"]
+            for row in rows
+            if row.get("old_ai_label") is not None
+            and row.get("corrected_label") is not None
+            and normalize_ai_label(row.get("old_ai_label"))
+            == normalize_ai_label(row.get("corrected_label"))
+        ]
+
+        if safe_ids:
+            (
+                supabase
+                .table("feedback_data")
+                .update({"status": "approved"})
+                .in_("id", safe_ids)
+                .execute()
+            )
+
+        return {
+            "status": "success",
+            "auto_approved": len(safe_ids),
+            "requires_audit": len(rows) - len(safe_ids),
+            "scanned": len(rows),
+            "message": f"Đã tự động duyệt {len(safe_ids)} phản hồi an toàn.",
+        }
+    except Exception as error:
+        if isinstance(error, HTTPException):
+            raise error
+        raise HTTPException(status_code=500, detail=str(error))
 
 
 @router.put("/feedback/review")

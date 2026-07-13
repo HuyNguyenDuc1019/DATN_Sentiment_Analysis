@@ -23,6 +23,7 @@ import {
 } from '../../utils/admin/feedbackUtils';
 
 import {
+  autoReviewSafeFeedback,
   bulkReviewFeedback,
   exportRetrainDataset,
   exportSelectedFeedback,
@@ -39,6 +40,7 @@ export default function AdminFeedback() {
   const [profiles, setProfiles] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAutoReviewing, setIsAutoReviewing] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -235,6 +237,39 @@ export default function AdminFeedback() {
     setMismatchFilter('all');
     setDateFrom('');
     setDateTo('');
+  };
+
+  const handleAutoReview = async () => {
+    if (isAutoReviewing) return;
+
+    setIsAutoReviewing(true);
+
+    try {
+      const adminId = await getAdminId();
+      const result = await autoReviewSafeFeedback({ adminId, limit: 1000 });
+
+      toast.success(
+        result.auto_approved > 0
+          ? `Đã tự động duyệt ${result.auto_approved} phản hồi an toàn. Còn ${result.requires_audit} phản hồi cần kiểm tra.`
+          : `Không có phản hồi an toàn để tự duyệt. Còn ${result.requires_audit || 0} phản hồi cần kiểm tra.`,
+        { id: 'admin-feedback-auto-review' },
+      );
+
+      logAdminActivity({
+        actionType: 'feedback_auto_review',
+        targetType: 'feedback',
+        description: `Tự động duyệt ${result.auto_approved || 0}/${result.scanned || 0} phản hồi an toàn`,
+      });
+
+      await loadFeedback();
+    } catch (error) {
+      console.error('Lỗi tự động xử lý phản hồi:', error);
+      toast.error(error.message || 'Không thể tự động xử lý phản hồi.', {
+        id: 'admin-feedback-auto-review-error',
+      });
+    } finally {
+      setIsAutoReviewing(false);
+    }
   };
 
   const handleReview = async (item, action) => {
@@ -611,8 +646,10 @@ export default function AdminFeedback() {
       <AdminFeedbackHeader
         isLoading={isLoading}
         isExporting={isExporting}
+        isAutoReviewing={isAutoReviewing}
         onRefresh={loadFeedback}
         onExport={handleExport}
+        onAutoReview={handleAutoReview}
       />
 
       <FeedbackStatsCards

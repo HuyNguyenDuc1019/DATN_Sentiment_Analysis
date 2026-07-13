@@ -26,6 +26,7 @@ import {
   fetchAllFeedbackQueue,
   fetchPriorityFeedbackQueue,
   submitReviewFeedback,
+  submitReviewFeedbackBatch,
 } from '../../services/user/feedbackService';
 
 export default function FeedbackCenter() {
@@ -223,15 +224,13 @@ export default function FeedbackCenter() {
     });
   };
 
-  const submitFeedbacksSequentially = async (reviews, getPayload, successMessage) => {
+  const submitFeedbacksBatch = async (reviews, getPayload, successMessage) => {
     if (!user?.id || !reviews.length) return;
 
     setSaving(true);
 
     try {
-      for (const review of reviews) {
-        await submitReviewFeedback(getPayload(review));
-      }
+      await submitReviewFeedbackBatch(reviews.map(getPayload));
 
       toast.success(successMessage);
       removeProcessedReviews(reviews.map((review) => review.id));
@@ -243,7 +242,7 @@ export default function FeedbackCenter() {
   };
 
   const acceptSelectedAsCorrect = async () => {
-    await submitFeedbacksSequentially(
+    await submitFeedbacksBatch(
       selectedReviews,
       (review) => createFeedbackPayload(
         review,
@@ -256,7 +255,7 @@ export default function FeedbackCenter() {
   };
 
   const acceptWholePageAsCorrect = async () => {
-    await submitFeedbacksSequentially(
+    await submitFeedbacksBatch(
       visibleQueue,
       (review) => createFeedbackPayload(
         review,
@@ -269,7 +268,7 @@ export default function FeedbackCenter() {
   };
 
   const correctSelectedAs = async (label) => {
-    await submitFeedbacksSequentially(
+    await submitFeedbacksBatch(
       selectedReviews,
       (review) => createFeedbackPayload(review, user.id, label, 'corrected'),
       `Đã sửa ${selectedReviews.length} phản hồi đã chọn.`,
