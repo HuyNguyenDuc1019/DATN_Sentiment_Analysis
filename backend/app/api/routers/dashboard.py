@@ -36,6 +36,40 @@ DANGER_KEYWORDS = [
     "nhạt",
 ]
 
+POSITIVE_KEYWORDS = [
+    "ngon",
+    "ngon quá",
+    "rất ngon",
+    "tuyệt",
+    "tốt",
+    "hài lòng",
+    "đáng tiền",
+    "sạch sẽ",
+    "nhanh",
+    "nhiệt tình",
+    "thân thiện",
+    "sẽ quay lại",
+]
+
+NEGATIVE_SIGNAL_KEYWORDS = [
+    *DANGER_KEYWORDS,
+    "không ngon",
+    "không sạch",
+    "không hài lòng",
+    "không đáng",
+    "không hợp",
+    "không quay lại",
+    "chưa tốt",
+    "quá tệ",
+    "thất vọng",
+    "đau bụng",
+    "ngộ độc",
+    "ruồi",
+    "dị vật",
+    "hôi",
+    "sống",
+]
+
 
 def normalize_text(value):
     text = str(value or "").lower().strip()
@@ -45,6 +79,33 @@ def normalize_text(value):
     text = re.sub(r"[^a-z0-9\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def normalize_text_with_accents(value):
+    text = str(value or "").lower().strip()
+    text = re.sub(r"[^\w\sÀ-ỹ]", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def contains_normalized_phrase(target, keyword):
+    raw_target = normalize_text_with_accents(target)
+    raw_keyword = normalize_text_with_accents(keyword)
+    normalized_target = normalize_text(target)
+    normalized_keyword = normalize_text(keyword)
+
+    if not normalized_target or not normalized_keyword:
+        return False
+
+    raw_pattern = rf"(?:^|\s){re.escape(raw_keyword)}(?:$|\s)"
+    if re.search(raw_pattern, raw_target) is not None:
+        return True
+
+    # Tránh va chạm sau khi bỏ dấu như "dở" -> "do" với "đồ" -> "do".
+    if len(normalized_keyword) <= 3 and raw_keyword != normalized_keyword:
+        return False
+
+    pattern = rf"(?:^|\s){re.escape(normalized_keyword)}(?:$|\s)"
+    return re.search(pattern, normalized_target) is not None
 
 
 def is_negative_label(value):
@@ -111,14 +172,36 @@ def get_keywords(item):
 
 
 def has_danger_keyword(item):
-    content = normalize_text(get_review_content(item))
-    keywords = " ".join(normalize_text(keyword) for keyword in get_keywords(item))
+    content = get_review_content(item)
+    keywords = " ".join(str(keyword) for keyword in get_keywords(item))
     target = f"{content} {keywords}"
 
-    return any(
-        normalize_text(keyword) in target
-        for keyword in DANGER_KEYWORDS
-    )
+    return any(contains_normalized_phrase(target, keyword) for keyword in DANGER_KEYWORDS)
+
+
+def has_negative_signal(item):
+    content = get_review_content(item)
+    keywords = " ".join(str(keyword) for keyword in get_keywords(item))
+    target = f"{content} {keywords}"
+    return any(contains_normalized_phrase(target, keyword) for keyword in NEGATIVE_SIGNAL_KEYWORDS)
+
+
+def is_clearly_positive(item):
+    content = get_review_content(item)
+    has_positive = any(contains_normalized_phrase(content, keyword) for keyword in POSITIVE_KEYWORDS)
+    return has_positive and not has_negative_signal(item)
+
+
+def is_actionable_alert(item):
+    if has_danger_keyword(item):
+        return True
+
+    if is_clearly_positive(item):
+        return False
+
+    # Nhãn 0 của mô hình nhị phân chưa đủ để coi câu trung tính là cảnh báo.
+    # Chỉ giữ bản ghi có thêm tín hiệu tiêu cực rõ ràng trong nội dung.
+    return is_negative_label(item.get("ai_label")) and has_negative_signal(item)
 
 
 def normalize_confidence(value):
@@ -206,7 +289,7 @@ def unique_by_content(items):
 def build_alerts(rows, limit=20):
     negative_rows = [
         item for item in rows
-        if is_negative_label(item.get("ai_label")) and get_content_key(item)
+        if is_actionable_alert(item) and get_content_key(item)
     ]
 
     tier_1 = [

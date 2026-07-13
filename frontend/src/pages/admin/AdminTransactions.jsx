@@ -6,6 +6,7 @@ import TransactionSummaryCards from '../../components/admin/transactions/Transac
 import TransactionToolbar from '../../components/admin/transactions/TransactionToolbar';
 import TransactionsTable from '../../components/admin/transactions/TransactionsTable';
 import TransactionDetailModal from '../../components/admin/transactions/TransactionDetailModal';
+import TransactionConfirmDialog from '../../components/admin/transactions/TransactionConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
 
 import {
@@ -61,6 +62,7 @@ export default function AdminTransactions() {
   const [quickFilter, setQuickFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const fetchTransactions = async () => {
@@ -172,45 +174,54 @@ export default function AdminTransactions() {
     }
   };
 
-  const handleConfirmTransaction = async (transaction) => {
-    const ok = window.confirm(
-      `Xác nhận giao dịch ${transaction.payment_code || transaction.id} và nâng cấp VIP cho người dùng?`,
-    );
+  const handleConfirmTransaction = (transaction) => {
+    setPendingAction({ type: 'confirm', transaction });
+  };
 
-    if (!ok) return;
+  const handleCancelTransaction = (transaction) => {
+    setPendingAction({ type: 'cancel', transaction });
+  };
 
-    try {
-      setActionLoadingId(transaction.id);
-
-      await confirmAdminTransaction(transaction.id);
-      await fetchTransactions();
-
-      toast.success('Đã xác nhận giao dịch và nâng cấp VIP.');
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message || 'Không thể xác nhận giao dịch.');
-    } finally {
-      setActionLoadingId(null);
+  const handleCloseConfirmDialog = () => {
+    if (!actionLoadingId) {
+      setPendingAction(null);
     }
   };
 
-  const handleCancelTransaction = async (transaction) => {
-    const ok = window.confirm(
-      `Bạn chắc chắn muốn hủy giao dịch ${transaction.payment_code || transaction.id}?`,
-    );
+  const handleExecuteTransactionAction = async () => {
+    if (!pendingAction?.transaction || actionLoadingId) return;
 
-    if (!ok) return;
+    const { type, transaction } = pendingAction;
 
     try {
       setActionLoadingId(transaction.id);
 
-      await cancelAdminTransaction(transaction.id);
-      await fetchTransactions();
+      if (type === 'confirm') {
+        await confirmAdminTransaction(transaction.id);
+      } else {
+        await cancelAdminTransaction(transaction.id);
+      }
 
-      toast.success('Đã hủy giao dịch.');
+      await fetchTransactions();
+      setPendingAction(null);
+
+      if (selectedTransaction?.id === transaction.id) {
+        setSelectedTransaction(null);
+      }
+
+      toast.success(
+        type === 'confirm'
+          ? 'Đã xác nhận giao dịch và nâng cấp VIP.'
+          : 'Đã hủy giao dịch.',
+      );
     } catch (error) {
       console.error(error);
-      toast.error(error.message || 'Không thể hủy giao dịch.');
+      toast.error(
+        error.message ||
+          (type === 'confirm'
+            ? 'Không thể xác nhận giao dịch.'
+            : 'Không thể hủy giao dịch.'),
+      );
     } finally {
       setActionLoadingId(null);
     }
@@ -295,6 +306,17 @@ export default function AdminTransactions() {
           actionLoadingId={actionLoadingId}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
+        />
+      )}
+
+      {pendingAction && (
+        <TransactionConfirmDialog
+          type={pendingAction.type}
+          transaction={pendingAction.transaction}
+          isLoading={actionLoadingId === pendingAction.transaction.id}
+          formatCurrency={formatCurrency}
+          onClose={handleCloseConfirmDialog}
+          onConfirm={handleExecuteTransactionAction}
         />
       )}
     </div>

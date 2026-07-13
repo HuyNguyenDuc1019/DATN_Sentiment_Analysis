@@ -189,6 +189,12 @@ export const submitFeedback = (payload) => {
   return post(`${PYTHON_API}/feedback`, payload);
 };
 
+export const submitFeedbackBatch = (payloads) => {
+  return post(`${PYTHON_API}/feedback/batch`, {
+    items: payloads,
+  });
+};
+
 export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) => {
   return get(`${PYTHON_API}/api/dashboard/alerts`, {
     user_id: userId,

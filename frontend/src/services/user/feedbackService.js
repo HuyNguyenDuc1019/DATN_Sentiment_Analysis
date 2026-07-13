@@ -1,49 +1,64 @@
-import { submitFeedback } from '../api';
+import { submitFeedback, submitFeedbackBatch } from '../api';
 import { supabase } from '../supabaseClient';
 
-import { isLowConfidence } from '../../utils/user/feedbackUtils';
 
-export async function fetchPriorityFeedbackQueue({
-  userId,
-  ignoredIds,
-  thresholdRatio,
-  scanLimit,
-  priorityLimit,
-}) {
-  const { data, error } = await supabase
-    .from('scraped_reviews')
-    .select('id,content,ai_label,confidence,source_url,created_at')
-    .eq('user_id', userId)
-    .order('confidence', { ascending: true })
-    .limit(scanLimit);
-
-  if (error) throw error;
-
-  return (data || [])
-    .filter((review) => !ignoredIds.has(review.id))
-    .filter((review) => isLowConfidence(review.confidence, thresholdRatio))
-    .slice(0, priorityLimit);
-}
-
-export async function fetchAllFeedbackQueue({ userId, ignoredIds, page, pageSize }) {
-  const from = page * pageSize;
-  const to = from + pageSize - 1;
-
-  const { data, error, count } = await supabase
-    .from('scraped_reviews')
-    .select('id,content,ai_label,confidence,source_url,created_at', { count: 'exact' })
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (error) throw error;
+function toPage(data, pageSize, getCursor) {
+  const rows = data || [];
+  const hasMore = rows.length > pageSize;
+  const queue = hasMore ? rows.slice(0, pageSize) : rows;
+  const lastItem = queue[queue.length - 1] || null;
 
   return {
-    queue: (data || []).filter((review) => !ignoredIds.has(review.id)),
-    count: count || 0,
+    queue,
+    hasMore,
+    nextCursor: lastItem ? getCursor(lastItem) : null,
   };
 }
 
+
+export async function fetchPriorityFeedbackQueue({
+  userId,
+  thresholdRatio,
+  pageSize,
+}) {
+  const { data, error } = await supabase.rpc('get_priority_feedback_queue', {
+    p_user_id: userId,
+    p_threshold: thresholdRatio,
+    p_limit: pageSize,
+  });
+
+  if (error) throw error;
+
+  return toPage(data, pageSize, (review) => ({
+    confidence: review.confidence,
+    id: review.id,
+  }));
+}
+
+
+export async function fetchAllFeedbackQueue({ userId, cursor, pageSize }) {
+  const { data, error } = await supabase.rpc('get_all_feedback_queue', {
+    p_user_id: userId,
+    p_before_created_at: cursor?.createdAt || null,
+    p_before_id: cursor?.id || null,
+    p_limit: pageSize,
+  });
+
+  if (error) throw error;
+
+  return toPage(data, pageSize, (review) => ({
+    createdAt: review.created_at,
+    id: review.id,
+  }));
+}
+
+
 export async function submitReviewFeedback(payload) {
   return submitFeedback(payload);
+}
+
+
+export async function submitReviewFeedbackBatch(payloads) {
+  if (!payloads.length) return { processed: 0 };
+  return submitFeedbackBatch(payloads);
 }

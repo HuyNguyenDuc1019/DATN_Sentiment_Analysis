@@ -39,31 +39,39 @@ export function buildQuickConclusion({
   const negativeRate = percent(negative, sentimentTotal);
   const alertRate = percent(alerts, total);
 
-  /*
-    Logic mới:
-    - Không kết luận quá gắt chỉ vì có vài cảnh báo.
-    - Chỉ "Không nên vội thử" khi tiêu cực quá cao hoặc cảnh báo chiếm tỷ lệ lớn.
-    - Trường hợp 57.3% hài lòng, 43% chưa hài lòng, 4 cảnh báo:
-      => "Cần cân nhắc kỹ", hợp lý hơn "Không nên vội thử".
-  */
+  // Một bình luận tiêu cực thường đồng thời nằm trong danh sách cảnh báo.
+  // Dùng giá trị lớn hơn thay vì cộng hai tỷ lệ để tránh tính trùng dữ liệu.
+  // Cảnh báo đóng vai trò hỗ trợ và không thể một mình đẩy kết luận lên mức
+  // nguy hiểm trong khi tỷ lệ hài lòng vẫn rất cao.
+  const riskScore = Math.max(negativeRate, alertRate * 0.75);
   let level = 'good';
 
-  if (negativeRate >= 55 || alertRate >= 3 || alerts >= 12) {
+  if (total < 5) {
+    level = 'insufficient';
+  } else if (riskScore >= 50) {
     level = 'critical';
-  } else if ((negativeRate >= 40 && alerts >= 3) || negativeRate >= 48 || alerts >= 6 || positiveRate < 52) {
+  } else if (riskScore >= 30) {
     level = 'high';
-  } else if (negativeRate >= 28 || alerts >= 1 || positiveRate < 68) {
+  } else if (riskScore >= 15) {
     level = 'medium';
   }
 
   const config = {
+    insufficient: {
+      title: 'Chưa đủ dữ liệu',
+      badge: 'Cần thêm phản hồi',
+      tone: 'amber',
+      icon: AlertTriangle,
+      description: 'Số lượng phản hồi hiện tại chưa đủ để đưa ra kết luận đáng tin cậy.',
+      suggestion: 'Hãy thu thập ít nhất 5 phản hồi rồi kiểm tra lại kết luận tổng quan.',
+    },
     good: {
-      title: 'Có thể thử',
-      badge: 'Ổn định',
+      title: 'Đáng để thử',
+      badge: 'Rủi ro thấp',
       tone: 'emerald',
       icon: CheckCircle2,
-      description: 'Tỷ lệ hài lòng đang chiếm ưu thế và số cảnh báo không đáng kể.',
-      suggestion: 'Có thể tiếp tục theo dõi thêm các phản hồi mới để giữ chất lượng ổn định.',
+      description: 'Phần lớn khách hàng hài lòng và tỷ lệ tín hiệu tiêu cực đang ở mức thấp.',
+      suggestion: 'Có thể cân nhắc trải nghiệm, đồng thời tiếp tục theo dõi các phản hồi mới.',
     },
     medium: {
       title: 'Nên thử có chọn lọc',
@@ -101,6 +109,7 @@ export function buildQuickConclusion({
     positiveRate,
     negativeRate,
     alertRate,
+    riskScore,
   };
 }
 
@@ -219,7 +228,7 @@ export default function QuickConclusionCard({
         </div>
       </div>
 
-      {conclusion.level !== 'good' && (
+      {!['good', 'insufficient'].includes(conclusion.level) && (
         <div className={`mt-5 flex items-start gap-3 rounded-xl border p-4 ${tone.soft}`}>
           <SmilePlus className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
           <p className="text-xs leading-5 text-slate-300">

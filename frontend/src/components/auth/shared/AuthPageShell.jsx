@@ -8,12 +8,29 @@ const FEATURES = [
 
 export default function AuthPageShell({ children, eyebrow, title, description }) {
   return (
-    <main className="auth-blue-shell relative min-h-screen overflow-y-auto bg-[#031b4e] px-4 py-6 font-sans text-white sm:px-6 lg:grid lg:place-items-center lg:py-6 xl:py-8">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.48),transparent_45%),linear-gradient(135deg,#03183f_0%,#075bb8_52%,#03183f_100%)]">
-        <div className="absolute -left-20 top-8 h-80 w-80 rounded-[45%] border-[34px] border-blue-500/25 blur-[1px] rotate-[-24deg]" />
-        <div className="absolute -right-16 -top-20 h-96 w-96 rounded-[42%] border-[38px] border-cyan-400/20 rotate-[28deg]" />
-        <div className="absolute -bottom-28 left-[8%] h-72 w-72 rounded-full border-[30px] border-indigo-400/20" />
-        <div className="absolute -bottom-28 right-[4%] h-80 w-80 rounded-[42%] border-[36px] border-blue-400/25 rotate-[24deg]" />
+    <main className="auth-blue-shell relative min-h-screen overflow-y-auto bg-[#050a18] px-4 py-6 font-sans text-white sm:px-6 lg:grid lg:place-items-center lg:py-6 xl:py-8">
+      <div
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 16% 18%, rgba(79, 70, 229, 0.28), transparent 30%), radial-gradient(circle at 84% 72%, rgba(8, 145, 178, 0.22), transparent 34%), radial-gradient(circle at 52% -8%, rgba(59, 130, 246, 0.20), transparent 38%), linear-gradient(135deg, #050917 0%, #0a1430 52%, #071426 100%)',
+        }}
+      >
+        <div
+          className="absolute inset-0 opacity-[0.13]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.18) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)',
+          }}
+        />
+        <div className="absolute -left-32 top-[16%] h-96 w-96 rounded-full bg-indigo-500/15 blur-[100px]" />
+        <div className="absolute -right-28 bottom-[8%] h-[28rem] w-[28rem] rounded-full bg-cyan-500/10 blur-[110px]" />
+        <div className="absolute left-[38%] top-[-18%] h-80 w-80 rounded-full bg-blue-500/10 blur-[100px]" />
+        <div className="absolute left-[8%] right-[8%] top-[12%] h-px bg-gradient-to-r from-transparent via-cyan-200/20 to-transparent" />
+        <div className="absolute bottom-[10%] left-[18%] right-[18%] h-px bg-gradient-to-r from-transparent via-indigo-300/15 to-transparent" />
       </div>
 
       <div className="auth-panel relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-cyan-200/35 bg-[#062456]/75 shadow-[0_30px_100px_rgba(0,14,48,0.55)] backdrop-blur-2xl lg:grid-cols-2">

@@ -18,7 +18,7 @@ export default function PrioritySuggestions({
           tone="rose"
           title="AI tự tin nhưng sai"
           description="AI confidence ≥ 80% nhưng khác nhãn người dùng sửa."
-          count={`${priorityStats.confidentWrong.length} mẫu`}
+          count={`${priorityStats.confidentWrongCount} mẫu`}
           onClick={() => onApplyPriorityFilter('confident_wrong')}
         />
 
@@ -26,7 +26,7 @@ export default function PrioritySuggestions({
           tone="indigo"
           title="Nội dung dài đáng duyệt"
           description="Câu dài từ 80 ký tự trở lên, thường có nhiều ngữ cảnh hơn."
-          count={`${priorityStats.longContent.length} mẫu`}
+          count={`${priorityStats.longContentCount} mẫu`}
           onClick={() => onApplyPriorityFilter('long_content')}
         />
 
@@ -37,21 +37,13 @@ export default function PrioritySuggestions({
               <p className="mt-1 text-xs text-slate-400">Phát hiện nội dung giống nhau để tránh dataset bị lệch.</p>
             </div>
             <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-sm font-bold text-amber-300">
-              {priorityStats.duplicateGroups.length} nhóm
+              {priorityStats.duplicateGroupCount} nhóm
             </span>
           </div>
 
-          <div className="mb-3 space-y-1">
-            {priorityStats.duplicateGroups.slice(0, 2).map((group) => (
-              <p key={group.text} className="truncate text-xs text-slate-300" title={group.text}>
-                {group.text} - xuất hiện {group.count} lần
-              </p>
-            ))}
-
-            {priorityStats.duplicateGroups.length === 0 && (
-              <p className="text-xs text-slate-500">Chưa phát hiện nội dung bị lặp.</p>
-            )}
-          </div>
+          <p className="mb-3 text-xs text-slate-400">
+            Số nhóm được tính trực tiếp trên toàn bộ dữ liệu trong PostgreSQL.
+          </p>
 
           <button
             onClick={() => onApplyPriorityFilter('duplicate')}
