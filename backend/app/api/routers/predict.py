@@ -170,3 +170,4 @@ async def predict_batch(req_obj: Request, request: BatchPredictRequest):
         "processing_time": f"{round(end_time - start_time, 2)}s",
         "message": "Phân tích và bóc tách dữ liệu thành công với cấu hình động cá nhân hóa!"
     }
+

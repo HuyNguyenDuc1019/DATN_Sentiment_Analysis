@@ -10,6 +10,9 @@ export default function TransactionsTable({
   getSortLabel,
   onCopyTransactionId,
   onSelectTransaction,
+  onConfirmTransaction,
+  onCancelTransaction,
+  actionLoadingId,
 }) {
   return (
     <div className="overflow-x-auto">
@@ -39,26 +42,33 @@ export default function TransactionsTable({
                 <ArrowUpDown size={13} />
               </button>
             </th>
-            <th className="px-6 py-4 font-semibold text-right">Chi tiết</th>
+            <th className="px-6 py-4 font-semibold text-right">Thao tác</th>
           </tr>
         </thead>
 
         <tbody className="admin-transactions-tbody divide-y divide-slate-700/50">
           {isLoading ? (
             <tr>
-              <td colSpan="6" className="px-6 py-8 text-center text-slate-400">Đang tải dữ liệu...</td>
+              <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                Đang tải dữ liệu...
+              </td>
             </tr>
           ) : filteredData.length === 0 ? (
             <tr>
-              <td colSpan="6" className="px-6 py-8 text-center text-slate-400">Không tìm thấy giao dịch nào.</td>
+              <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                Không tìm thấy giao dịch nào.
+              </td>
             </tr>
           ) : (
             paginatedData.map((transaction) => (
               <TransactionRow
                 key={transaction.id}
                 transaction={transaction}
+                actionLoadingId={actionLoadingId}
                 onCopyTransactionId={onCopyTransactionId}
                 onSelectTransaction={onSelectTransaction}
+                onConfirmTransaction={onConfirmTransaction}
+                onCancelTransaction={onCancelTransaction}
               />
             ))
           )}

@@ -67,7 +67,7 @@ export default function BasicInfoCard({
           />
 
           <ProfileInput
-            label="Email doanh nghiệp"
+            label="Email"
             type="email"
             value={profile.email}
             onChange={(event) => setProfile((current) => ({ ...current, email: event.target.value }))}

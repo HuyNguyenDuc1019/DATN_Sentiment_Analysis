@@ -7,28 +7,45 @@ import re
 
 class SentimentPredictor:
     def __init__(self, model_path: str):
-        print("Đang khởi tạo mô hình trên CPU...")
+        print(f"Đang khởi tạo mô hình từ {model_path} trên CPU...")
         self.device = torch.device('cpu')
         
-        # Load Tokenizer và Model từ thư mục local
+        # Load Tokenizer và Model
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
         
         # Chuyển mô hình sang chế độ CPU và đánh giá (Inference mode)
         self.model.to(self.device)
         self.model.eval()
+        
+        # Tích hợp Từ điển Teencode (Đồng bộ với lúc huấn luyện)
+        self.teencode_dict = {
+            "ko": "không", "k": "không", "khg": "không", "kh": "không", "hong": "không", "hông": "không",
+            "đc": "được", "dc": "được",
+            "r": "rồi", "rùi": "rồi",
+            "vs": "với", "sp": "sản phẩm", "nv": "nhân viên", "pv": "phục vụ",
+            "qán": "quán", "mik": "mình", "m": "mình",
+            "oke": "ok", "okela": "ok", "oki": "ok",
+            "ngonnn": "ngon", "ngonnnn": "ngon"
+        }
+        
         print("Đã tải mô hình thành công!")
 
     def preprocess_text(self, text: str) -> str:
         # 1. Chuyển chữ thường
-        text = text.lower()
-        # 2. Xóa ký tự đặc biệt (chỉ giữ lại chữ cái và khoảng trắng)
-        text = re.sub(r'[^\w\s]', '', text)
-        # 3. Tách từ bằng PyVi (tạo các dấu gạch dưới như món_ăn)
-        text = ViTokenizer.tokenize(text)
+        text = str(text).lower()
         
-        # Lưu ý: Nếu quá trình train bạn loại bỏ stopwords, bạn có thể 
-        # thêm logic đọc file vietnamese-stopwords-dash.txt và filter tại đây.
+        # 2. Xóa ký tự đặc biệt (thay bằng khoảng trắng để không dính chữ)
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # 3. Dịch Teencode
+        words = text.split()
+        words = [self.teencode_dict.get(w, w) for w in words]
+        text = ' '.join(words)
+        
+        # 4. Tách từ bằng PyVi
+        text = ViTokenizer.tokenize(text)
         return text
 
     def predict(self, text: str):
@@ -41,14 +58,14 @@ class SentimentPredictor:
             return_tensors="pt",
             truncation=True,
             padding="max_length",
-            max_length=256 # Có thể chỉnh lại theo max_length lúc bạn train
+            max_length=128  # Đã điều chỉnh về 128 để khớp với model Colab
         )
         
         # Đưa tensor lên CPU
         input_ids = inputs["input_ids"].to(self.device)
         attention_mask = inputs["attention_mask"].to(self.device)
 
-        # Chạy dự đoán, tắt gradient để tiết kiệm RAM
+        # Chạy dự đoán, tắt gradient
         with torch.no_grad():
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
             logits = outputs.logits
@@ -60,7 +77,7 @@ class SentimentPredictor:
             predicted_class = torch.argmax(logits, dim=1).item()
             confidence_score = probabilities[predicted_class] * 100
 
-        # Mapping nhãn
+        # Mapping nhãn (0 = Tiêu cực, 1 = Tích cực)
         sentiment_label = "Tích cực" if predicted_class == 1 else "Tiêu cực"
 
         return {

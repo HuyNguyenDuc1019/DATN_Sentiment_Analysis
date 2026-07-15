@@ -1,67 +1,61 @@
+import { ListChecks, SlidersHorizontal, Sparkles } from 'lucide-react';
+
 export default function FeedbackToolbar({
   mode,
   page,
-  pageCount,
-  totalRows,
+  pageRows,
+  hasMore,
   confidenceThreshold,
   onModeChange,
   onConfidenceThresholdChange,
 }) {
   return (
-    <div className="mb-4 shrink-0 rounded-2xl border border-slate-700 bg-slate-800/50 p-3 backdrop-blur-md lg:p-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onModeChange('priority')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              mode === 'priority'
-                ? 'bg-indigo-600 text-white'
-                : 'border border-slate-700 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            AI chưa chắc
-          </button>
+    <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-slate-700/70 bg-slate-800/40 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex w-full rounded-xl bg-slate-950/40 p-1 lg:w-auto">
+        <ModeButton icon={Sparkles} active={mode === 'priority'} onClick={() => onModeChange('priority')}>
+          AI chưa chắc
+        </ModeButton>
+        <ModeButton icon={ListChecks} active={mode === 'all'} onClick={() => onModeChange('all')}>
+          Duyệt hàng loạt
+        </ModeButton>
+      </div>
 
-          <button
-            type="button"
-            onClick={() => onModeChange('all')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              mode === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'border border-slate-700 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            Duyệt toàn bộ
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2 xl:items-end">
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/30 px-3 py-2">
-            <span className="text-xs font-semibold text-slate-300">Ngưỡng AI chưa chắc</span>
-            <input
-              type="number"
-              min="30"
-              max="95"
-              step="5"
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+        {mode === 'priority' ? (
+          <label className="flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-950/30 px-3 py-2.5">
+            <SlidersHorizontal className="h-4 w-4 text-indigo-400" />
+            Hiển thị dự đoán dưới
+            <select
               value={confidenceThreshold}
-              onChange={(event) => {
-                const nextValue = Math.min(95, Math.max(30, Number(event.target.value) || 70));
-                onConfidenceThresholdChange(nextValue);
-              }}
-              className="w-16 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-semibold text-white outline-none focus:border-indigo-500"
-              title="Các bình luận có độ chắc chắn thấp hơn ngưỡng này sẽ vào tab AI chưa chắc"
-            />
-            <span className="text-xs font-semibold text-slate-300">%</span>
-          </div>
-
-          <div className="text-xs leading-5 text-slate-400">
-            {mode === 'priority'
-              ? `AI chưa chắc: chỉ hiện các câu có độ chắc chắn dưới ${confidenceThreshold}%.`
-              : `Trang ${page + 1}/${pageCount} • ${totalRows.toLocaleString('vi-VN')} bình luận • mỗi trang 100 dòng`}
-          </div>
-        </div>
+              onChange={(event) => onConfidenceThresholdChange(Number(event.target.value))}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 font-semibold text-white outline-none focus:border-indigo-500"
+            >
+              {[30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95].map((value) => (
+                <option key={value} value={value}>{value}%</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span className="rounded-xl border border-slate-700/70 bg-slate-950/30 px-3 py-2.5">
+            Trang {page + 1} · {pageRows} bình luận{hasMore ? ' · còn dữ liệu' : ' · trang cuối'}
+          </span>
+        )}
       </div>
     </div>
+  );
+}
+
+function ModeButton({ icon: Icon, active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition lg:flex-none ${
+        active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white'
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </button>
   );
 }

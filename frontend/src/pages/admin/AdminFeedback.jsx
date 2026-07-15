@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { logAdminActivity } from '../../services/adminActivityLogger';
@@ -13,43 +13,56 @@ import FeedbackTable from '../../components/admin/feedback/FeedbackTable';
 import FeedbackDetailModal from '../../components/admin/feedback/FeedbackDetailModal';
 import PaginationControls from '../../components/admin/feedback/PaginationControls';
 
-import {
-  ITEMS_PER_PAGE,
-  getConfidenceBucket,
-  getErrorMessage,
-  getPriorityStats,
-  isFeedbackMismatch,
-  normalizeStatus,
-} from '../../utils/admin/feedbackUtils';
+import { getErrorMessage, normalizeStatus } from '../../utils/admin/feedbackUtils';
 
 import {
   bulkReviewFeedback,
   exportRetrainDataset,
   exportSelectedFeedback,
-  fetchAdminFeedback,
-  fetchFeedbackConfidenceMap,
+  fetchAdminFeedbackPage,
+  fetchAdminFeedbackStats,
   fetchFeedbackDetail,
   getAdminId,
   reviewFeedback,
   reviewFeedbackDetailed,
 } from '../../services/admin/feedbackService';
 
+
+const PAGE_SIZE = 50;
+const EMPTY_STATS = {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  rejected: 0,
+  confident_wrong: 0,
+  long_content: 0,
+  duplicate_groups: 0,
+};
+
+
 export default function AdminFeedback() {
   const [items, setItems] = useState([]);
   const [profiles, setProfiles] = useState({});
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('pending');
-  const [page, setPage] = useState(1);
 
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
   const [confidenceFilter, setConfidenceFilter] = useState('all');
   const [mismatchFilter, setMismatchFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  const [page, setPage] = useState(1);
+  const [cursor, setCursor] = useState(null);
+  const [cursorHistory, setCursorHistory] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkAction, setBulkAction] = useState('');
@@ -64,38 +77,88 @@ export default function AdminFeedback() {
   const [modalNewLabel, setModalNewLabel] = useState('');
   const [modalSubmittingAction, setModalSubmittingAction] = useState('');
 
-  const confidenceMergedRef = useRef(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setCursor(null);
+      setCursorHistory([]);
+      setNextCursor(null);
+      setHasMore(false);
+      setSelectedIds(new Set());
+      setDebouncedSearch(search.trim());
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const filters = useMemo(() => ({
+    search: debouncedSearch,
+    status: statusFilter,
+    confidence: confidenceFilter,
+    mismatch: mismatchFilter,
+    dateFrom,
+    dateTo,
+    priority: priorityFilter,
+  }), [
+    debouncedSearch,
+    statusFilter,
+    confidenceFilter,
+    mismatchFilter,
+    dateFrom,
+    dateTo,
+    priorityFilter,
+  ]);
+
+  const resetPagination = useCallback(() => {
+    setPage(1);
+    setCursor(null);
+    setCursorHistory([]);
+    setNextCursor(null);
+    setHasMore(false);
+    setSelectedIds(new Set());
+  }, []);
 
   const loadFeedback = useCallback(async () => {
     setIsLoading(true);
 
     try {
       const adminId = await getAdminId();
-      const data = await fetchAdminFeedback(adminId);
+      const result = await fetchAdminFeedbackPage({
+        adminId,
+        filters,
+        cursor,
+        limit: PAGE_SIZE,
+      });
 
-      const formattedItems = [];
       const mappedProfiles = {};
-
-      data.forEach((item) => {
-        if (item.profiles) {
-          mappedProfiles[item.user_id] = item.profiles;
-        }
-
-        const { profiles: _profiles, ...cleanItem } = item;
-        formattedItems.push(cleanItem);
+      const formattedItems = (result.items || []).map((item) => {
+        if (item.profiles) mappedProfiles[item.user_id] = item.profiles;
+        const cleanItem = { ...item };
+        delete cleanItem.profiles;
+        return cleanItem;
       });
 
       setItems(formattedItems);
       setProfiles(mappedProfiles);
+      setHasMore(Boolean(result.has_more));
+      setNextCursor(result.next_cursor || null);
+      setSelectedIds(new Set());
     } catch (error) {
       console.error('Lỗi tải phản hồi admin:', error);
-      toast.error('Không thể tải danh sách phản hồi từ máy chủ.', {
-        id: 'admin-feedback-load-error',
-      });
+      toast.error(error.message || 'Không thể tải danh sách phản hồi.');
       setItems([]);
       setProfiles({});
     } finally {
       setIsLoading(false);
+    }
+  }, [filters, cursor]);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const adminId = await getAdminId();
+      const nextStats = await fetchAdminFeedbackStats(adminId);
+      setStats({ ...EMPTY_STATS, ...nextStats });
+    } catch (error) {
+      console.error('Lỗi tải thống kê feedback:', error);
     }
   }, []);
 
@@ -104,120 +167,21 @@ export default function AdminFeedback() {
   }, [loadFeedback]);
 
   useEffect(() => {
-    if (isLoading) {
-      confidenceMergedRef.current = false;
-      return;
-    }
+    loadStats();
+  }, [loadStats]);
 
-    if (confidenceMergedRef.current || items.length === 0) return;
+  const refreshAll = async () => {
+    await Promise.all([loadFeedback(), loadStats()]);
+  };
 
-    const mergeConfidence = async () => {
-      try {
-        const adminId = await getAdminId();
-        const map = await fetchFeedbackConfidenceMap(adminId);
-
-        setItems((current) =>
-          current.map((item) => (map[item.id] !== undefined ? { ...item, ai_confidence: map[item.id] } : item)),
-        );
-      } catch (error) {
-        console.error('Lỗi tải confidence map:', error);
-      } finally {
-        confidenceMergedRef.current = true;
-      }
-    };
-
-    mergeConfidence();
-  }, [isLoading, items.length]);
-
-  const stats = useMemo(() => {
-    const pending = items.filter((item) => normalizeStatus(item.status) === 'pending').length;
-    const approved = items.filter((item) => normalizeStatus(item.status) === 'approved').length;
-    const rejected = items.filter((item) => normalizeStatus(item.status) === 'rejected').length;
-
-    return {
-      total: items.length,
-      pending,
-      approved,
-      rejected,
-    };
-  }, [items]);
-
-  const priorityStats = useMemo(() => getPriorityStats(items), [items]);
-
-  const filteredItems = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    const searchTokens = normalizedSearch
-      ? normalizedSearch.split(',').map((token) => token.trim()).filter(Boolean)
-      : [];
-
-    return items.filter((item) => {
-      const profile = profiles[item.user_id] || {};
-      const haystack = [item.original_content, profile.full_name, profile.email]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      const matchSearch = searchTokens.length
-        ? searchTokens.some((token) => haystack.includes(token))
-        : true;
-
-      const matchStatus = statusFilter === 'all' ? true : normalizeStatus(item.status) === statusFilter;
-      const matchConfidence = confidenceFilter === 'all' ? true : getConfidenceBucket(item) === confidenceFilter;
-
-      const matchMismatch =
-        mismatchFilter === 'all'
-          ? true
-          : mismatchFilter === 'mismatch'
-            ? isFeedbackMismatch(item)
-            : !isFeedbackMismatch(item);
-
-      let matchDate = true;
-
-      if ((dateFrom || dateTo) && item.created_at) {
-        const itemDate = new Date(item.created_at);
-        if (dateFrom) matchDate = matchDate && itemDate >= new Date(dateFrom);
-        if (dateTo) matchDate = matchDate && itemDate <= new Date(`${dateTo}T23:59:59`);
-      }
-
-      let matchPriority = true;
-
-      if (priorityFilter === 'confident_wrong') {
-        const value = item.ai_confidence;
-        const confidence = value === null || value === undefined ? 0 : value <= 1 ? value * 100 : value;
-        matchPriority = isFeedbackMismatch(item) && confidence >= 80;
-      }
-
-      if (priorityFilter === 'long_content') {
-        matchPriority = (item.original_content || '').trim().length >= 80;
-      }
-
-      if (priorityFilter === 'duplicate') {
-        matchPriority = priorityStats.duplicateIds.has(item.id);
-      }
-
-      return matchSearch && matchStatus && matchConfidence && matchMismatch && matchDate && matchPriority;
-    });
-  }, [items, profiles, search, statusFilter, confidenceFilter, mismatchFilter, dateFrom, dateTo, priorityFilter, priorityStats]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
-
-  const paginatedItems = useMemo(() => {
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    return filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredItems, page]);
-
-  useEffect(() => {
-    setPage(1);
-    setSelectedIds(new Set());
-  }, [search, statusFilter, confidenceFilter, mismatchFilter, dateFrom, dateTo, priorityFilter]);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
+  const priorityStats = useMemo(() => ({
+    confidentWrongCount: Number(stats.confident_wrong || 0),
+    longContentCount: Number(stats.long_content || 0),
+    duplicateGroupCount: Number(stats.duplicate_groups || 0),
+  }), [stats]);
 
   const resetFilters = () => {
+    resetPagination();
     setSearch('');
     setStatusFilter('pending');
     setConfidenceFilter('all');
@@ -228,6 +192,7 @@ export default function AdminFeedback() {
   };
 
   const applyPriorityFilter = (type) => {
+    resetPagination();
     setPriorityFilter(type);
     setSearch('');
     setStatusFilter('all');
@@ -238,123 +203,68 @@ export default function AdminFeedback() {
   };
 
   const handleReview = async (item, action) => {
-  const currentStatus = normalizeStatus(item.status);
-
-  if (currentStatus === 'approved') {
-    toast.error('Phản hồi này đã được duyệt trước đó.', {
-      id: `admin-feedback-already-approved-${item.id}`,
-    });
-    return;
-  }
-
-  if (currentStatus === 'rejected') {
-    toast.error('Phản hồi này đã bị từ chối trước đó.', {
-      id: `admin-feedback-already-rejected-${item.id}`,
-    });
-    return;
-  }
-
-  const status = action === 'approve' ? 'approved' : 'rejected';
-  const actionText = action === 'approve' ? 'duyệt' : 'từ chối';
-
-  setUpdatingId(item.id);
-
-  try {
-    const adminId = await getAdminId();
-
-    const response = await reviewFeedback({
-      adminId,
-      feedbackId: item.id,
-      action,
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => null);
-      throw new Error(getErrorMessage(err, 'Không thể duyệt phản hồi.'));
+    const currentStatus = normalizeStatus(item.status);
+    if (currentStatus !== 'pending') {
+      toast.error('Phản hồi này đã được xử lý.');
+      return;
     }
 
-    setItems((current) =>
-      current.map((feedback) =>
-        feedback.id === item.id
-          ? {
-              ...feedback,
-              status,
-            }
-          : feedback,
-      ),
-    );
+    setUpdatingId(item.id);
 
-    toast.success(`Đã ${actionText} phản hồi thành công!`, {
-      id: `admin-feedback-${action}-${item.id}`,
-    });
-
-    logAdminActivity({
-      actionType: action === 'approve' ? 'feedback_approved' : 'feedback_rejected',
-      targetType: 'feedback',
-      targetId: item.id,
-      description: `${actionText} phản hồi: "${(item.original_content || '').slice(0, 60)}${
-        (item.original_content || '').length > 60 ? '...' : ''
-      }"`,
-    });
-  } catch (error) {
-    console.error('Lỗi duyệt phản hồi:', error);
-
-    toast.error(`Không thể ${actionText} phản hồi: ${error.message}`, {
-      id: `admin-feedback-${action}-error`,
-    });
-  } finally {
-    setUpdatingId('');
-  }
-};
-
-  const handleExport = async () => {
     try {
-      setIsExporting(true);
-
       const adminId = await getAdminId();
-      const response = await exportRetrainDataset(adminId);
+      const response = await reviewFeedback({ adminId, feedbackId: item.id, action });
 
       if (!response.ok) {
-        let message = 'Lỗi khi tải file từ Server';
-
-        try {
-          const errorData = await response.json();
-          message = errorData.detail || message;
-        } catch {
-          message = response.statusText || message;
-        }
-
-        throw new Error(message);
+        const error = await response.json().catch(() => null);
+        throw new Error(getErrorMessage(error, 'Không thể xử lý phản hồi.'));
       }
+
+      if (statusFilter === 'pending') {
+        setItems((current) => current.filter((feedback) => feedback.id !== item.id));
+      } else {
+        const nextStatus = action === 'approve' ? 'approved' : 'rejected';
+        setItems((current) => current.map((feedback) => (
+          feedback.id === item.id ? { ...feedback, status: nextStatus } : feedback
+        )));
+      }
+
+      toast.success(action === 'approve' ? 'Đã duyệt phản hồi.' : 'Đã từ chối phản hồi.');
+      loadStats();
+
+      logAdminActivity({
+        actionType: action === 'approve' ? 'feedback_approved' : 'feedback_rejected',
+        targetType: 'feedback',
+        targetId: item.id,
+        description: `${action === 'approve' ? 'duyệt' : 'từ chối'} phản hồi`,
+      });
+    } catch (error) {
+      toast.error(error.message || 'Không thể xử lý phản hồi.');
+    } finally {
+      setUpdatingId('');
+    }
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+
+    try {
+      const adminId = await getAdminId();
+      const response = await exportRetrainDataset(adminId);
+      if (!response.ok) throw new Error('Không thể xuất dataset.');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-
       link.href = url;
       link.download = `phobert_retrain_dataset_${new Date().toISOString().slice(0, 10)}.csv`;
-
       document.body.appendChild(link);
       link.click();
-
       link.remove();
       window.URL.revokeObjectURL(url);
-
-      toast.success('Xuất Dataset AI thành công!', {
-        id: 'admin-feedback-export-success',
-      });
-
-      logAdminActivity({
-        actionType: 'dataset_exported',
-        targetType: 'dataset',
-        targetId: null,
-        description: 'xuất dataset CSV để retrain mô hình AI',
-      });
+      toast.success('Xuất Dataset AI thành công!');
     } catch (error) {
-      console.error('Lỗi xuất Dataset CSV:', error);
-      toast.error(`Thất bại: ${error.message}`, {
-        id: 'admin-feedback-export-error',
-      });
+      toast.error(error.message || 'Không thể xuất dataset.');
     } finally {
       setIsExporting(false);
     }
@@ -363,24 +273,20 @@ export default function AdminFeedback() {
   const toggleSelectOne = (id) => {
     setSelectedIds((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
-  const isAllFilteredSelected = paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id));
+  const isAllFilteredSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
 
   const toggleSelectAll = () => {
     setSelectedIds((current) => {
-      if (isAllFilteredSelected) {
-        const next = new Set(current);
-        paginatedItems.forEach((item) => next.delete(item.id));
-        return next;
-      }
-
       const next = new Set(current);
-      paginatedItems.forEach((item) => next.add(item.id));
+      items.forEach((item) => {
+        if (isAllFilteredSelected) next.delete(item.id);
+        else next.add(item.id);
+      });
       return next;
     });
   };
@@ -389,12 +295,10 @@ export default function AdminFeedback() {
 
   const submitBulkAction = async (action) => {
     const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    if (!ids.length) return;
 
     if ((action === 'reject' || action === 'edit_label') && !bulkReason.trim()) {
-      toast.error('Vui lòng nhập lý do trước khi thực hiện.', {
-        id: 'bulk-reason-required',
-      });
+      toast.error('Vui lòng nhập lý do trước khi thực hiện.');
       return;
     }
 
@@ -411,40 +315,23 @@ export default function AdminFeedback() {
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(getErrorMessage(err, 'Lỗi server'));
+        const error = await response.json().catch(() => null);
+        throw new Error(getErrorMessage(error, 'Không thể xử lý hàng loạt.'));
       }
 
-      if (action === 'delete') {
-        setItems((current) => current.filter((item) => !ids.includes(item.id)));
-      } else if (action === 'edit_label') {
-        setItems((current) =>
-          current.map((item) => (ids.includes(item.id) ? { ...item, corrected_label: Number(bulkNewLabel) } : item)),
-        );
-      } else {
-        const status = action === 'approve' ? 'approved' : 'rejected';
-        setItems((current) => current.map((item) => (ids.includes(item.id) ? { ...item, status } : item)));
-      }
-
-      toast.success(`Đã xử lý ${ids.length} phản hồi thành công!`, {
-        id: 'bulk-action-success',
-      });
-
+      toast.success(`Đã xử lý ${ids.length} phản hồi bằng một request.`);
       logAdminActivity({
         actionType: `feedback_bulk_${action}`,
         targetType: 'feedback',
         targetId: null,
-        description: `thực hiện "${action}" hàng loạt trên ${ids.length} phản hồi`,
+        description: `thực hiện ${action} hàng loạt trên ${ids.length} phản hồi`,
       });
-
       clearSelection();
       setBulkAction('');
       setBulkReason('');
+      await refreshAll();
     } catch (error) {
-      console.error('Lỗi bulk action:', error);
-      toast.error(`Thất bại: ${error.message}`, {
-        id: 'bulk-action-error',
-      });
+      toast.error(error.message || 'Không thể xử lý hàng loạt.');
     } finally {
       setIsBulkSubmitting(false);
     }
@@ -452,46 +339,45 @@ export default function AdminFeedback() {
 
   const handleExportSelected = async () => {
     const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    if (!ids.length) return;
 
     setIsExportingSelected(true);
 
     try {
       const adminId = await getAdminId();
-      const response = await exportSelectedFeedback({
-        adminId,
-        feedbackIds: ids,
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(getErrorMessage(err, 'Lỗi khi tải file'));
-      }
+      const response = await exportSelectedFeedback({ adminId, feedbackIds: ids });
+      if (!response.ok) throw new Error('Không thể xuất các phản hồi đã chọn.');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-
       link.href = url;
       link.download = `feedback_selected_${new Date().toISOString().slice(0, 10)}.csv`;
-
       document.body.appendChild(link);
       link.click();
       link.remove();
-
       window.URL.revokeObjectURL(url);
-
-      toast.success('Xuất CSV các mục đã chọn thành công!', {
-        id: 'export-selected-success',
-      });
+      toast.success('Xuất CSV thành công!');
     } catch (error) {
-      console.error('Lỗi xuất CSV đã chọn:', error);
-      toast.error(`Thất bại: ${error.message}`, {
-        id: 'export-selected-error',
-      });
+      toast.error(error.message || 'Không thể xuất CSV.');
     } finally {
       setIsExportingSelected(false);
     }
+  };
+
+  const goNextPage = () => {
+    if (!hasMore || !nextCursor) return;
+    setCursorHistory((current) => [...current, cursor]);
+    setCursor(nextCursor);
+    setPage((current) => current + 1);
+  };
+
+  const goPreviousPage = () => {
+    if (!cursorHistory.length) return;
+    const previousCursor = cursorHistory[cursorHistory.length - 1];
+    setCursorHistory((current) => current.slice(0, -1));
+    setCursor(previousCursor);
+    setPage((current) => Math.max(1, current - 1));
   };
 
   const openDetailModal = async (item) => {
@@ -502,23 +388,11 @@ export default function AdminFeedback() {
 
     try {
       const adminId = await getAdminId();
-      const detail = await fetchFeedbackDetail({
-        adminId,
-        feedbackId: item.id,
-      });
-
-      setModalItem({
-        ...item,
-        ...detail,
-        ai_confidence: detail.ai_confidence ?? item.ai_confidence,
-      });
-
+      const detail = await fetchFeedbackDetail({ adminId, feedbackId: item.id });
+      setModalItem({ ...item, ...detail, ai_confidence: detail.ai_confidence ?? item.ai_confidence });
       setModalNewLabel(String(detail.corrected_label ?? ''));
     } catch (error) {
-      console.error('Lỗi tải chi tiết:', error);
-      toast.error('Không thể tải chi tiết phản hồi này.', {
-        id: 'modal-detail-load-error',
-      });
+      toast.error('Không thể tải chi tiết phản hồi này.');
     } finally {
       setModalLoading(false);
     }
@@ -535,9 +409,7 @@ export default function AdminFeedback() {
     if (!modalItem) return;
 
     if ((action === 'reject' || action === 'edit_label') && !modalReason.trim()) {
-      toast.error('Vui lòng nhập lý do trước khi thực hiện.', {
-        id: 'modal-reason-required',
-      });
+      toast.error('Vui lòng nhập lý do trước khi thực hiện.');
       return;
     }
 
@@ -554,88 +426,53 @@ export default function AdminFeedback() {
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(getErrorMessage(err, 'Lỗi server'));
+        const error = await response.json().catch(() => null);
+        throw new Error(getErrorMessage(error, 'Không thể xử lý phản hồi.'));
       }
 
-      const actionText = action === 'approve' ? 'duyệt' : action === 'reject' ? 'từ chối' : 'sửa nhãn';
-
-      setItems((current) =>
-        current.map((feedback) => {
-          if (feedback.id !== modalItem.id) return feedback;
-          if (action === 'edit_label') return { ...feedback, corrected_label: Number(modalNewLabel) };
-          return { ...feedback, status: action === 'approve' ? 'approved' : 'rejected' };
-        }),
-      );
-
-      setModalItem((current) => ({
-        ...current,
-        status: action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : current.status,
-        corrected_label: action === 'edit_label' ? Number(modalNewLabel) : current.corrected_label,
-        review_history: [
-          ...(current.review_history || []),
-          {
-            admin_id: adminId,
-            action,
-            reason: modalReason || null,
-            new_label: action === 'edit_label' ? Number(modalNewLabel) : null,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      }));
-
-      toast.success(`Đã ${actionText} phản hồi thành công!`, {
-        id: `modal-${action}-success`,
-      });
-
-      logAdminActivity({
-        actionType: `feedback_${action}`,
-        targetType: 'feedback',
-        targetId: modalItem.id,
-        description: `${actionText} phản hồi qua modal chi tiết (lý do: ${modalReason || 'không có'})`,
-      });
-
-      setModalReason('');
+      toast.success('Đã cập nhật phản hồi.');
+      closeModal();
+      await refreshAll();
     } catch (error) {
-      console.error('Lỗi xử lý trong modal:', error);
-      toast.error(`Thất bại: ${error.message}`, {
-        id: 'modal-action-error',
-      });
+      toast.error(error.message || 'Không thể xử lý phản hồi.');
     } finally {
       setModalSubmittingAction('');
     }
   };
 
   return (
-    <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
+    <div className="space-y-6 p-8 font-sans animate-in fade-in duration-500">
       <AdminFeedbackHeader
         isLoading={isLoading}
         isExporting={isExporting}
-        onRefresh={loadFeedback}
+        onRefresh={refreshAll}
         onExport={handleExport}
       />
 
-      <FeedbackStatsCards
-        stats={stats}
-        isLoading={isLoading}
-      />
+      <FeedbackStatsCards stats={stats} isLoading={isLoading} />
 
-      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur-md overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur-md">
         <PrioritySuggestions
           priorityStats={priorityStats}
           priorityFilter={priorityFilter}
           onApplyPriorityFilter={applyPriorityFilter}
-          onClearPriorityFilter={() => setPriorityFilter('all')}
+          onClearPriorityFilter={() => {
+            resetPagination();
+            setPriorityFilter('all');
+          }}
         />
 
         <FeedbackToolbar
           isLoading={isLoading}
-          count={filteredItems.length}
+          count={items.length}
           search={search}
           statusFilter={statusFilter}
           showAdvancedFilters={showAdvancedFilters}
           onSearchChange={setSearch}
-          onStatusFilterChange={setStatusFilter}
+          onStatusFilterChange={(value) => {
+            resetPagination();
+            setStatusFilter(value);
+          }}
           onToggleAdvancedFilters={() => setShowAdvancedFilters((current) => !current)}
         />
 
@@ -645,10 +482,22 @@ export default function AdminFeedback() {
             mismatchFilter={mismatchFilter}
             dateFrom={dateFrom}
             dateTo={dateTo}
-            onConfidenceFilterChange={setConfidenceFilter}
-            onMismatchFilterChange={setMismatchFilter}
-            onDateFromChange={setDateFrom}
-            onDateToChange={setDateTo}
+            onConfidenceFilterChange={(value) => {
+              resetPagination();
+              setConfidenceFilter(value);
+            }}
+            onMismatchFilterChange={(value) => {
+              resetPagination();
+              setMismatchFilter(value);
+            }}
+            onDateFromChange={(value) => {
+              resetPagination();
+              setDateFrom(value);
+            }}
+            onDateToChange={(value) => {
+              resetPagination();
+              setDateTo(value);
+            }}
             onResetFilters={resetFilters}
           />
         )}
@@ -672,8 +521,8 @@ export default function AdminFeedback() {
 
         <FeedbackTable
           isLoading={isLoading}
-          filteredItems={filteredItems}
-          paginatedItems={paginatedItems}
+          filteredItems={items}
+          paginatedItems={items}
           profiles={profiles}
           updatingId={updatingId}
           selectedIds={selectedIds}
@@ -684,18 +533,20 @@ export default function AdminFeedback() {
           onReview={handleReview}
         />
 
-        {!isLoading && filteredItems.length > 0 && (
+        {!isLoading && items.length > 0 && (
           <div className="flex flex-col gap-3 border-t border-slate-700/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-400">
-              Hiển thị <span className="font-semibold text-slate-200">{(page - 1) * ITEMS_PER_PAGE + 1}</span> -{' '}
-              <span className="font-semibold text-slate-200">{Math.min(page * ITEMS_PER_PAGE, filteredItems.length)}</span> /{' '}
-              <span className="font-semibold text-slate-200">{filteredItems.length}</span> phản hồi
+              Trang <span className="font-semibold text-slate-200">{page}</span> · đang hiển thị{' '}
+              <span className="font-semibold text-slate-200">{items.length}</span> phản hồi
+              {hasMore ? ' · còn dữ liệu' : ' · trang cuối'}
             </p>
 
             <PaginationControls
               page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
+              canPrevious={cursorHistory.length > 0}
+              canNext={hasMore && Boolean(nextCursor)}
+              onPrevious={goPreviousPage}
+              onNext={goNextPage}
             />
           </div>
         )}

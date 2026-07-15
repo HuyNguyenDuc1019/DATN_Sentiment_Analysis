@@ -66,6 +66,37 @@ function normalizeText(value) {
     .trim();
 }
 
+function normalizeTextWithAccents(value) {
+  return String(value || '')
+    .toLocaleLowerCase('vi-VN')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function containsNormalizedPhrase(target, keyword) {
+  const rawTarget = normalizeTextWithAccents(target);
+  const rawKeyword = normalizeTextWithAccents(keyword);
+  const normalizedTarget = normalizeText(target);
+  const normalizedKeyword = normalizeText(keyword);
+
+  if (!normalizedTarget || !normalizedKeyword) return false;
+
+  const escapedRawKeyword = rawKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`(?:^|\\s)${escapedRawKeyword}(?:$|\\s)`, 'u').test(rawTarget)) {
+    return true;
+  }
+
+  // Các từ ngắn sau khi bỏ dấu dễ trùng nghĩa: "dở" -> "do" có thể
+  // khớp nhầm "đồ", "bẩn" -> "ban" có thể liên quan tới "bánh".
+  if (normalizedKeyword.length <= 3 && rawKeyword !== normalizedKeyword) {
+    return false;
+  }
+
+  const escapedKeyword = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\s)${escapedKeyword}(?:$|\\s)`, 'u').test(normalizedTarget);
+}
+
 function normalizeLabel(value) {
   if (value === 1 || value === '1') return 1;
   if (value === 0 || value === '0') return 0;
@@ -153,16 +184,22 @@ function getAlertKeywords(item) {
 }
 
 function hasDangerKeyword(item) {
-  const content = normalizeText(getAlertContent(item));
-  const keywords = getAlertKeywords(item)
-    .map((keyword) => normalizeText(keyword))
-    .join(' ');
+  const content = getAlertContent(item);
+  const keywords = getAlertKeywords(item).join(' ');
 
   const target = `${content} ${keywords}`;
 
   return DANGER_KEYWORDS.some((keyword) =>
-    target.includes(normalizeText(keyword)),
+    containsNormalizedPhrase(target, keyword),
   );
+}
+
+function isActionableAlert(item) {
+  if (!isNegativeReview(item)) return false;
+
+  // isCriticalAlert kiểm tra cả tín hiệu ngôn ngữ, nên loại được câu tích cực
+  // bị AI gán nhầm nhãn 0 và câu hỏi trung tính như "Bao nhiêu tiền".
+  return hasDangerKeyword(item) || isCriticalAlert(item);
 }
 
 function normalizeConfidenceValue(value) {
@@ -277,7 +314,7 @@ function buildVisibleAlerts(alerts, reviews) {
   const merged = mergeAlertsWithReviews(alerts, reviews);
 
   const negativeItems = merged
-    .filter(isNegativeReview)
+    .filter(isActionableAlert)
     .filter((item) => getAlertContentKey(item));
 
   const tier1 = negativeItems.filter((item) => item?.is_action_required);

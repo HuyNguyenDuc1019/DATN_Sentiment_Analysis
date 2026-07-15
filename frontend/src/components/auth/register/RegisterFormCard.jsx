@@ -16,8 +16,8 @@ export default function RegisterFormCard({
   onToggleConfirmPassword,
 }) {
   return (
-    <div className="w-full max-w-md my-8">
-      <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-8 shadow-2xl">
+    <div className="w-full max-w-[520px]">
+      <div className="auth-form-card rounded-[1.75rem] border border-cyan-200/15 bg-[#03183f]/30 p-6 shadow-xl shadow-black/15 backdrop-blur-xl sm:p-8">
         <AuthBrand />
 
         <div className="mb-8">
@@ -65,7 +65,7 @@ export default function RegisterFormCard({
           </AuthSubmitButton>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-8 border-t border-slate-800 pt-6 text-center">
           <p className="text-sm text-slate-400">
             Đã có tài khoản?{' '}
             <Link to="/" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">

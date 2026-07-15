@@ -47,7 +47,15 @@ const extractCount = (payload, depth = 0) => {
   if (!payload || depth > 6) return 0;
   if (Array.isArray(payload)) return payload.length;
 
-  for (const key of ['count', 'total', 'saved_count', 'savedCount', 'inserted', 'inserted_count', 'review_count']) {
+  for (const key of [
+    'count',
+    'total',
+    'saved_count',
+    'savedCount',
+    'inserted',
+    'inserted_count',
+    'review_count',
+  ]) {
     const value = Number(payload[key]);
     if (Number.isFinite(value) && value >= 0) return value;
   }
@@ -126,7 +134,10 @@ const get = async (url, params = {}) => {
   let data;
 
   try {
-    response = await fetch(`${url}?${query.toString()}`);
+    const queryString = query.toString();
+    const finalUrl = queryString ? `${url}?${queryString}` : url;
+
+    response = await fetch(finalUrl);
     data = await response.json().catch(() => null);
   } catch {
     throw new Error('Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.');
@@ -144,12 +155,27 @@ const get = async (url, params = {}) => {
 
 export const predictBatch = async (payload, options = {}) => {
   const data = await post(`${PYTHON_API}/predict/batch`, payload, options);
+<<<<<<< HEAD
   return extractResults(data).map(normalizeResult).filter((item) => item.text);
+=======
+
+  return extractResults(data)
+    .map(normalizeResult)
+    .filter((item) => item.text);
+>>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 };
 
 export const analyzeUrl = async (payload, options = {}) => {
   const data = await post(`${SCRAPER_API}/api/scrape`, payload, options);
+<<<<<<< HEAD
   const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
+=======
+
+  const results = extractResults(data)
+    .map(normalizeResult)
+    .filter((item) => item.text);
+
+>>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
   const count = results.length || extractCount(data);
 
   return {
@@ -161,6 +187,7 @@ export const analyzeUrl = async (payload, options = {}) => {
 
 export const stopScrapeTask = async (taskId) => {
   if (!taskId) return null;
+<<<<<<< HEAD
 
   return post(`${SCRAPER_API}/api/scrape/stop`, {
     task_id: taskId,
@@ -168,15 +195,41 @@ export const stopScrapeTask = async (taskId) => {
 };
 
 export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);
+=======
+>>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 
-export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) =>
-  get(`${PYTHON_API}/api/dashboard/alerts`, {
+  return post(`${SCRAPER_API}/api/scrape/stop`, {
+    task_id: taskId,
+  });
+};
+
+export const submitFeedback = (payload) => {
+  return post(`${PYTHON_API}/feedback`, payload);
+};
+
+export const submitFeedbackBatch = (payloads) => {
+  return post(`${PYTHON_API}/feedback/batch`, {
+    items: payloads,
+  });
+};
+
+export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) => {
+  return get(`${PYTHON_API}/api/dashboard/alerts`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
   });
+};
 
-export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) =>
-  get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
+export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) => {
+  return get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
   });
+};
+
+export const createVipPayment = async (userId, amount = 50000) => {
+  return post(`${PYTHON_API}/payment/create`, {
+    user_id: userId,
+    amount,
+  });
+};

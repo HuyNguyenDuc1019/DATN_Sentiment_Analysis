@@ -1,25 +1,23 @@
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 
 export default function LabelButton({ type, active, onClick }) {
-  const isPositive = type === 'positive';
-  const Icon = isPositive ? ThumbsUp : ThumbsDown;
-  const text = isPositive ? 'Khách hài lòng' : 'Khách chưa hài lòng';
+  const positive = type === 'positive';
+  const Icon = positive ? ThumbsUp : ThumbsDown;
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 font-semibold transition-all ${
+      className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
         active
-          ? isPositive
-            ? 'border-emerald-400 bg-emerald-500/30 text-emerald-100 ring-2 ring-emerald-400/25'
-            : 'border-rose-400 bg-rose-500/30 text-rose-100 ring-2 ring-rose-400/25'
-          : isPositive
-            ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400 hover:border-emerald-400/60 hover:bg-emerald-500/12'
-            : 'border-rose-500/30 bg-rose-500/5 text-rose-400 hover:border-rose-400/60 hover:bg-rose-500/12'
+          ? positive
+            ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200 ring-2 ring-emerald-400/15'
+            : 'border-rose-400 bg-rose-500/20 text-rose-200 ring-2 ring-rose-400/15'
+          : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
       }`}
     >
-      <Icon className={`h-5 w-5 ${active ? 'fill-current' : ''}`} />
-      {text}
+      <Icon className="h-4 w-4" />
+      {positive ? 'Hài lòng' : 'Chưa hài lòng'}
     </button>
   );
 }

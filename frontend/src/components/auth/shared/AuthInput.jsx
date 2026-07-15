@@ -9,9 +9,9 @@ export default function AuthInput({
   className = '',
 }) {
   return (
-    <div>
+    <div className="group">
       {!hideLabel && (
-        <label className="block text-sm font-medium text-slate-300 mb-2">
+        <label className="mb-2 block text-sm font-semibold text-slate-300">
           {label}
         </label>
       )}
@@ -22,7 +22,7 @@ export default function AuthInput({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className={`w-full bg-slate-900/80 border border-slate-700 rounded-lg py-3 px-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all ${className}`}
+        className={`h-[52px] w-full rounded-2xl border border-slate-700/80 bg-slate-950/70 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 ${className}`}
       />
     </div>
   );

@@ -279,7 +279,23 @@ async def delete_user_dataset(
                 "deleted_count": 0,
             }
 
-        supabase.table("scraped_reviews").delete().in_("id", review_ids).execute()
+        # feedback_data là bảng con và đang giữ khóa ngoại scraped_review_id.
+        # Phải xóa các phản hồi liên quan trước khi xóa scraped_reviews.
+        (
+            supabase
+            .table("feedback_data")
+            .delete()
+            .in_("scraped_review_id", review_ids)
+            .execute()
+        )
+
+        (
+            supabase
+            .table("scraped_reviews")
+            .delete()
+            .in_("id", review_ids)
+            .execute()
+        )
 
         return {
             "status": "success",
@@ -303,6 +319,16 @@ async def clear_user_data(user_id: str):
     try:
         if not user_id:
             raise HTTPException(status_code=400, detail="Thiếu user_id.")
+
+        # Xóa bảng con trước để không vi phạm
+        # feedback_data_scraped_review_id_fkey.
+        (
+            supabase
+            .table("feedback_data")
+            .delete()
+            .eq("user_id", user_id)
+            .execute()
+        )
 
         delete_res = (
             supabase

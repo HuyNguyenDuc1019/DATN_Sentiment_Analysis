@@ -6,6 +6,7 @@ import TransactionSummaryCards from '../../components/admin/transactions/Transac
 import TransactionToolbar from '../../components/admin/transactions/TransactionToolbar';
 import TransactionsTable from '../../components/admin/transactions/TransactionsTable';
 import TransactionDetailModal from '../../components/admin/transactions/TransactionDetailModal';
+import TransactionConfirmDialog from '../../components/admin/transactions/TransactionConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
 
 import {
@@ -21,13 +22,39 @@ import {
 } from '../../utils/admin/transactionUtils';
 
 import {
+  cancelAdminTransaction,
+  confirmAdminTransaction,
   copyTextToClipboard,
   fetchAdminTransactions,
 } from '../../services/admin/transactionService';
 
+const normalizeTransactionResponse = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.transactions)) return response.transactions;
+  if (Array.isArray(response?.items)) return response.items;
+
+  return [];
+};
+
+const getProfileInfo = (item) => {
+  const profile = item?.profiles || item?.profile || item?.user_profile || null;
+
+  return {
+    email: profile?.email || item?.email || 'N/A',
+    fullName:
+      profile?.full_name ||
+      profile?.fullName ||
+      item?.full_name ||
+      item?.fullName ||
+      'N/A',
+  };
+};
+
 export default function AdminTransactions() {
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [startDateFilter, setStartDateFilter] = useState('');
@@ -35,23 +62,31 @@ export default function AdminTransactions() {
   const [quickFilter, setQuickFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const fetchTransactions = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchAdminTransactions();
 
-      const formattedData = data.map((item) => ({
-        ...item,
-        email: item.profiles?.email || 'N/A',
-        fullName: item.profiles?.full_name || 'N/A',
-      }));
+      const response = await fetchAdminTransactions();
+      const transactionList = normalizeTransactionResponse(response);
+
+      const formattedData = transactionList.map((item) => {
+        const profileInfo = getProfileInfo(item);
+
+        return {
+          ...item,
+          email: profileInfo.email,
+          fullName: profileInfo.fullName,
+        };
+      });
 
       setTransactions(formattedData);
     } catch (error) {
       console.error(error);
-      toast.error('Không thể tải danh sách giao dịch.');
+      toast.error(error.message || 'Không thể tải danh sách giao dịch.');
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +115,11 @@ export default function AdminTransactions() {
   const summary = useMemo(() => buildTransactionSummary(filteredData), [filteredData]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
-  const paginatedData = filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const paginatedData = filteredData.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
 
   const hasActiveFilter =
     searchTerm.trim() ||
@@ -135,6 +174,59 @@ export default function AdminTransactions() {
     }
   };
 
+  const handleConfirmTransaction = (transaction) => {
+    setPendingAction({ type: 'confirm', transaction });
+  };
+
+  const handleCancelTransaction = (transaction) => {
+    setPendingAction({ type: 'cancel', transaction });
+  };
+
+  const handleCloseConfirmDialog = () => {
+    if (!actionLoadingId) {
+      setPendingAction(null);
+    }
+  };
+
+  const handleExecuteTransactionAction = async () => {
+    if (!pendingAction?.transaction || actionLoadingId) return;
+
+    const { type, transaction } = pendingAction;
+
+    try {
+      setActionLoadingId(transaction.id);
+
+      if (type === 'confirm') {
+        await confirmAdminTransaction(transaction.id);
+      } else {
+        await cancelAdminTransaction(transaction.id);
+      }
+
+      await fetchTransactions();
+      setPendingAction(null);
+
+      if (selectedTransaction?.id === transaction.id) {
+        setSelectedTransaction(null);
+      }
+
+      toast.success(
+        type === 'confirm'
+          ? 'Đã xác nhận giao dịch và nâng cấp VIP.'
+          : 'Đã hủy giao dịch.',
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error.message ||
+          (type === 'confirm'
+            ? 'Không thể xác nhận giao dịch.'
+            : 'Không thể hủy giao dịch.'),
+      );
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const exportCsv = () => {
     try {
       exportTransactionsCsv(filteredData);
@@ -178,16 +270,21 @@ export default function AdminTransactions() {
           filteredData={filteredData}
           paginatedData={paginatedData}
           sortConfig={sortConfig}
+          actionLoadingId={actionLoadingId}
           onSort={handleSort}
           getSortLabel={(key) => getSortLabel(sortConfig, key)}
           onCopyTransactionId={copyTransactionId}
           onSelectTransaction={setSelectedTransaction}
+          onConfirmTransaction={handleConfirmTransaction}
+          onCancelTransaction={handleCancelTransaction}
         />
 
         {!isLoading && filteredData.length > 0 && (
           <div className="admin-transactions-pagination px-4 py-3 border-t border-slate-700 bg-slate-800/50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-400">
-              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1} - {Math.min(currentPage * PAGE_SIZE, filteredData.length)} trong {filteredData.length} giao dịch
+              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1} -{' '}
+              {Math.min(currentPage * PAGE_SIZE, filteredData.length)} trong{' '}
+              {filteredData.length} giao dịch
             </p>
 
             <Pagination
@@ -204,8 +301,22 @@ export default function AdminTransactions() {
           transaction={selectedTransaction}
           onClose={() => setSelectedTransaction(null)}
           onCopyTransactionId={copyTransactionId}
+          onConfirmTransaction={handleConfirmTransaction}
+          onCancelTransaction={handleCancelTransaction}
+          actionLoadingId={actionLoadingId}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
+        />
+      )}
+
+      {pendingAction && (
+        <TransactionConfirmDialog
+          type={pendingAction.type}
+          transaction={pendingAction.transaction}
+          isLoading={actionLoadingId === pendingAction.transaction.id}
+          formatCurrency={formatCurrency}
+          onClose={handleCloseConfirmDialog}
+          onConfirm={handleExecuteTransactionAction}
         />
       )}
     </div>

@@ -2,62 +2,53 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
+import { createVnpayPayment } from '../../services/paymentService';
 
 import VipPlanCard from '../../components/user/upgrade-vip/VipPlanCard';
 
-import { delayPaymentMock } from '../../utils/user/upgradeVipUtils';
-import {
-  getCurrentUserId,
-  upgradeUserToVip,
-} from '../../services/user/upgradeVipService';
-
 export default function UpgradeVIP() {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { refreshUserProfile } = useAuth();
+  const { user } = useAuth();
 
-  const handleMockPayment = async () => {
-    setIsProcessing(true);
-
-    const paymentPromise = delayPaymentMock(2000);
-
-    toast.promise(paymentPromise, {
-      loading: 'Đang kết nối cổng thanh toán...',
-      success: 'Thanh toán thành công! Đang nâng cấp tài khoản...',
-      error: 'Thanh toán thất bại.',
-    });
-
-    await paymentPromise;
-
+  const handleUpgrade = async () => {
     try {
-      const userId = await getCurrentUserId();
-
-      await upgradeUserToVip({
-        userId,
-        amount: 99000,
-      });
-
-      if (typeof refreshUserProfile === 'function') {
-        await refreshUserProfile();
+      if (!user?.id) {
+        toast.error('Bạn cần đăng nhập trước khi nâng cấp VIP.');
+        return;
       }
 
-      toast.success('🎉 Chúc mừng! Bạn đã trở thành thành viên VIP.', {
-        duration: 4000,
+      setIsProcessing(true);
+
+      const response = await createVnpayPayment({
+        userId: user.id,
+        amount: 50000,
       });
 
-      setTimeout(() => window.location.reload(), 1500);
+      const paymentUrl =
+        response?.payment_url ||
+        response?.data?.payment_url ||
+        response?.paymentUrl ||
+        response?.url;
+
+      if (!paymentUrl) {
+        throw new Error('Backend chưa trả về payment_url.');
+      }
+
+      toast.success('Đang chuyển sang cổng thanh toán VNPay...');
+
+      window.location.href = paymentUrl;
     } catch (error) {
-      console.error(error);
-      toast.error(error.message || 'Có lỗi xảy ra trong quá trình nâng cấp.');
-    } finally {
+      console.error('Lỗi tạo thanh toán VNPay:', error);
+      toast.error(error.message || 'Không thể tạo thanh toán VNPay.');
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-8">
+    <div className="flex min-h-[calc(100vh-120px)] flex-col items-center justify-center p-6">
       <VipPlanCard
         isProcessing={isProcessing}
-        onUpgrade={handleMockPayment}
+        onUpgrade={handleUpgrade}
       />
     </div>
   );

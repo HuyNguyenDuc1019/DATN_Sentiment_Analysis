@@ -2,12 +2,14 @@ import {
   formatRelativeTime,
   getConfidencePercent,
   getConfidenceRatio,
+  normalizeLabelToNumber,
 } from '../../../utils/user/feedbackUtils';
 
 export default function QueueItem({ data, active, checked, showCheckbox, onCheck, onClick }) {
   const confidenceValue = getConfidenceRatio(data.confidence);
   const confidence = getConfidencePercent(data.confidence);
   const isReliable = confidenceValue >= 0.7;
+  const positive = normalizeLabelToNumber(data.ai_label) === 1;
   const time = formatRelativeTime(data.created_at);
 
   return (
@@ -31,19 +33,19 @@ export default function QueueItem({ data, active, checked, showCheckbox, onCheck
         )}
 
         <button onClick={onClick} className="min-w-0 flex-1 text-left">
-          <p className={`mb-3 line-clamp-2 text-sm leading-relaxed ${active ? 'text-slate-200' : 'text-slate-400'}`}>
+          <p className={`mb-3 line-clamp-2 text-sm leading-relaxed ${active ? 'text-white' : 'text-slate-400'}`}>
             {data.content}
           </p>
-          <div className="flex items-end justify-between gap-3">
-            <span
-              className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${
-                isReliable
-                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
-                  : 'border-rose-500/20 bg-rose-500/10 text-rose-400'
-              }`}
-            >
-              {isReliable ? 'Độ chắc chắn cao' : 'Độ chắc chắn thấp'}: {confidence}%
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${positive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                AI: {positive ? 'Hài lòng' : 'Chưa hài lòng'}
+              </span>
+              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${isReliable ? 'text-emerald-400' : 'text-amber-300'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${isReliable ? 'bg-emerald-400' : 'bg-amber-300'}`} />
+                {confidence}%
+              </span>
+            </div>
             <span className="shrink-0 text-[11px] text-slate-500">{time}</span>
           </div>
         </button>
