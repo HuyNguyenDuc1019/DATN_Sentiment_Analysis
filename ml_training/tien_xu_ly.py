@@ -81,4 +81,22 @@ def process_dataset():
     print(f"✅ HOÀN TẤT! Dữ liệu đã lưu tại: {output_file}")
 
 if __name__ == "__main__":
-    process_dataset()
+    # --- 1. ĐOẠN DEMO ĐỂ CHỤP ẢNH BÁO CÁO ---
+    cau_goc = "qán pv siêu tệ, sp ko ngon đâu mik đi 1 lần r !!!"
+    
+    # Gọi hàm xử lý PhoBERT của bạn
+    cau_ket_qua = clean_for_phobert(cau_goc)
+    
+    print("\n" + "="*70)
+    print("🚀 KIỂM TRA QUÁ TRÌNH TIỀN XỬ LÝ NLP (PREPROCESSING)")
+    print("="*70)
+    print(f"🔴 NGUYÊN BẢN (Raw)    : {cau_goc}")
+    print("-" * 70)
+    print(f"🟢 KẾT QUẢ (Processed) : {cau_ket_qua}")
+    print("="*70 + "\n")
+    
+    # --- 2. CHẠY XỬ LÝ FILE EXCEL CHÍNH ---
+    # (Tạm thời comment lại bằng dấu # để Terminal chỉ hiện mỗi cái khung báo cáo cho dễ chụp ảnh. 
+    # Khi nào bạn muốn xử lý file Excel thì bỏ dấu # đi nhé)
+    
+    # process_dataset()

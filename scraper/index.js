@@ -87,6 +87,14 @@ function setCompareCache(url, reviews) {
     createdAt: Date.now(),
     reviews,
   });
+
+  // 👉 ĐÃ SỬA: Tự động dọn rác khỏi RAM sau đúng thời gian TTL (15 phút) để chống tràn bộ nhớ
+  setTimeout(() => {
+    if (compareCache.has(url)) {
+        compareCache.delete(url);
+        console.log(`🧹 Đã tự động dọn rác Cache cho URL: ${url}`);
+    }
+  }, COMPARE_CACHE_TTL_MS);
 }
 
 function detectUrlSource(url) {
@@ -130,10 +138,14 @@ function isValidComment(text) {
   if (cleanText.split(' ').length < 2) return false;
   if (!/[a-zA-ZÀ-ỹ]/.test(cleanText)) return false;
 
+  // 👉 ĐÃ SỬA: Chặn triệt để các bình luận rác tên user kiểu "U...", "H ...", "T   ..."
+  if (/^([a-zA-ZÀ-ỹ]\s*\.\.\.\s*)$/i.test(cleanText)) {
+      return false;
+  }
+
   return true;
 }
 
-// 👉 ĐÃ SỬA: Hàm tự động bổ sung năm hiện tại nếu Foody giấu năm
 function parseFoodyDate(dateStr) {
   if (!dateStr) return new Date();
 
@@ -173,13 +185,11 @@ function parseFoodyDate(dateStr) {
     return now;
   }
 
-  // Regex mới: Cho phép (\d{4}) là tùy chọn
   const dateMatch = raw.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?(?:\s+(\d{1,2}):(\d{1,2}))?/);
 
   if (dateMatch) {
     const day = Number(dateMatch[1]);
     const month = Number(dateMatch[2]);
-    // Nếu Foody không hiển thị năm (dateMatch[3] undefined), tự động lấy năm hiện tại
     const year = dateMatch[3] ? Number(dateMatch[3]) : new Date().getFullYear();
     const hour = Number(dateMatch[4] || 0);
     const minute = Number(dateMatch[5] || 0);
@@ -353,9 +363,11 @@ async function scrapeFoodyForCompare(url) {
   console.log('⚖️ Đang cào Foody cho chức năng so sánh, không lưu DB...');
   console.log('🤖 Khởi động trình duyệt ảo Puppeteer...');
 
+  // 👉 ĐÃ SỬA: Chống crash trên Server Linux
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: "new", 
     defaultViewport: null,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   const page = await browser.newPage();
@@ -375,9 +387,18 @@ async function scrapeFoodyForCompare(url) {
 
     let hasMoreComments = true;
     let clickCount = 0;
+    let previousCommentCount = 0;
 
     while (hasMoreComments && clickCount < 3) {
       try {
+        const currentCommentCount = await page.evaluate(() => document.querySelectorAll('.item-comment, .review-item').length);
+        
+        if (clickCount > 0 && currentCommentCount === previousCommentCount) {
+            console.log('✅ Số bình luận không tăng thêm, dừng click sớm.');
+            break;
+        }
+        previousCommentCount = currentCommentCount;
+
         await page.waitForSelector('a.fd-btn-more', {
           timeout: 1500,
         });
@@ -585,9 +606,11 @@ async function scrapeFoody(
 
   ensureTaskNotStopped(scrapeTask);
 
+  // 👉 ĐÃ SỬA: Chống crash trên Server Linux
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: "new",
     defaultViewport: null,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   const page = await browser.newPage();
@@ -613,11 +636,21 @@ async function scrapeFoody(
 
     let hasMoreComments = true;
     let clickCount = 0;
+    let previousCommentCount = 0;
 
+    // 👉 ĐÃ SỬA: Lọc click mù
     while (hasMoreComments && clickCount < 50) {
       ensureTaskNotStopped(scrapeTask);
 
       try {
+        const currentCommentCount = await page.evaluate(() => document.querySelectorAll('.item-comment, .review-item').length);
+        
+        if (clickCount > 0 && currentCommentCount === previousCommentCount) {
+            console.log('✅ Số bình luận không tăng thêm, dừng click sớm để tiết kiệm thời gian.');
+            break;
+        }
+        previousCommentCount = currentCommentCount;
+
         await page.waitForSelector('a.fd-btn-more', {
           timeout: 2000,
         });
@@ -703,7 +736,7 @@ async function scrapeFoody(
       endDate ? endDate.toISOString() : 'Không có',
     );
 
-    let consecutiveOldReviews = 0; // 👉 Thêm biến đếm số lượng bình luận cũ
+    let consecutiveOldReviews = 0; 
 
     for (const item of rawReviews) {
       ensureTaskNotStopped(scrapeTask);
@@ -718,7 +751,6 @@ async function scrapeFoody(
 
       console.log('🧾 Review date_str:', item.date_str, '=>', reviewDate.toISOString());
 
-      // 👉 LOGIC NGẮT THỜI GIAN MỚI (FOODY)
       if (startDate && reviewDate < startDate) {
         consecutiveOldReviews++;
         console.log(
@@ -727,11 +759,11 @@ async function scrapeFoody(
         
         if (consecutiveOldReviews >= 3) {
           console.log(`🛑 Đã chạm 3 bình luận cũ liên tiếp trên Foody. Dừng quét!`);
-          break; // Ngắt vòng lặp for
+          break; 
         }
         continue;
       } else {
-        consecutiveOldReviews = 0; // Reset nếu gặp bình luận mới
+        consecutiveOldReviews = 0; 
       }
 
       if (endDate && reviewDate > endDate) {
@@ -860,7 +892,7 @@ async function scrapeGoogleMaps(
         break;
       }
 
-      let consecutiveOldReviews = 0; // 👉 Thêm biến đếm số lượng bình luận cũ
+      let consecutiveOldReviews = 0;
 
       for (const item of rawReviews) {
         ensureTaskNotStopped(scrapeTask);
@@ -895,7 +927,6 @@ async function scrapeGoogleMaps(
 
         console.log('🧾 Google review date:', item.iso_date || item.date, '=>', reviewDate.toISOString());
 
-        // 👉 LOGIC NGẮT THỜI GIAN MỚI (GOOGLE MAPS)
         if (startDate && reviewDate < startDate) {
           consecutiveOldReviews++;
           console.log(
@@ -904,12 +935,12 @@ async function scrapeGoogleMaps(
 
           if (consecutiveOldReviews >= 3) {
             console.log(`🛑 Đã chạm 3 bình luận cũ liên tiếp trên Google Maps. Dừng lật trang!`);
-            pageCount = 99; // Ép pageCount lớn hơn 10 để thoát vòng lặp while bên ngoài
-            break; // Thoát vòng lặp for
+            pageCount = 99; 
+            break; 
           }
           continue;
         } else {
-          consecutiveOldReviews = 0; // Reset nếu gặp bình luận mới
+          consecutiveOldReviews = 0; 
         }
 
         if (endDate && reviewDate > endDate) {
