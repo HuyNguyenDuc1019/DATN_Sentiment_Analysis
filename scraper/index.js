@@ -17,7 +17,7 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY || '';
 
 const compareCache = new Map();
 const COMPARE_CACHE_TTL_MS = 15 * 60 * 1000;
-const COMPARE_MAX_REVIEWS = 25;
+const COMPARE_MAX_REVIEWS = 50;
 
 const runningScrapeTasks = new Map();
 
@@ -389,7 +389,7 @@ async function scrapeFoodyForCompare(url) {
     let clickCount = 0;
     let previousCommentCount = 0;
 
-    while (hasMoreComments && clickCount < 3) {
+    while (hasMoreComments && clickCount < 5) {
       try {
         const currentCommentCount = await page.evaluate(() => document.querySelectorAll('.item-comment, .review-item').length);
         
@@ -400,7 +400,7 @@ async function scrapeFoodyForCompare(url) {
         previousCommentCount = currentCommentCount;
 
         await page.waitForSelector('a.fd-btn-more', {
-          timeout: 1500,
+          timeout: 3000,
         });
 
         const clicked = await page.evaluate(() => {
@@ -408,8 +408,8 @@ async function scrapeFoodyForCompare(url) {
 
           for (const btn of buttons) {
             if (
-              btn.innerText.includes('Xem thêm bình luận') ||
-              btn.textContent.includes('Xem thêm bình luận')
+              btn.innerText.includes('Xem thêm') ||
+              btn.textContent.includes('Xem thêm')
             ) {
               btn.click();
               return true;
@@ -428,7 +428,7 @@ async function scrapeFoodyForCompare(url) {
         clickCount += 1;
         console.log(`👉 Compare đã click "Xem thêm" lần ${clickCount}...`);
 
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch {
         console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
         hasMoreComments = false;
