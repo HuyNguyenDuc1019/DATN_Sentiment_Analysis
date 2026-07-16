@@ -66,7 +66,7 @@ export default function AdminSettings() {
       ...current,
       [name]: type === 'checkbox'
         ? checked
-        : ['ai_threshold', 'max_upload_size_free', 'data_retention_days'].includes(name)
+        : ['ai_threshold', 'max_upload_size', 'data_retention_days'].includes(name)
           ? parseFloat(value) || 0
           : value,
     }));

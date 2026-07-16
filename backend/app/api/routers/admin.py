@@ -26,7 +26,7 @@ class AdminFeedbackReview(BaseModel):
 class AdminSettingUpdate(BaseModel):
     admin_id: str
     ai_threshold: float
-    max_upload_size_free: int
+    max_upload_size: int
     custom_dictionary: str
     crisis_alert_enabled: bool
     aspect_dictionary: dict
@@ -491,7 +491,7 @@ async def get_system_settings(admin_id: str = Depends(verify_admin)):
         if not res.data:
             return {
                 "ai_threshold": 0.75,
-                "max_upload_size_free": 5,
+                "max_upload_size": 5,
                 "data_retention_days": 30,
                 "custom_dictionary": "",
                 "crisis_alert_enabled": True,
@@ -515,7 +515,7 @@ async def update_system_settings(
             .table("system_settings")
             .update({
                 "ai_threshold": request.ai_threshold,
-                "max_upload_size_free": request.max_upload_size_free,
+                "max_upload_size": request.max_upload_size,
                 "custom_dictionary": request.custom_dictionary,
                 "crisis_alert_enabled": request.crisis_alert_enabled,
                 "aspect_dictionary": request.aspect_dictionary,

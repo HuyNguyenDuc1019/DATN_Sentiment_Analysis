@@ -16,8 +16,6 @@ const AuthContext = createContext({
 function clearStoredAccountState() {
   localStorage.removeItem('userRole');
   localStorage.removeItem('user_role');
-  localStorage.removeItem('userTier');
-  localStorage.removeItem('user_tier');
 }
 
 function storeProfileState(profile) {

@@ -143,7 +143,6 @@ export async function registerWithEmail({
           full_name: fullName,
           role: 'user',
           status: 'active',
-          tier: 'free',
         },
         { onConflict: 'id' },
       );

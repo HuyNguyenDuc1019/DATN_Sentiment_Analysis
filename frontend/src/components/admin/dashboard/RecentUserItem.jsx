@@ -23,9 +23,6 @@ export default function RecentUserItem({ item }) {
           {item.status || 'active'}
         </span>
 
-        <span className="rounded-full bg-slate-500/15 px-2.5 py-1 text-xs font-bold text-slate-300 ring-1 ring-slate-500/30">
-          {item.tier || 'free'}
-        </span>
       </div>
     </div>
   );

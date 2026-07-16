@@ -1,7 +1,7 @@
 import unittest
 from pydantic import ValidationError
 
-from app.schemas import BatchPredictRequest, FeedbackBatchRequest, PredictRequest
+from app.schemas import AdminSettingUpdate, BatchPredictRequest, FeedbackBatchRequest, PredictRequest
 
 
 class SchemaTests(unittest.TestCase):
@@ -22,6 +22,16 @@ class SchemaTests(unittest.TestCase):
     def test_feedback_batch_rejects_empty_items(self):
         with self.assertRaises(ValidationError):
             FeedbackBatchRequest(items=[])
+
+    def test_admin_settings_use_shared_upload_limit(self):
+        payload = AdminSettingUpdate(
+            admin_id="admin-1",
+            ai_threshold=0.75,
+            max_upload_size=50,
+        )
+
+        self.assertEqual(payload.max_upload_size, 50)
+        self.assertNotIn("max_upload_size_free", payload.model_dump())
 
 
 if __name__ == "__main__":

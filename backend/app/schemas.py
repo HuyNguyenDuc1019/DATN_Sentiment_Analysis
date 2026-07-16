@@ -47,7 +47,7 @@ class FeedbackBatchRequest(BaseModel):
 class AdminSettingUpdate(BaseModel):
     admin_id: str
     ai_threshold: float
-    max_upload_size_free: int
+    max_upload_size: int
 
 class AdminActionRequest(BaseModel):
     admin_id: str

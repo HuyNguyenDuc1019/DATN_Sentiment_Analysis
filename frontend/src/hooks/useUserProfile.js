@@ -31,7 +31,6 @@ function getFallbackProfile(user) {
     avatarUrl: user?.user_metadata?.avatar_url || '',
     role: user?.app_metadata?.role || user?.user_metadata?.role || getStoredRole(),
     status: '',
-    tier: '',
   };
 }
 
@@ -48,7 +47,7 @@ export function useUserProfile() {
     const fallback = getFallbackProfile(user);
     const { data, error } = await supabase
       .from('profiles')
-      .select('full_name,email,avatar_url,role,status,tier')
+      .select('full_name,email,avatar_url,role,status')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -67,7 +66,6 @@ export function useUserProfile() {
       avatarUrl: data.avatar_url || fallback.avatarUrl,
       role: rawRole,
       status: data.status || '',
-      tier: data.tier || '',
     });
   }, [user]);
 

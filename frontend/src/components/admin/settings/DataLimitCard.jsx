@@ -12,11 +12,11 @@ export default function DataLimitCard({ settings, onChange }) {
 
       <div className="p-6 flex-1 space-y-6">
         <NumberSettingField
-          id="max_upload_size_free"
-          name="max_upload_size_free"
+          id="max_upload_size"
+          name="max_upload_size"
           label="Dung lượng file tối đa (MB)"
           description="Giới hạn dung lượng upload chung để bảo vệ tài nguyên máy chủ."
-          value={settings.max_upload_size_free}
+          value={settings.max_upload_size}
           onChange={onChange}
           suffix="MB"
         />

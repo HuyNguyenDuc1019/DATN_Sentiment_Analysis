@@ -1,6 +1,6 @@
 export const DEFAULT_SETTINGS = {
   ai_threshold: 0.5,
-  max_upload_size_free: 5,
+  max_upload_size: 5,
   data_retention_days: 30,
   custom_dictionary: 'ngộ độc, đau bụng, ruồi, thái độ, tẩy chay, dị vật, chửi, tệ',
   crisis_alert_enabled: true,
@@ -23,7 +23,7 @@ export function normalizeSettingsForUi(data) {
 
   return {
     ai_threshold: data.ai_threshold ?? 0.75,
-    max_upload_size_free: data.max_upload_size_free ?? 5,
+    max_upload_size: data.max_upload_size ?? 5,
     data_retention_days: data.data_retention_days ?? 30,
     custom_dictionary: data.custom_dictionary ?? '',
     crisis_alert_enabled: data.crisis_alert_enabled ?? true,

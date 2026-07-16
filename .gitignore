@@ -24,3 +24,6 @@ __pycache__/
 
 # Bỏ qua các file môi trường bảo mật
 .env
+
+# Database dumps can contain private user data and must stay local.
+backups/
