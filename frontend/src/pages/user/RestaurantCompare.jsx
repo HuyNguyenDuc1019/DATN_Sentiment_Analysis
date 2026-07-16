@@ -545,5 +545,5 @@ export default function RestaurantCompare() {
         onUpgraded={refreshUserProfile}
       />
     </div>
-  );
+     );
 }
