@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -41,6 +41,7 @@ export default function LoginScreen() {
 
   return (
     <AuthPageShell
+      showThemeToggle
       eyebrow="Đồ án phân tích cảm xúc"
       title="Thấu hiểu khách hàng từ từng phản hồi"
       description="Hệ thống ứng dụng trí tuệ nhân tạo để phân loại cảm xúc trong đánh giá nhà hàng, trực quan hóa dữ liệu và hỗ trợ ra quyết định."

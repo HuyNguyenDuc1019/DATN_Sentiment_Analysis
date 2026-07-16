@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import { BarChart2, Link as LinkIcon, Search, Square } from 'lucide-react';
-=======
 import { BarChart2, CalendarDays, Link as LinkIcon, Search, Square } from 'lucide-react';
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 
 export default function UrlInputPanel({
   url,
@@ -10,13 +6,10 @@ export default function UrlInputPanel({
   loading,
   analyze,
   stop,
-<<<<<<< HEAD
-=======
   customStartDate,
   setCustomStartDate,
   customEndDate,
   setCustomEndDate,
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 }) {
   return (
     <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex flex-col justify-center">
@@ -60,8 +53,6 @@ export default function UrlInputPanel({
               THU THẬP
             </button>
           )}
-<<<<<<< HEAD
-=======
         </div>
 
         <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
@@ -106,7 +97,6 @@ export default function UrlInputPanel({
           <p className="mt-3 text-xs leading-5 text-slate-500">
             Bỏ trống nếu muốn tự động nối tiếp dữ liệu. Chọn ngày bắt đầu và ngày kết thúc nếu muốn giới hạn khoảng thời gian cào.
           </p>
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
         </div>
 
         {loading && (

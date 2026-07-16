@@ -1,4 +1,5 @@
-import { BarChart3, BrainCircuit, MessageSquareText, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BarChart3, BrainCircuit, MessageSquareText, Moon, ShieldCheck, Sparkles, Sun } from 'lucide-react';
 
 const FEATURES = [
   { icon: MessageSquareText, label: 'Thu thập phản hồi' },
@@ -6,11 +7,38 @@ const FEATURES = [
   { icon: BarChart3, label: 'Báo cáo và hỗ trợ quyết định' },
 ];
 
-export default function AuthPageShell({ children, eyebrow, title, description }) {
+export default function AuthPageShell({ children, eyebrow, title, description, showThemeToggle = false }) {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('almotion-theme') !== 'light';
+  });
+
+  useEffect(() => {
+    const theme = isDark ? 'dark' : 'light';
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(theme);
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem('almotion-theme', theme);
+    window.dispatchEvent(new Event('almotion-theme-change'));
+  }, [isDark]);
+
   return (
     <main className="auth-blue-shell relative min-h-screen overflow-y-auto bg-[#050a18] px-4 py-6 font-sans text-white sm:px-6 lg:grid lg:place-items-center lg:py-6 xl:py-8">
+      {showThemeToggle && (
+        <button
+          type="button"
+          onClick={() => setIsDark((current) => !current)}
+          className="auth-theme-toggle fixed right-4 top-4 z-50 flex h-11 items-center gap-2 rounded-full border border-white/15 bg-slate-950/55 px-3.5 text-sm font-semibold text-slate-200 shadow-xl backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-indigo-300/50 hover:text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 sm:right-6 sm:top-6"
+          aria-label={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          title={isDark ? 'Giao diện sáng' : 'Giao diện tối'}
+        >
+          {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+          <span className="hidden sm:inline">{isDark ? 'Sáng' : 'Tối'}</span>
+        </button>
+      )}
+
       <div
-        className="pointer-events-none absolute inset-0 overflow-hidden"
+        className="auth-page-background pointer-events-none absolute inset-0 overflow-hidden"
         style={{
           backgroundImage:
             'radial-gradient(circle at 16% 18%, rgba(79, 70, 229, 0.28), transparent 30%), radial-gradient(circle at 84% 72%, rgba(8, 145, 178, 0.22), transparent 34%), radial-gradient(circle at 52% -8%, rgba(59, 130, 246, 0.20), transparent 38%), linear-gradient(135deg, #050917 0%, #0a1430 52%, #071426 100%)',
@@ -82,19 +110,52 @@ export default function AuthPageShell({ children, eyebrow, title, description })
         </section>
       </div>
       <style>{`
-        html.light .auth-blue-shell,
-        html.light .auth-blue-shell section { color: #f8fafc !important; }
-        html.light .auth-blue-shell [class*="text-white"] { color: #ffffff !important; }
-        html.light .auth-blue-shell [class*="text-slate-300"] { color: #cbd5e1 !important; }
-        html.light .auth-blue-shell [class*="text-slate-400"] { color: #94a3b8 !important; }
-        html.light .auth-blue-shell [class*="text-slate-500"] { color: #64748b !important; }
-        html.light .auth-blue-shell input {
-          background: rgba(2, 20, 58, 0.62) !important;
-          border-color: rgba(125, 211, 252, 0.28) !important;
-          color: #f8fafc !important;
-          box-shadow: none !important;
+        html.light .auth-blue-shell {
+          background: #eef4ff !important;
+          color: #0f172a !important;
         }
-        html.light .auth-blue-shell input::placeholder { color: #64748b !important; }
+        html.light .auth-page-background {
+          background-image: radial-gradient(circle at 16% 18%, rgba(99, 102, 241, 0.16), transparent 30%), radial-gradient(circle at 84% 72%, rgba(14, 165, 233, 0.14), transparent 34%), linear-gradient(135deg, #f8fbff 0%, #edf4ff 52%, #f5f9ff 100%) !important;
+        }
+        html.light .auth-panel {
+          border-color: rgba(148, 163, 184, 0.42) !important;
+          background: rgba(255, 255, 255, 0.82) !important;
+          box-shadow: 0 30px 90px rgba(71, 85, 105, 0.18) !important;
+        }
+        html.light .auth-form-pane { background: rgba(255, 255, 255, 0.7) !important; }
+        html.light .auth-info-pane { background: linear-gradient(145deg, #eef2ff 0%, #e0f2fe 100%) !important; }
+        html.light .auth-form-card {
+          border-color: #dbe4f0 !important;
+          background: rgba(255, 255, 255, 0.9) !important;
+          box-shadow: 0 20px 55px rgba(71, 85, 105, 0.12) !important;
+        }
+        html.light .auth-theme-toggle {
+          border-color: #d7e0ed !important;
+          background: rgba(255, 255, 255, 0.9) !important;
+          color: #334155 !important;
+          box-shadow: 0 12px 32px rgba(71, 85, 105, 0.16) !important;
+        }
+        html.light .auth-theme-toggle:hover { color: #4f46e5 !important; }
+        html.light .auth-blue-shell,
+        html.light .auth-blue-shell section { color: #0f172a !important; }
+        html.light .auth-blue-shell [class*="text-white"] { color: #0f172a !important; }
+        html.light .auth-blue-shell [class*="text-slate-300"] { color: #334155 !important; }
+        html.light .auth-blue-shell [class*="text-slate-400"] { color: #64748b !important; }
+        html.light .auth-blue-shell [class*="text-slate-500"] { color: #64748b !important; }
+        html.light .auth-blue-shell [class*="text-blue-100"] { color: #475569 !important; }
+        html.light .auth-blue-shell [class*="text-blue-200"] { color: #64748b !important; }
+        html.light .auth-feature-card,
+        html.light .auth-flow {
+          border-color: rgba(148, 163, 184, 0.34) !important;
+          background: rgba(255, 255, 255, 0.58) !important;
+        }
+        html.light .auth-blue-shell input {
+          background: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #0f172a !important;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+        }
+        html.light .auth-blue-shell input::placeholder { color: #94a3b8 !important; }
 
         @media (min-width: 1024px) {
           .auth-blue-shell { height: 100dvh; min-height: 0; }

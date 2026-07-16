@@ -155,27 +155,19 @@ const get = async (url, params = {}) => {
 
 export const predictBatch = async (payload, options = {}) => {
   const data = await post(`${PYTHON_API}/predict/batch`, payload, options);
-<<<<<<< HEAD
-  return extractResults(data).map(normalizeResult).filter((item) => item.text);
-=======
 
   return extractResults(data)
     .map(normalizeResult)
     .filter((item) => item.text);
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 };
 
 export const analyzeUrl = async (payload, options = {}) => {
   const data = await post(`${SCRAPER_API}/api/scrape`, payload, options);
-<<<<<<< HEAD
-  const results = extractResults(data).map(normalizeResult).filter((item) => item.text);
-=======
 
   const results = extractResults(data)
     .map(normalizeResult)
     .filter((item) => item.text);
 
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
   const count = results.length || extractCount(data);
 
   return {
@@ -187,16 +179,6 @@ export const analyzeUrl = async (payload, options = {}) => {
 
 export const stopScrapeTask = async (taskId) => {
   if (!taskId) return null;
-<<<<<<< HEAD
-
-  return post(`${SCRAPER_API}/api/scrape/stop`, {
-    task_id: taskId,
-  });
-};
-
-export const submitFeedback = (payload) => post(`${PYTHON_API}/feedback`, payload);
-=======
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 
   return post(`${SCRAPER_API}/api/scrape/stop`, {
     task_id: taskId,

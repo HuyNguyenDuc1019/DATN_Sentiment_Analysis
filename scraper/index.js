@@ -17,7 +17,7 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY || '';
 
 const compareCache = new Map();
 const COMPARE_CACHE_TTL_MS = 15 * 60 * 1000;
-const COMPARE_MAX_REVIEWS = 25;
+const COMPARE_MAX_REVIEWS = 50;
 
 const runningScrapeTasks = new Map();
 
@@ -389,7 +389,7 @@ async function scrapeFoodyForCompare(url) {
     let clickCount = 0;
     let previousCommentCount = 0;
 
-    while (hasMoreComments && clickCount < 3) {
+    while (hasMoreComments && clickCount < 5) {
       try {
         const currentCommentCount = await page.evaluate(() => document.querySelectorAll('.item-comment, .review-item').length);
         
@@ -400,7 +400,7 @@ async function scrapeFoodyForCompare(url) {
         previousCommentCount = currentCommentCount;
 
         await page.waitForSelector('a.fd-btn-more', {
-          timeout: 1500,
+          timeout: 3000,
         });
 
         const clicked = await page.evaluate(() => {
@@ -408,8 +408,8 @@ async function scrapeFoodyForCompare(url) {
 
           for (const btn of buttons) {
             if (
-              btn.innerText.includes('Xem thêm bình luận') ||
-              btn.textContent.includes('Xem thêm bình luận')
+              btn.innerText.includes('Xem thêm') ||
+              btn.textContent.includes('Xem thêm')
             ) {
               btn.click();
               return true;
@@ -428,7 +428,7 @@ async function scrapeFoodyForCompare(url) {
         clickCount += 1;
         console.log(`👉 Compare đã click "Xem thêm" lần ${clickCount}...`);
 
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch {
         console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
         hasMoreComments = false;
@@ -548,13 +548,6 @@ async function scrapeGoogleMapsForCompare(url) {
     const cleanReviews = [];
 
     for (const item of rawReviews) {
-<<<<<<< HEAD
-      const content = cleanReviewText(item.snippet || item.details || '');
-
-      if (!content) continue;
-
-      const reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
-=======
       let rawText = item.snippet || item.details || '';
 
       if (typeof rawText === 'object' && rawText !== null) {
@@ -570,7 +563,6 @@ async function scrapeGoogleMapsForCompare(url) {
         : item.date
           ? parseVietnameseDate(item.date)
           : new Date();
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 
       cleanReviews.push({
         content,
@@ -614,10 +606,7 @@ async function scrapeFoody(
 
   ensureTaskNotStopped(scrapeTask);
 
-<<<<<<< HEAD
-=======
   // 👉 ĐÃ SỬA: Chống crash trên Server Linux
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
   const browser = await puppeteer.launch({
     headless: "new",
     defaultViewport: null,
@@ -831,8 +820,6 @@ async function scrapeGoogleMaps(
 
   ensureTaskNotStopped(scrapeTask);
 
-  ensureTaskNotStopped(scrapeTask);
-
   if (!SERPAPI_KEY) {
     throw new Error(
       'Thiếu SERPAPI_KEY. Hãy tạo file .env trong thư mục scraper hoặc set biến môi trường trước khi chạy node index.js.',
@@ -872,11 +859,6 @@ async function scrapeGoogleMaps(
 
     console.log(`✅ Tìm thấy mã quán data_id: ${dataId}. Bắt đầu tải bình luận...`);
 
-<<<<<<< HEAD
-    ensureTaskNotStopped(scrapeTask);
-
-    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
-=======
     const cleanReviews = [];
     const seenContents = new Set();
 
@@ -890,19 +872,13 @@ async function scrapeGoogleMaps(
       ensureTaskNotStopped(scrapeTask);
 
       pageCount += 1;
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 
-    const reviewRes = await axios.get(reviewUrl);
+      let reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi&sort_by=newestFirst`;
 
-    ensureTaskNotStopped(scrapeTask);
+      if (nextToken) {
+        reviewUrl += `&next_page_token=${encodeURIComponent(nextToken)}`;
+      }
 
-<<<<<<< HEAD
-    const rawReviews = reviewRes.data.reviews;
-
-    if (!rawReviews || rawReviews.length === 0) {
-      return {
-        message: 'Quán này không có bình luận nào.',
-=======
       console.log(`📄 Đang tải trang bình luận Google Maps số ${pageCount}...`);
 
       const reviewRes = await axios.get(reviewUrl);
@@ -1003,39 +979,11 @@ async function scrapeGoogleMaps(
     if (!cleanReviews.length) {
       return {
         message: 'Quán này không có bình luận nào mới trong khoảng thời gian đã chọn.',
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
         results: [],
         count: 0,
       };
     }
 
-<<<<<<< HEAD
-    const cleanReviews = [];
-
-    for (const item of rawReviews) {
-      ensureTaskNotStopped(scrapeTask);
-
-      const content = cleanReviewText(item.snippet || item.details || '');
-
-      if (!content) continue;
-
-      const reviewDate = item.iso_date ? new Date(item.iso_date) : new Date();
-
-      if (lastScrapedDate && reviewDate <= new Date(lastScrapedDate)) {
-        console.log(
-          `🛑 Đã chạm bình luận cũ (${reviewDate.toISOString()}). Ngắt thu thập!`,
-        );
-        break;
-      }
-
-      cleanReviews.push({
-        content,
-        review_date: reviewDate.toISOString(),
-      });
-    }
-
-=======
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
     ensureTaskNotStopped(scrapeTask);
 
     console.log(
@@ -1081,9 +1029,6 @@ app.post('/api/scrape/stop', (req, res) => {
 });
 
 app.post('/api/scrape', async (req, res) => {
-<<<<<<< HEAD
-  const { task_id, url, user_id, dataset_name, dataset_type } = req.body;
-=======
   const {
     task_id,
     url,
@@ -1095,7 +1040,6 @@ app.post('/api/scrape', async (req, res) => {
   } = req.body;
 
   console.log('📦 Body nhận từ Frontend:', req.body);
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
 
   if (!url || !user_id) {
     return res.status(400).json({
@@ -1118,17 +1062,11 @@ app.post('/api/scrape', async (req, res) => {
 
     ensureTaskNotStopped(scrapeTask);
 
-<<<<<<< HEAD
-    const lastScrapedDate = await getLastScrapedDate({
-=======
     const dbLastScrapedDate = await getLastScrapedDate({
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
       url,
       userId: user_id,
     });
 
-<<<<<<< HEAD
-=======
     const lastScrapedDate = custom_start_date || dbLastScrapedDate;
     const endScrapedDate = custom_end_date || null;
 
@@ -1138,7 +1076,6 @@ app.post('/api/scrape', async (req, res) => {
     console.log('📅 Mốc bắt đầu được dùng:', lastScrapedDate || 'Không có');
     console.log('📅 Mốc kết thúc được dùng:', endScrapedDate || 'Không có');
 
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
     ensureTaskNotStopped(scrapeTask);
 
     const finalDatasetName = dataset_name || sourceInfo.name;
@@ -1153,10 +1090,7 @@ app.post('/api/scrape', async (req, res) => {
         url,
         user_id,
         lastScrapedDate,
-<<<<<<< HEAD
-=======
         endScrapedDate,
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
         finalDatasetName,
         finalDatasetType,
         scrapeTask,
@@ -1168,10 +1102,7 @@ app.post('/api/scrape', async (req, res) => {
         url,
         user_id,
         lastScrapedDate,
-<<<<<<< HEAD
-=======
         endScrapedDate,
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
         finalDatasetName,
         finalDatasetType,
         scrapeTask,

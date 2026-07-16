@@ -221,11 +221,7 @@ export function TaskProvider({ children }) {
     }
   };
 
-<<<<<<< HEAD
-  const runUrlAnalysis = async () => {
-=======
   const runUrlAnalysis = async ({ customStartDate = '', customEndDate = '' } = {}) => {
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
     if (!user?.id) {
       toast.error('Vui lòng đăng nhập trước khi phân tích đường dẫn.');
       return;
@@ -253,8 +249,6 @@ export function TaskProvider({ children }) {
       return;
     }
 
-<<<<<<< HEAD
-=======
     if (customStartDate && customEndDate) {
       const start = new Date(customStartDate);
       const end = new Date(customEndDate);
@@ -265,7 +259,6 @@ export function TaskProvider({ children }) {
       }
     }
 
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
     const controller = new AbortController();
     const taskId = createTaskId();
 
@@ -284,8 +277,6 @@ export function TaskProvider({ children }) {
         dataset_type: sourceInfo.type,
       };
 
-<<<<<<< HEAD
-=======
       if (customStartDate) {
         payload.custom_start_date = new Date(customStartDate).toISOString();
       }
@@ -297,7 +288,6 @@ export function TaskProvider({ children }) {
         payload.custom_end_date = endDate.toISOString();
       }
 
->>>>>>> b7e1b98d5514ecdfdb90d0493aab4206f39819ce
       console.log('Payload gửi xuống scraper:', payload);
 
       const data = await analyzeUrl(payload, {
