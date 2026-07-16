@@ -33,8 +33,11 @@ async function requestJson(path, options = {}) {
         ...options.headers,
       },
     });
-  } catch (_error) {
-    throw new Error('Không thể kết nối backend. Hãy kiểm tra backend tại cổng 8000.');
+  } catch (error) {
+    throw new Error(
+      'Không thể kết nối backend. Hãy kiểm tra backend tại cổng 8000.',
+      { cause: error },
+    );
   }
 
   const body = await readResponseBody(response);

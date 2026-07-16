@@ -391,7 +391,7 @@ export default function AdminFeedback() {
       const detail = await fetchFeedbackDetail({ adminId, feedbackId: item.id });
       setModalItem({ ...item, ...detail, ai_confidence: detail.ai_confidence ?? item.ai_confidence });
       setModalNewLabel(String(detail.corrected_label ?? ''));
-    } catch (error) {
+    } catch {
       toast.error('Không thể tải chi tiết phản hồi này.');
     } finally {
       setModalLoading(false);

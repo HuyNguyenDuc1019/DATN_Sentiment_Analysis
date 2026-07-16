@@ -7,7 +7,6 @@ import {
   BarChart3,
   CheckCircle2,
   Crown,
-  FileText,
   HelpCircle,
   LayoutDashboard,
   Search,

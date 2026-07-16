@@ -529,7 +529,7 @@ html.light [class*='border-slate'] {
   border-color: var(--light-border) !important;
 }
 
-/* Account / upgrade boxes */
+/* Account information boxes */
 html.light aside > a[href*='profile'],
 html.light [data-account-card] {
   background: linear-gradient(180deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
@@ -620,30 +620,6 @@ html.light .recharts-cartesian-axis-tick-value,
 html.light .recharts-legend-item-text {
   fill: var(--light-muted) !important;
   color: var(--light-muted) !important;
-}
-
-/* Admin transactions */
-html.light .admin-transactions-page {
-  color: var(--light-text) !important;
-}
-
-html.light .admin-transactions-table-card,
-html.light .admin-transactions-toolbar,
-html.light .admin-transactions-pagination {
-  background: linear-gradient(180deg, var(--light-panel) 0%, var(--light-panel-2) 100%) !important;
-  border-color: var(--light-border) !important;
-}
-
-html.light .admin-transactions-tbody tr {
-  background: #e1e8ef !important;
-}
-
-html.light .admin-transactions-tbody tr:nth-child(even) {
-  background: #d8e1eb !important;
-}
-
-html.light .admin-transactions-tbody tr:hover {
-  background: #ccd9e8 !important;
 }
 
 /* Responsive shell */

@@ -91,7 +91,7 @@ export async function fetchAdminDashboardData() {
     };
   } catch (error) {
     console.error('Load admin dashboard failed:', error);
-    throw new Error('Lỗi server khi tải dữ liệu dashboard.');
+    throw new Error('Lỗi server khi tải dữ liệu dashboard.', { cause: error });
   }
 }
 

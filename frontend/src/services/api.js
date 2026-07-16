@@ -108,7 +108,10 @@ const post = async (url, body, options = {}) => {
       throw error;
     }
 
-    throw new Error('Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.');
+    throw new Error(
+      'Không kết nối được server. Vui lòng kiểm tra dịch vụ đã chạy chưa.',
+      { cause: error },
+    );
   }
 
   if (!response.ok || data?.success === false) {

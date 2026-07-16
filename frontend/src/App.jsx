@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -7,31 +8,44 @@ import AdminProtectedRoute from './components/auth/AdminProtectedRoute';
 import AuthLayout from './components/layout/AuthLayout';
 import UserLayout from './components/layout/UserLayout';
 
-import LoginScreen from './pages/auth/Login';
-import RegisterScreen from './pages/auth/Register';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import ResetPassword from './pages/auth/ResetPassword';
-
-import Dashboard from './pages/user/Dashboard';
-import UrlAnalyzer from './pages/user/UrlAnalyzer';
-import BatchPrediction from './pages/user/BatchPrediction';
-import FeedbackCenter from './pages/user/FeedbackCenter';
-import Report from './pages/user/Report';
-import Settings from './pages/user/Settings';
-import Profile from './pages/user/Profile';
-import RestaurantCompare from './pages/user/RestaurantCompare';
-
 import AdminLayout from './components/layout/AdminLayout';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminFeedback from './pages/admin/AdminFeedback';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminSettings from './pages/admin/AdminSettings';
+
+const LoginScreen = lazy(() => import('./pages/auth/Login'));
+const RegisterScreen = lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+
+const Dashboard = lazy(() => import('./pages/user/Dashboard'));
+const UrlAnalyzer = lazy(() => import('./pages/user/UrlAnalyzer'));
+const BatchPrediction = lazy(() => import('./pages/user/BatchPrediction'));
+const FeedbackCenter = lazy(() => import('./pages/user/FeedbackCenter'));
+const Report = lazy(() => import('./pages/user/Report'));
+const Settings = lazy(() => import('./pages/user/Settings'));
+const Profile = lazy(() => import('./pages/user/Profile'));
+const RestaurantCompare = lazy(() => import('./pages/user/RestaurantCompare'));
+
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
+      <div className="flex items-center gap-3 text-sm font-medium">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+        Đang tải trang...
+      </div>
+    </div>
+  );
+}
 
 function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
           <Route element={<AuthLayout />}>
             <Route path="/" element={<LoginScreen />} />
             <Route path="/register" element={<RegisterScreen />} />
@@ -64,7 +78,8 @@ function App() {
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   );

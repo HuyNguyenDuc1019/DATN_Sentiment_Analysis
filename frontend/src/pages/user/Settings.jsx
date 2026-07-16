@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -82,7 +82,7 @@ export default function Settings() {
     loadSettings();
   }, [userId]);
 
-  const loadUserDatasets = async () => {
+  const loadUserDatasets = useCallback(async () => {
     if (!userId) return;
 
     try {
@@ -96,13 +96,13 @@ export default function Settings() {
     } finally {
       setIsLoadingDatasets(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     if (activeTab === 'data' && userId) {
       loadUserDatasets();
     }
-  }, [activeTab, userId]);
+  }, [activeTab, userId, loadUserDatasets]);
 
   const handleSaveSettings = async () => {
     if (!userId) {

@@ -20,7 +20,6 @@ import {
   isCriticalAlert,
   isInRange,
   normalizeAlert,
-  uniqueAlerts,
 } from '../../utils/user/dashboardUtils';
 
 import {
@@ -400,12 +399,14 @@ export default function Dashboard() {
     load();
   }, [load]);
 
+  const [statsReferenceTime] = useState(() => Date.now());
+
   const stats = useMemo(() => {
     const positive = reviews.filter((item) => normalizeLabel(item.ai_label) === 1).length;
     const negative = reviews.length - positive;
     const sources = new Set(reviews.map((item) => item.source_url).filter(Boolean)).size;
 
-    const now = Date.now();
+    const now = statsReferenceTime;
     const week = 7 * 24 * 60 * 60 * 1000;
 
     const current = reviews.filter((item) =>
@@ -431,7 +432,7 @@ export default function Dashboard() {
       positiveRate: reviews.length ? positive / reviews.length : 0,
       growth,
     };
-  }, [reviews]);
+  }, [reviews, statsReferenceTime]);
 
   const trendData = useMemo(() => buildTrendData(reviews), [reviews]);
 

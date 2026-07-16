@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
@@ -317,47 +317,31 @@ export function TaskProvider({ children }) {
     }
   };
 
-  const value = useMemo(
-    () => ({
-      batch: {
-        file: batchFile,
-        texts: batchTexts,
-        column: batchColumn,
-        columns: batchColumns,
-        results: batchResults,
-        loading: batchLoading,
-        selectFile: selectBatchFile,
-        setColumn: setBatchColumn,
-        analyze: runBatchPrediction,
-        stop: stopBatchPrediction,
-      },
-      urlAnalyzer: {
-        url,
-        setUrl,
-        results: urlResults,
-        count: urlCount,
-        loading: urlLoading,
-        filter: urlFilter,
-        setFilter: setUrlFilter,
-        analyze: runUrlAnalysis,
-        stop: stopUrlAnalysis,
-      },
-    }),
-    [
-      batchFile,
-      batchTexts,
-      batchColumn,
-      batchColumns,
-      batchResults,
-      batchLoading,
+  const value = {
+    batch: {
+      file: batchFile,
+      texts: batchTexts,
+      column: batchColumn,
+      columns: batchColumns,
+      results: batchResults,
+      loading: batchLoading,
+      selectFile: selectBatchFile,
+      setColumn: setBatchColumn,
+      analyze: runBatchPrediction,
+      stop: stopBatchPrediction,
+    },
+    urlAnalyzer: {
       url,
-      urlResults,
-      urlCount,
-      urlLoading,
-      urlFilter,
-      user?.id,
-    ],
-  );
+      setUrl,
+      results: urlResults,
+      count: urlCount,
+      loading: urlLoading,
+      filter: urlFilter,
+      setFilter: setUrlFilter,
+      analyze: runUrlAnalysis,
+      stop: stopUrlAnalysis,
+    },
+  };
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
 }

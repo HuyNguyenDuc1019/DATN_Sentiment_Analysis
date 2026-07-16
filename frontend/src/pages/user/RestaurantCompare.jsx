@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Radar as RadarIcon, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -196,7 +196,7 @@ export default function RestaurantCompare() {
     setRestaurants((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const loadComparisonHistory = async () => {
+  const loadComparisonHistory = useCallback(async () => {
     if (!user?.id) return;
 
     try {
@@ -211,11 +211,11 @@ export default function RestaurantCompare() {
         setIsLoadingHistory(false);
       }
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     loadComparisonHistory();
-  }, [user?.id]);
+  }, [loadComparisonHistory]);
 
   const stopCompare = () => {
     if (compareAbortRef.current) {
@@ -426,7 +426,7 @@ export default function RestaurantCompare() {
                       <RechartsTooltip 
                         contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', borderRadius: '8px' }}
                         itemStyle={{ color: '#e2e8f0' }}
-                        formatter={(value, name, props) => [`${value}% Tích cực`, results[name.replace('restaurant', '')]?.restaurant_name || name]}
+                        formatter={(value, name) => [`${value}% Tích cực`, results[name.replace('restaurant', '')]?.restaurant_name || name]}
                       />
                       <RechartsLegend wrapperStyle={{ paddingTop: '20px' }} />
                       

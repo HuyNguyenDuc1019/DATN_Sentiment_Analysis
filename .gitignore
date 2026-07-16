@@ -5,6 +5,8 @@ venv/
 # Bỏ qua thư viện của Node.js
 frontend/node_modules/
 node_modules/
+scraper/chrome_profile/
+scraper/ngrok.exe
 
 # Bỏ qua các file trọng số AI quá nặng (tránh lỗi vượt quá 100MB của GitHub)
 backend/phobert_saved_model/
@@ -13,6 +15,7 @@ backend/phobert_v1/*.safetensors
 backend/phobert_v2/*.bin
 backend/phobert_v2/*.safetensors
 ml_training/*.pkl
+ml_training/*.mp4
 
 # Bỏ qua các file cache của hệ thống
 __pycache__/

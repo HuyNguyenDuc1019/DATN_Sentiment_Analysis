@@ -90,8 +90,6 @@ toast.error = (message, options = {}) => {
   return originalError(formatToastMessage(message), { ...options, id: key });
 };
 
-toast.custom = toast.custom;
-
 window.alert = (message) => {
   const key = normalizeToastKey('alert', message);
   if (!shouldShowToast(key)) return;

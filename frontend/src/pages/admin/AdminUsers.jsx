@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { logAdminActivity } from '../../services/adminActivityLogger';
@@ -16,7 +16,6 @@ import {
   exportUsersCsv,
   filterUsers,
   formatDate,
-  getActivityForUser,
   getErrorMessage,
   getHistoryTitle,
   getUserStats,
@@ -54,7 +53,7 @@ export default function AdminUsers() {
   const [processingId, setProcessingId] = useState(null);
   const [page, setPage] = useState(1);
 
-  const fetchActivitySummary = async (adminId) => {
+  const fetchActivitySummary = useCallback(async (adminId) => {
     try {
       const summary = await fetchAdminActivitySummary(adminId);
       setActivitySummary(summary);
@@ -62,9 +61,9 @@ export default function AdminUsers() {
       console.warn('Không tải được thống kê hoạt động user:', error);
       setActivitySummary({});
     }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true);
 
@@ -89,11 +88,11 @@ export default function AdminUsers() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchActivitySummary]);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
   const fetchUserHistory = async (userId) => {
     if (!userId) return;
@@ -166,7 +165,7 @@ export default function AdminUsers() {
     try {
       const adminId = await getCurrentAdminId();
 
-      const responseData = await updateAdminUserAction({
+      await updateAdminUserAction({
         adminId,
         targetUserId: targetUser.id,
         action,
