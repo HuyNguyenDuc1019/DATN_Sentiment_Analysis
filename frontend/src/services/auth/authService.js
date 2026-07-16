@@ -131,27 +131,6 @@ export async function registerWithEmail({
     throw error;
   }
 
-  const userId = data?.user?.id;
-
-  if (userId) {
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: userId,
-          email,
-          full_name: fullName,
-          role: 'user',
-          status: 'active',
-        },
-        { onConflict: 'id' },
-      );
-
-    if (profileError) {
-      console.error('Create profile failed:', profileError);
-    }
-  }
-
   return {
     data,
   };
