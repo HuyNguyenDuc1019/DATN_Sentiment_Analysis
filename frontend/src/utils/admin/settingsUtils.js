@@ -9,6 +9,10 @@ export const DEFAULT_SETTINGS = {
     'Dịch vụ': 'nhân viên, bảo vệ, quản lý, thái độ, chậm, lâu, nhiệt tình, chửi, phục vụ, order, lên món, giao hàng',
     'Không gian': 'máy lạnh, nóng, bẩn, dơ, sạch, chỗ để xe, ồn ào, rộng rãi, thoáng mát, nhà vệ sinh, decor, view',
   },
+  // THÊM 3 MẢNG TỪ KHÓA MẶC ĐỊNH
+  danger_keywords: [],
+  positive_keywords: [],
+  negative_signal_keywords: [],
 };
 
 export function normalizeSettingsForUi(data) {
@@ -28,6 +32,10 @@ export function normalizeSettingsForUi(data) {
     custom_dictionary: data.custom_dictionary ?? '',
     crisis_alert_enabled: data.crisis_alert_enabled ?? true,
     aspect_dictionary: uiAspects,
+    // ĐẢM BẢO DỮ LIỆU TỪ DB LUÔN LÀ MẢNG
+    danger_keywords: Array.isArray(data.danger_keywords) ? data.danger_keywords : [],
+    positive_keywords: Array.isArray(data.positive_keywords) ? data.positive_keywords : [],
+    negative_signal_keywords: Array.isArray(data.negative_signal_keywords) ? data.negative_signal_keywords : [],
   };
 }
 
@@ -68,10 +76,20 @@ export function buildSettingsPayload(settings) {
 
   const finalCustomDict = splitUniqueKeywords(settings.custom_dictionary).join(', ');
 
+  // Hàm dọn dẹp mảng từ khóa cảm xúc: Xóa khoảng trắng, bỏ dòng rỗng, và lọc trùng lặp
+  const cleanArray = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return Array.from(new Set(arr.map((item) => item.trim()).filter(Boolean)));
+  };
+
   const payload = {
     ...settings,
     custom_dictionary: finalCustomDict,
     aspect_dictionary: finalAspectDict,
+    // LÀM SẠCH DỮ LIỆU TRƯỚC KHI GỬI LÊN API
+    danger_keywords: cleanArray(settings.danger_keywords),
+    positive_keywords: cleanArray(settings.positive_keywords),
+    negative_signal_keywords: cleanArray(settings.negative_signal_keywords),
   };
 
   const savedUiAspects = {};

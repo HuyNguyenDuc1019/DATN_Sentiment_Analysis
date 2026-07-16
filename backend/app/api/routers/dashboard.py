@@ -11,64 +11,45 @@ from app.database import supabase
 router = APIRouter(tags=["Dashboard & Alerts"])
 
 
-DANGER_KEYWORDS = [
-    "tệ",
-    "dở",
-    "chán",
-    "bẩn",
-    "mất vệ sinh",
-    "không ngon",
-    "quá lâu",
-    "chờ lâu",
-    "đợi lâu",
-    "phục vụ kém",
-    "thái độ",
-    "khó chịu",
-    "đắt",
-    "mắc",
-    "không đáng tiền",
-    "thất vọng",
-    "lừa",
-    "sai món",
-    "thiếu món",
-    "nguội",
-    "mặn",
-    "nhạt",
-]
+def get_dynamic_keywords():
+    """Hàm kéo từ khóa động từ bảng system_settings"""
+    try:
+        res = (
+            supabase
+            .table("system_settings")
+            .select("danger_keywords, positive_keywords, negative_signal_keywords")
+            .eq("id", 1)
+            .execute()
+        )
+        if res.data:
+            row = res.data[0]
+            return (
+                row.get("danger_keywords") or [],
+                row.get("positive_keywords") or [],
+                row.get("negative_signal_keywords") or []
+            )
+    except Exception as e:
+        print(f"Lỗi kéo từ khóa động từ Supabase: {e}")
 
-POSITIVE_KEYWORDS = [
-    "ngon",
-    "ngon quá",
-    "rất ngon",
-    "tuyệt",
-    "tốt",
-    "hài lòng",
-    "đáng tiền",
-    "sạch sẽ",
-    "nhanh",
-    "nhiệt tình",
-    "thân thiện",
-    "sẽ quay lại",
-]
-
-NEGATIVE_SIGNAL_KEYWORDS = [
-    *DANGER_KEYWORDS,
-    "không ngon",
-    "không sạch",
-    "không hài lòng",
-    "không đáng",
-    "không hợp",
-    "không quay lại",
-    "chưa tốt",
-    "quá tệ",
-    "thất vọng",
-    "đau bụng",
-    "ngộ độc",
-    "ruồi",
-    "dị vật",
-    "hôi",
-    "sống",
-]
+    # Fallback mặc định an toàn nếu DB chưa có dữ liệu hoặc lỗi mạng
+    default_danger = [
+        "tệ", "dở", "chán", "bẩn", "mất vệ sinh", "không ngon", "quá lâu",
+        "chờ lâu", "đợi lâu", "phục vụ kém", "thái độ", "khó chịu", "đắt",
+        "mắc", "không đáng tiền", "thất vọng", "lừa", "sai món", "thiếu món",
+        "nguội", "mặn", "nhạt",
+    ]
+    default_positive = [
+        "ngon", "ngon quá", "rất ngon", "tuyệt", "tốt", "hài lòng",
+        "đáng tiền", "sạch sẽ", "nhanh", "nhiệt tình", "thân thiện", "sẽ quay lại",
+    ]
+    default_negative_signal = [
+        *default_danger,
+        "không ngon", "không sạch", "không hài lòng", "không đáng",
+        "không hợp", "không quay lại", "chưa tốt", "quá tệ",
+        "thất vọng", "đau bụng", "ngộ độc", "ruồi", "dị vật",
+        "hôi", "sống",
+    ]
+    return default_danger, default_positive, default_negative_signal
 
 
 def normalize_text(value):
@@ -100,7 +81,6 @@ def contains_normalized_phrase(target, keyword):
     if re.search(raw_pattern, raw_target) is not None:
         return True
 
-    # Tránh va chạm sau khi bỏ dấu như "dở" -> "do" với "đồ" -> "do".
     if len(normalized_keyword) <= 3 and raw_keyword != normalized_keyword:
         return False
 
@@ -113,14 +93,9 @@ def is_negative_label(value):
         return True
 
     text = normalize_text(value)
-
     return text in [
-        "negative",
-        "neg",
-        "label 0",
-        "tieu cuc",
-        "khach chua hai long",
-        "chua hai long",
+        "negative", "neg", "label 0", "tieu cuc",
+        "khach chua hai long", "chua hai long",
     ]
 
 
@@ -129,14 +104,9 @@ def is_positive_label(value):
         return True
 
     text = normalize_text(value)
-
     return text in [
-        "positive",
-        "pos",
-        "label 1",
-        "tich cuc",
-        "khach hai long",
-        "hai long",
+        "positive", "pos", "label 1", "tich cuc",
+        "khach hai long", "hai long",
     ]
 
 
@@ -162,46 +132,39 @@ def get_keywords(item):
         return keywords
 
     if isinstance(keywords, str):
-        return [
-            keyword.strip()
-            for keyword in keywords.split(",")
-            if keyword.strip()
-        ]
+        return [keyword.strip() for keyword in keywords.split(",") if keyword.strip()]
 
     return []
 
 
-def has_danger_keyword(item):
+def has_danger_keyword(item, danger_keywords):
     content = get_review_content(item)
     keywords = " ".join(str(keyword) for keyword in get_keywords(item))
     target = f"{content} {keywords}"
+    return any(contains_normalized_phrase(target, keyword) for keyword in danger_keywords)
 
-    return any(contains_normalized_phrase(target, keyword) for keyword in DANGER_KEYWORDS)
 
-
-def has_negative_signal(item):
+def has_negative_signal(item, negative_signal_keywords):
     content = get_review_content(item)
     keywords = " ".join(str(keyword) for keyword in get_keywords(item))
     target = f"{content} {keywords}"
-    return any(contains_normalized_phrase(target, keyword) for keyword in NEGATIVE_SIGNAL_KEYWORDS)
+    return any(contains_normalized_phrase(target, keyword) for keyword in negative_signal_keywords)
 
 
-def is_clearly_positive(item):
+def is_clearly_positive(item, positive_keywords, negative_signal_keywords):
     content = get_review_content(item)
-    has_positive = any(contains_normalized_phrase(content, keyword) for keyword in POSITIVE_KEYWORDS)
-    return has_positive and not has_negative_signal(item)
+    has_positive = any(contains_normalized_phrase(content, keyword) for keyword in positive_keywords)
+    return has_positive and not has_negative_signal(item, negative_signal_keywords)
 
 
-def is_actionable_alert(item):
-    if has_danger_keyword(item):
+def is_actionable_alert(item, danger_keywords, positive_keywords, negative_signal_keywords):
+    if has_danger_keyword(item, danger_keywords):
         return True
 
-    if is_clearly_positive(item):
+    if is_clearly_positive(item, positive_keywords, negative_signal_keywords):
         return False
 
-    # Nhãn 0 của mô hình nhị phân chưa đủ để coi câu trung tính là cảnh báo.
-    # Chỉ giữ bản ghi có thêm tín hiệu tiêu cực rõ ràng trong nội dung.
-    return is_negative_label(item.get("ai_label")) and has_negative_signal(item)
+    return is_negative_label(item.get("ai_label")) and has_negative_signal(item, negative_signal_keywords)
 
 
 def normalize_confidence(value):
@@ -219,7 +182,6 @@ def normalize_confidence(value):
 def parse_time(value):
     if not value:
         return 0
-
     try:
         value = str(value).replace("Z", "+00:00")
         return datetime.fromisoformat(value).timestamp()
@@ -235,13 +197,13 @@ def get_review_time(item):
     )
 
 
-def calculate_alert_score(item):
+def calculate_alert_score(item, danger_keywords):
     score = 0
 
     if item.get("is_action_required"):
         score += 100
 
-    if has_danger_keyword(item):
+    if has_danger_keyword(item, danger_keywords):
         score += 40
 
     confidence = normalize_confidence(item.get("confidence"))
@@ -257,39 +219,22 @@ def calculate_alert_score(item):
     return score
 
 
-def sort_alerts_stable(item):
-    return (
-        -calculate_alert_score(item),
-        -get_review_time(item),
-        -normalize_confidence(item.get("confidence")),
-        str(item.get("id") or ""),
-        get_content_key(item),
-    )
-
-
 def unique_by_content(items):
     seen = set()
     result = []
-
     for item in items:
         key = get_content_key(item)
-
-        if not key:
+        if not key or key in seen:
             continue
-
-        if key in seen:
-            continue
-
         seen.add(key)
         result.append(item)
-
     return result
 
 
-def build_alerts(rows, limit=20):
+def build_alerts(rows, danger_keywords, positive_keywords, negative_signal_keywords, limit=20):
     negative_rows = [
         item for item in rows
-        if is_actionable_alert(item) and get_content_key(item)
+        if is_actionable_alert(item, danger_keywords, positive_keywords, negative_signal_keywords) and get_content_key(item)
     ]
 
     tier_1 = [
@@ -299,12 +244,12 @@ def build_alerts(rows, limit=20):
 
     tier_2 = [
         item for item in negative_rows
-        if not item.get("is_action_required") and has_danger_keyword(item)
+        if not item.get("is_action_required") and has_danger_keyword(item, danger_keywords)
     ]
 
     tier_3 = [
         item for item in negative_rows
-        if not item.get("is_action_required") and not has_danger_keyword(item)
+        if not item.get("is_action_required") and not has_danger_keyword(item, danger_keywords)
     ]
 
     picked = []
@@ -313,7 +258,17 @@ def build_alerts(rows, limit=20):
     def add_items(items):
         nonlocal picked
 
-        for item in sorted(items, key=sort_alerts_stable):
+        # Định nghĩa hàm sắp xếp bên trong để có thể dùng biến danger_keywords
+        def sort_key(item):
+            return (
+                -calculate_alert_score(item, danger_keywords),
+                -get_review_time(item),
+                -normalize_confidence(item.get("confidence")),
+                str(item.get("id") or ""),
+                get_content_key(item),
+            )
+
+        for item in sorted(items, key=sort_key):
             if len(picked) >= limit:
                 return
 
@@ -347,24 +302,22 @@ async def get_last_scraped(source_url: str, user_id: str):
         )
 
         if response.data and len(response.data) > 0:
-            return {
-                "last_scraped_date": response.data[0].get("review_date"),
-            }
+            return {"last_scraped_date": response.data[0].get("review_date")}
 
-        return {
-            "last_scraped_date": None,
-        }
+        return {"last_scraped_date": None}
 
     except Exception as e:
         print("Lỗi truy vấn ngày cào:", e)
-        return {
-            "last_scraped_date": None,
-        }
+        return {"last_scraped_date": None}
 
 
 @router.get("/api/dashboard/alerts")
 async def get_dashboard_alerts(source_url: str, user_id: str):
     try:
+        # Bước 1: Kéo danh sách từ khóa động từ Database
+        danger_kws, positive_kws, negative_signal_kws = get_dynamic_keywords()
+
+        # Bước 2: Kéo dữ liệu bình luận của user
         query = (
             supabase
             .table("scraped_reviews")
@@ -384,15 +337,13 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
         response = query.execute()
         rows = response.data or []
 
-        alerts = build_alerts(rows, limit=20)
+        # Bước 3: Đưa từ khóa động vào thuật toán để phân loại
+        alerts = build_alerts(rows, danger_kws, positive_kws, negative_signal_kws, limit=20)
 
-        return {
-            "alerts": alerts,
-        }
+        return {"alerts": alerts}
 
     except HTTPException:
         raise
-
     except Exception as e:
         print(f"Lỗi API dashboard alerts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -421,11 +372,7 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
             kws = item.get("keywords") or []
 
             if isinstance(kws, str):
-                kws = [
-                    keyword.strip()
-                    for keyword in kws.split(",")
-                    if keyword.strip()
-                ]
+                kws = [keyword.strip() for keyword in kws.split(",") if keyword.strip()]
 
             if not isinstance(kws, list):
                 kws = []
@@ -439,37 +386,17 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
         neg_counts = Counter(neg_keywords)
 
         leaderboard_data = {
-            "top_positive": [
-                {
-                    "keyword": k.capitalize(),
-                    "count": v,
-                }
-                for k, v in pos_counts.most_common(5)
-            ],
-            "top_negative": [
-                {
-                    "keyword": k.capitalize(),
-                    "count": v,
-                }
-                for k, v in neg_counts.most_common(5)
-            ],
+            "top_positive": [{"keyword": k.capitalize(), "count": v} for k, v in pos_counts.most_common(5)],
+            "top_negative": [{"keyword": k.capitalize(), "count": v} for k, v in neg_counts.most_common(5)],
         }
 
         wordcloud_data = []
 
         for kw, count in pos_counts.most_common(20):
-            wordcloud_data.append({
-                "text": kw.capitalize(),
-                "value": count * 10,
-                "sentiment": "positive",
-            })
+            wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "positive"})
 
         for kw, count in neg_counts.most_common(20):
-            wordcloud_data.append({
-                "text": kw.capitalize(),
-                "value": count * 10,
-                "sentiment": "negative",
-            })
+            wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "negative"})
 
         return {
             "leaderboard": leaderboard_data,

@@ -7,6 +7,8 @@ import AiLogicCard from '../../components/admin/settings/AiLogicCard';
 import DataLimitCard from '../../components/admin/settings/DataLimitCard';
 import CrisisAlertCard from '../../components/admin/settings/CrisisAlertCard';
 import AspectDictionaryCard from '../../components/admin/settings/AspectDictionaryCard';
+// Tải component mới quản lý Từ khóa cảm xúc
+import SentimentDictionaryCard from '../../components/admin/settings/SentimentDictionaryCard';
 
 import {
   DEFAULT_SETTINGS,
@@ -79,6 +81,14 @@ export default function AdminSettings() {
         ...current.aspect_dictionary,
         [aspectName]: textValue,
       },
+    }));
+  };
+
+  // Hàm mới: Xử lý thay đổi mảng từ khóa cảm xúc (chuyển text nhiều dòng thành mảng)
+  const handleKeywordArrayChange = (fieldName, textValue) => {
+    setSettings((current) => ({
+      ...current,
+      [fieldName]: textValue.split('\n'), // Tách bằng dấu xuống dòng
     }));
   };
 
@@ -250,6 +260,12 @@ export default function AdminSettings() {
         <CrisisAlertCard
           settings={settings}
           onChange={handleChange}
+        />
+
+        {/* THÊM KHỐI QUẢN LÝ TỪ KHÓA CẢM XÚC VÀO ĐÂY */}
+        <SentimentDictionaryCard
+          settings={settings}
+          onChange={handleKeywordArrayChange}
         />
 
         <AspectDictionaryCard
