@@ -10,7 +10,6 @@ from app.api.routers import (
     dashboard,
     feedback,
     compare,
-    payment,
 )
 
 app = FastAPI(
@@ -24,6 +23,8 @@ origins = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "https://aimotion-frontend.vercel.app/",
+    "*"
 ]
 
 app.add_middleware(
@@ -39,7 +40,7 @@ app.add_middleware(
 async def load_model():
     model_dir = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
-        "phobert_saved_model",
+        "phobert_v2",  
     )
 
     try:
@@ -56,7 +57,6 @@ app.include_router(predict.router)
 app.include_router(dashboard.router)
 app.include_router(feedback.router)
 app.include_router(compare.router)
-app.include_router(payment.router)
 
 
 @app.get("/")

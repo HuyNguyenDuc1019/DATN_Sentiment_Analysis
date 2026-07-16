@@ -1,4 +1,13 @@
-import { BarChart3, BrainCircuit, MessageSquareText, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  BarChart3,
+  BrainCircuit,
+  MessageSquareText,
+  Moon,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 
 const FEATURES = [
   { icon: MessageSquareText, label: 'Thu thập phản hồi' },
@@ -6,14 +15,66 @@ const FEATURES = [
   { icon: BarChart3, label: 'Báo cáo và hỗ trợ quyết định' },
 ];
 
+function readThemeMode() {
+  if (typeof window === 'undefined') return true;
+  return localStorage.getItem('almotion-theme') !== 'light';
+}
+
 export default function AuthPageShell({ children, eyebrow, title, description }) {
+  const [isDarkMode, setIsDarkMode] = useState(readThemeMode);
+
+  useEffect(() => {
+    const theme = isDarkMode ? 'dark' : 'light';
+    const root = document.documentElement;
+
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    root.style.colorScheme = theme;
+    localStorage.setItem('almotion-theme', theme);
+    window.dispatchEvent(new Event('almotion-theme-change'));
+  }, [isDarkMode]);
+
   return (
-    <main className="auth-blue-shell relative min-h-screen overflow-y-auto bg-[#031b4e] px-4 py-6 font-sans text-white sm:px-6 lg:grid lg:place-items-center lg:py-6 xl:py-8">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.48),transparent_45%),linear-gradient(135deg,#03183f_0%,#075bb8_52%,#03183f_100%)]">
-        <div className="absolute -left-20 top-8 h-80 w-80 rounded-[45%] border-[34px] border-blue-500/25 blur-[1px] rotate-[-24deg]" />
-        <div className="absolute -right-16 -top-20 h-96 w-96 rounded-[42%] border-[38px] border-cyan-400/20 rotate-[28deg]" />
-        <div className="absolute -bottom-28 left-[8%] h-72 w-72 rounded-full border-[30px] border-indigo-400/20" />
-        <div className="absolute -bottom-28 right-[4%] h-80 w-80 rounded-[42%] border-[36px] border-blue-400/25 rotate-[24deg]" />
+    <main className="auth-blue-shell relative min-h-screen overflow-y-auto bg-[#050a18] px-4 py-6 font-sans text-white sm:px-6 lg:grid lg:place-items-center lg:py-6 xl:py-8">
+      <button
+        type="button"
+        onClick={() => setIsDarkMode((current) => !current)}
+        className="auth-theme-toggle fixed right-4 top-4 z-50 inline-flex h-11 items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3.5 text-sm font-semibold text-slate-100 shadow-lg backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-indigo-400/50 hover:bg-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 sm:right-6 sm:top-6"
+        aria-label={isDarkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+        title={isDarkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+      >
+        {isDarkMode ? (
+          <Sun className="h-[18px] w-[18px]" />
+        ) : (
+          <Moon className="h-[18px] w-[18px]" />
+        )}
+        <span className="hidden sm:inline">
+          {isDarkMode ? 'Chế độ sáng' : 'Chế độ tối'}
+        </span>
+      </button>
+
+      <div
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 16% 18%, rgba(79, 70, 229, 0.28), transparent 30%), radial-gradient(circle at 84% 72%, rgba(8, 145, 178, 0.22), transparent 34%), radial-gradient(circle at 52% -8%, rgba(59, 130, 246, 0.20), transparent 38%), linear-gradient(135deg, #050917 0%, #0a1430 52%, #071426 100%)',
+        }}
+      >
+        <div
+          className="absolute inset-0 opacity-[0.13]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.18) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)',
+          }}
+        />
+        <div className="absolute -left-32 top-[16%] h-96 w-96 rounded-full bg-indigo-500/15 blur-[100px]" />
+        <div className="absolute -right-28 bottom-[8%] h-[28rem] w-[28rem] rounded-full bg-cyan-500/10 blur-[110px]" />
+        <div className="absolute left-[38%] top-[-18%] h-80 w-80 rounded-full bg-blue-500/10 blur-[100px]" />
+        <div className="absolute left-[8%] right-[8%] top-[12%] h-px bg-gradient-to-r from-transparent via-cyan-200/20 to-transparent" />
+        <div className="absolute bottom-[10%] left-[18%] right-[18%] h-px bg-gradient-to-r from-transparent via-indigo-300/15 to-transparent" />
       </div>
 
       <div className="auth-panel relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-cyan-200/35 bg-[#062456]/75 shadow-[0_30px_100px_rgba(0,14,48,0.55)] backdrop-blur-2xl lg:grid-cols-2">
@@ -37,7 +98,10 @@ export default function AuthPageShell({ children, eyebrow, title, description })
 
             <div className="auth-feature-list mt-8 space-y-3">
               {FEATURES.map(({ icon: Icon, label }) => (
-                <div key={label} className="auth-feature-card flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3.5 backdrop-blur-xl">
+                <div
+                  key={label}
+                  className="auth-feature-card flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3.5 backdrop-blur-xl"
+                >
                   <div className="auth-feature-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400/30 to-indigo-500/30 text-cyan-200">
                     <Icon className="h-5 w-5" />
                   </div>
@@ -52,8 +116,12 @@ export default function AuthPageShell({ children, eyebrow, title, description })
               <FlowNode icon={BrainCircuit} label="AI" accent />
               <span className="text-cyan-300">→</span>
               <div className="space-y-2 text-[11px] font-semibold">
-                <div className="rounded-lg bg-emerald-400/15 px-2 py-1.5 text-center text-emerald-200">Hài lòng</div>
-                <div className="rounded-lg bg-rose-400/15 px-2 py-1.5 text-center text-rose-200">Chưa hài lòng</div>
+                <div className="rounded-lg bg-emerald-400/15 px-2 py-1.5 text-center text-emerald-200">
+                  Hài lòng
+                </div>
+                <div className="rounded-lg bg-rose-400/15 px-2 py-1.5 text-center text-rose-200">
+                  Chưa hài lòng
+                </div>
               </div>
             </div>
 
@@ -64,20 +132,67 @@ export default function AuthPageShell({ children, eyebrow, title, description })
           </div>
         </section>
       </div>
+
       <style>{`
-        html.light .auth-blue-shell,
-        html.light .auth-blue-shell section { color: #f8fafc !important; }
-        html.light .auth-blue-shell [class*="text-white"] { color: #ffffff !important; }
-        html.light .auth-blue-shell [class*="text-slate-300"] { color: #cbd5e1 !important; }
-        html.light .auth-blue-shell [class*="text-slate-400"] { color: #94a3b8 !important; }
-        html.light .auth-blue-shell [class*="text-slate-500"] { color: #64748b !important; }
-        html.light .auth-blue-shell input {
-          background: rgba(2, 20, 58, 0.62) !important;
-          border-color: rgba(125, 211, 252, 0.28) !important;
-          color: #f8fafc !important;
-          box-shadow: none !important;
+        html.light .auth-blue-shell {
+          background: #eef4ff !important;
+          color: #0f172a !important;
         }
-        html.light .auth-blue-shell input::placeholder { color: #64748b !important; }
+        html.light .auth-blue-shell > div:first-of-type {
+          background-image:
+            radial-gradient(circle at 16% 18%, rgba(99, 102, 241, 0.16), transparent 30%),
+            radial-gradient(circle at 84% 72%, rgba(6, 182, 212, 0.14), transparent 34%),
+            radial-gradient(circle at 52% -8%, rgba(59, 130, 246, 0.13), transparent 38%),
+            linear-gradient(135deg, #f8fbff 0%, #edf4ff 52%, #eefaff 100%) !important;
+        }
+        html.light .auth-panel {
+          border-color: rgba(99, 102, 241, 0.18) !important;
+          background: rgba(255, 255, 255, 0.78) !important;
+          box-shadow: 0 30px 90px rgba(51, 65, 85, 0.18) !important;
+        }
+        html.light .auth-form-pane {
+          border-color: rgba(148, 163, 184, 0.24) !important;
+          background: rgba(255, 255, 255, 0.35) !important;
+        }
+        html.light .auth-info-pane {
+          background: linear-gradient(145deg, rgba(238, 242, 255, 0.82), rgba(224, 242, 254, 0.62)) !important;
+        }
+        html.light .auth-form-card {
+          border-color: rgba(148, 163, 184, 0.28) !important;
+          background: rgba(255, 255, 255, 0.72) !important;
+          box-shadow: 0 20px 55px rgba(51, 65, 85, 0.12) !important;
+        }
+        html.light .auth-blue-shell [class*="text-white"] { color: #0f172a !important; }
+        html.light .auth-blue-shell [class*="text-slate-100"] { color: #1e293b !important; }
+        html.light .auth-blue-shell [class*="text-slate-200"] { color: #334155 !important; }
+        html.light .auth-blue-shell [class*="text-slate-300"] { color: #334155 !important; }
+        html.light .auth-blue-shell [class*="text-slate-400"] { color: #475569 !important; }
+        html.light .auth-blue-shell [class*="text-slate-500"] { color: #64748b !important; }
+        html.light .auth-blue-shell [class*="text-slate-600"] { color: #64748b !important; }
+        html.light .auth-blue-shell [class*="from-indigo"][class*="text-white"],
+        html.light .auth-blue-shell button[class*="bg-gradient-to-r"] {
+          color: #ffffff !important;
+        }
+        html.light .auth-blue-shell .auth-title { color: #0f172a !important; }
+        html.light .auth-blue-shell .auth-description { color: #475569 !important; }
+        html.light .auth-blue-shell .auth-feature-card,
+        html.light .auth-blue-shell .auth-flow {
+          border-color: rgba(99, 102, 241, 0.16) !important;
+          background: rgba(255, 255, 255, 0.62) !important;
+        }
+        html.light .auth-blue-shell input {
+          background: rgba(255, 255, 255, 0.9) !important;
+          border-color: rgba(148, 163, 184, 0.5) !important;
+          color: #0f172a !important;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+        }
+        html.light .auth-blue-shell input::placeholder { color: #94a3b8 !important; }
+        html.light .auth-blue-shell .auth-theme-toggle {
+          border-color: rgba(99, 102, 241, 0.18) !important;
+          background: rgba(255, 255, 255, 0.82) !important;
+          color: #334155 !important;
+          box-shadow: 0 10px 30px rgba(51, 65, 85, 0.14) !important;
+        }
 
         @media (min-width: 1024px) {
           .auth-blue-shell { height: 100dvh; min-height: 0; }
@@ -117,7 +232,13 @@ export default function AuthPageShell({ children, eyebrow, title, description })
 
 function FlowNode({ icon: Icon, label, accent = false }) {
   return (
-    <div className={`flex flex-col items-center gap-2 rounded-xl border p-3 ${accent ? 'border-cyan-300/30 bg-blue-500/20 text-cyan-100' : 'border-white/10 bg-white/5 text-blue-100'}`}>
+    <div
+      className={`flex flex-col items-center gap-2 rounded-xl border p-3 ${
+        accent
+          ? 'border-cyan-300/30 bg-blue-500/20 text-cyan-100'
+          : 'border-white/10 bg-white/5 text-blue-100'
+      }`}
+    >
       <Icon className="h-6 w-6" />
       <span className="text-[11px] font-semibold">{label}</span>
     </div>

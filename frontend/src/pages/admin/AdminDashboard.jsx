@@ -24,7 +24,7 @@ import {
 function getAdminDashboardCards(stats) {
   return [
     {
-      title: 'Tổng phản hồi đã xử lý',
+      title: 'Tổng bình luận đã phân tích',
       value: stats.apiCalls,
       icon: <Activity className="h-5 w-5 text-indigo-400" />,
       formatter: formatNumber,
@@ -63,10 +63,12 @@ export default function AdminDashboard() {
       const { metricsData, chartDataResponse, usersData } = await fetchAdminDashboardData();
 
       setStats({
-        apiCalls: metricsData.total_api_calls || 0,
-        users: metricsData.total_users || 0,
-        pendingFeedback: metricsData.pending_feedbacks || 0,
-        positiveRate: metricsData.global_positive_ratio || 0,
+        apiCalls: Number(
+          metricsData.total_analyzed_reviews ?? metricsData.total_api_calls ?? 0,
+        ),
+        users: Number(metricsData.total_users ?? 0),
+        pendingFeedback: Number(metricsData.pending_feedbacks ?? 0),
+        positiveRate: Number(metricsData.global_positive_ratio ?? 0),
       });
 
       setWeeklyData(formatAdminChartData(chartDataResponse.chart_data || []));

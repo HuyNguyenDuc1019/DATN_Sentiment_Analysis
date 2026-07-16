@@ -56,14 +56,14 @@ export function getPageItems(currentPage, totalPages) {
 export function getUserStats(users) {
   const total = users.length;
   const admins = users.filter((user) => user.role === 'admin').length;
-  const normalUsers = users.filter((user) => user.role !== 'admin').length;
-  const vipUsers = users.filter((user) => String(user.tier || '').toLowerCase() === 'vip').length;
+  const activeUsers = users.filter((user) => user.status !== 'blocked').length;
+  const blockedUsers = users.filter((user) => user.status === 'blocked').length;
 
   return {
     total,
     admins,
-    normalUsers,
-    vipUsers,
+    activeUsers,
+    blockedUsers,
   };
 }
 
@@ -72,7 +72,6 @@ export function filterUsers({
   searchTerm,
   roleFilter,
   statusFilter,
-  tierFilter,
 }) {
   const keyword = searchTerm.trim().toLowerCase();
 
@@ -82,7 +81,6 @@ export function filterUsers({
     const id = String(user.id || '').toLowerCase();
     const role = String(user.role || 'user').toLowerCase();
     const status = user.status === 'blocked' ? 'blocked' : 'active';
-    const tier = String(user.tier || 'free').toLowerCase();
 
     const matchSearch =
       !keyword ||
@@ -90,14 +88,11 @@ export function filterUsers({
       name.includes(keyword) ||
       id.includes(keyword) ||
       role.includes(keyword) ||
-      status.includes(keyword) ||
-      tier.includes(keyword);
+      status.includes(keyword);
 
     const matchRole = roleFilter === 'all' ? true : role === roleFilter;
     const matchStatus = statusFilter === 'all' ? true : status === statusFilter;
-    const matchTier = tierFilter === 'all' ? true : tier === tierFilter;
-
-    return matchSearch && matchRole && matchStatus && matchTier;
+    return matchSearch && matchRole && matchStatus;
   });
 }
 
@@ -131,8 +126,6 @@ export function getHistoryTitle(actionType) {
   const titles = {
     user_banned: 'Khóa tài khoản',
     user_unbanned: 'Mở khóa tài khoản',
-    user_upgraded_vip: 'Nâng cấp VIP',
-    user_downgraded_vip: 'Hạ gói dịch vụ',
     admin_login: 'Admin đăng nhập',
   };
 
@@ -169,7 +162,6 @@ export function exportUsersCsv({ users, activitySummary }) {
     'full_name',
     'role',
     'status',
-    'tier',
     'review_count',
     'feedback_count',
     'last_activity',
@@ -184,7 +176,6 @@ export function exportUsersCsv({ users, activitySummary }) {
       full_name: user.full_name || '',
       role: user.role || 'user',
       status: user.status === 'blocked' ? 'blocked' : 'active',
-      tier: user.tier || 'free',
       review_count: activity.review_count || 0,
       feedback_count: activity.feedback_count || 0,
       last_activity: formatCsvDate(activity.last_activity_at || activity.last_activity),

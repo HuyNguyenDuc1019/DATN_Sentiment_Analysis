@@ -12,12 +12,6 @@ export const helpTopics = [
     desc: 'Hiểu cảm xúc, cảnh báo, từ khóa.',
   },
   {
-    id: 'vip',
-    icon: 'crown',
-    title: 'VIP & thanh toán',
-    desc: 'Mở khóa tính năng nâng cao.',
-  },
-  {
     id: 'admin',
     icon: 'shield',
     title: 'Quản trị',
@@ -137,45 +131,6 @@ export const helpQuestions = [
     tip: 'Đừng quyết định chỉ dựa trên một bình luận duy nhất.',
   },
   {
-    id: 'vip-benefit',
-    topic: 'vip',
-    question: 'Tài khoản VIP có gì hơn Free?',
-    summary: 'VIP mở khóa nhiều tính năng nâng cao hơn tài khoản Free.',
-    steps: [
-      'Tăng giới hạn phân tích dữ liệu.',
-      'Mở khóa so sánh nhiều quán.',
-      'Dùng được các báo cáo nâng cao.',
-      'Ưu tiên trải nghiệm tính năng mới.',
-    ],
-    tip: 'VIP phù hợp khi cần phân tích nhiều dữ liệu cho đồ án hoặc demo.',
-  },
-  {
-    id: 'vnpay-flow',
-    topic: 'vip',
-    question: 'Thanh toán VIP hoạt động như thế nào?',
-    summary: 'Người dùng được chuyển sang cổng VNPay Sandbox để thanh toán thử.',
-    steps: [
-      'Bấm Nâng cấp VIP.',
-      'Hệ thống tạo đơn thanh toán.',
-      'Chuyển sang VNPay Sandbox.',
-      'Thanh toán xong sẽ quay lại trang kết quả.',
-    ],
-    tip: 'VNPay Sandbox là môi trường test, không mất tiền thật.',
-  },
-  {
-    id: 'payment-failed',
-    topic: 'vip',
-    question: 'Vì sao thanh toán hiển thị thất bại?',
-    summary: 'Có thể người dùng hủy, nhập sai thông tin hoặc VNPay trả mã lỗi.',
-    steps: [
-      'Kiểm tra mã phản hồi trên trang kết quả.',
-      'Nếu mã là 00 thì thành công.',
-      'Nếu khác 00 thì giao dịch thất bại hoặc bị hủy.',
-      'Có thể bấm Thanh toán lại để tạo đơn mới.',
-    ],
-    tip: 'Không nên refresh lại trang lỗi cũ, hãy tạo giao dịch mới.',
-  },
-  {
     id: 'admin-feedback',
     topic: 'admin',
     question: 'Admin dùng phản hồi người dùng để làm gì?',
@@ -196,23 +151,10 @@ export const helpQuestions = [
     steps: [
       'Vào mục Quản lý Người dùng.',
       'Tìm kiếm theo tên hoặc email.',
-      'Xem trạng thái Free, VIP hoặc bị khóa.',
+      'Xem vai trò và trạng thái hoạt động hoặc bị khóa.',
       'Thực hiện thao tác quản trị khi cần.',
     ],
     tip: 'Các thao tác quan trọng nên được ghi lại trong lịch sử hoạt động admin.',
-  },
-  {
-    id: 'admin-transaction',
-    topic: 'admin',
-    question: 'Admin xem giao dịch VIP ở đâu?',
-    summary: 'Trang Quản lý Giao dịch dùng để theo dõi lịch sử nâng cấp VIP.',
-    steps: [
-      'Vào mục Quản lý Giao dịch.',
-      'Xem tổng giao dịch, trạng thái và doanh thu.',
-      'Lọc theo ngày hoặc trạng thái.',
-      'Bấm chi tiết để xem thông tin giao dịch.',
-    ],
-    tip: 'Giao dịch thành công sẽ có trạng thái paid hoặc Thành công.',
   },
   {
     id: 'zero-result',
@@ -280,10 +222,5 @@ export const helpQuickLinks = [
     to: '/compare',
     label: 'So sánh quán',
     desc: 'Đối chiếu nhiều địa điểm',
-  },
-  {
-    to: '/upgrade-vip',
-    label: 'Nâng cấp VIP',
-    desc: 'Mở khóa tính năng',
   },
 ];

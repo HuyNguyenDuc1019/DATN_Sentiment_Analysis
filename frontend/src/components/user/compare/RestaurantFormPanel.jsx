@@ -158,7 +158,7 @@ export default function RestaurantFormPanel({
         <div>
           <h2 className="text-lg font-semibold text-white">Danh sách quán cần so sánh</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Free so sánh 2 quán, VIP so sánh tối đa 3 quán và lưu lịch sử.
+            So sánh từ 2 đến 3 quán và có thể lưu lại lịch sử kết quả.
           </p>
         </div>
 

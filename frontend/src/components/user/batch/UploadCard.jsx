@@ -1,6 +1,6 @@
 import { CloudUpload, FileText, ShieldCheck } from 'lucide-react';
 
-export default function UploadCard({ file, count, inputRef, onFile, isVip }) {
+export default function UploadCard({ file, count, inputRef, onFile }) {
   return (
     <div
       onDragOver={(event) => event.preventDefault()}
@@ -47,9 +47,7 @@ export default function UploadCard({ file, count, inputRef, onFile, isVip }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
           <p className="text-xs leading-5 text-slate-400">
-            {isVip
-              ? 'Tài khoản VIP có thể xử lý nhiều dữ liệu hơn và lưu lịch sử phân tích.'
-              : 'Gói Free hỗ trợ tối đa 5MB và 50 bình luận/lần. Nâng cấp VIP để mở giới hạn cao hơn.'}
+            Hệ thống hỗ trợ xử lý dữ liệu hàng loạt và lưu lịch sử phân tích.
           </p>
         </div>
       </div>

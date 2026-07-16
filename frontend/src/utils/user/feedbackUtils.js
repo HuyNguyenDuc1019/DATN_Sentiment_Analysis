@@ -1,8 +1,6 @@
 import { confidenceRatio } from '../../services/reviews';
 
 export const PAGE_SIZE = 100;
-export const PRIORITY_LIMIT = 100;
-export const PRIORITY_SCAN_LIMIT = 300;
 
 export function normalizeLabelToNumber(label) {
   if (typeof label === 'number') return label === 1 ? 1 : 0;
@@ -91,21 +89,3 @@ export function formatRelativeTime(createdAt) {
   return new Date(createdAt).toLocaleDateString('vi-VN');
 }
 
-export function ignoredStorageKey(userId) {
-  return `ignored-feedback-reviews:${userId}`;
-}
-
-export function getIgnoredReviewIds(userId) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(ignoredStorageKey(userId)) || '[]');
-    return new Set(Array.isArray(saved) ? saved : []);
-  } catch {
-    return new Set();
-  }
-}
-
-export function rememberIgnoredReview(userId, reviewId) {
-  const ignoredIds = getIgnoredReviewIds(userId);
-  ignoredIds.add(reviewId);
-  localStorage.setItem(ignoredStorageKey(userId), JSON.stringify([...ignoredIds]));
-}

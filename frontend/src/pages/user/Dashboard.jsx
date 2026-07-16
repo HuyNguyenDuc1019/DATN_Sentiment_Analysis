@@ -3,7 +3,6 @@ import { Globe, Hash, MessageSquare, Network } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
-import UpgradeModal from '../../components/common/UpgradeModal';
 import QuickConclusionCard from '../../components/user/dashboard/QuickConclusionCard';
 
 import AlertsSection from '../../components/user/dashboard/AlertsSection';
@@ -64,6 +63,37 @@ function normalizeText(value) {
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeTextWithAccents(value) {
+  return String(value || '')
+    .toLocaleLowerCase('vi-VN')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function containsNormalizedPhrase(target, keyword) {
+  const rawTarget = normalizeTextWithAccents(target);
+  const rawKeyword = normalizeTextWithAccents(keyword);
+  const normalizedTarget = normalizeText(target);
+  const normalizedKeyword = normalizeText(keyword);
+
+  if (!normalizedTarget || !normalizedKeyword) return false;
+
+  const escapedRawKeyword = rawKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`(?:^|\\s)${escapedRawKeyword}(?:$|\\s)`, 'u').test(rawTarget)) {
+    return true;
+  }
+
+  // Các từ ngắn sau khi bỏ dấu dễ trùng nghĩa: "dở" -> "do" có thể
+  // khớp nhầm "đồ", "bẩn" -> "ban" có thể liên quan tới "bánh".
+  if (normalizedKeyword.length <= 3 && rawKeyword !== normalizedKeyword) {
+    return false;
+  }
+
+  const escapedKeyword = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\s)${escapedKeyword}(?:$|\\s)`, 'u').test(normalizedTarget);
 }
 
 function normalizeLabel(value) {
@@ -153,16 +183,22 @@ function getAlertKeywords(item) {
 }
 
 function hasDangerKeyword(item) {
-  const content = normalizeText(getAlertContent(item));
-  const keywords = getAlertKeywords(item)
-    .map((keyword) => normalizeText(keyword))
-    .join(' ');
+  const content = getAlertContent(item);
+  const keywords = getAlertKeywords(item).join(' ');
 
   const target = `${content} ${keywords}`;
 
   return DANGER_KEYWORDS.some((keyword) =>
-    target.includes(normalizeText(keyword)),
+    containsNormalizedPhrase(target, keyword),
   );
+}
+
+function isActionableAlert(item) {
+  if (!isNegativeReview(item)) return false;
+
+  // isCriticalAlert kiểm tra cả tín hiệu ngôn ngữ, nên loại được câu tích cực
+  // bị AI gán nhầm nhãn 0 và câu hỏi trung tính như "Bao nhiêu tiền".
+  return hasDangerKeyword(item) || isCriticalAlert(item);
 }
 
 function normalizeConfidenceValue(value) {
@@ -277,7 +313,7 @@ function buildVisibleAlerts(alerts, reviews) {
   const merged = mergeAlertsWithReviews(alerts, reviews);
 
   const negativeItems = merged
-    .filter(isNegativeReview)
+    .filter(isActionableAlert)
     .filter((item) => getAlertContentKey(item));
 
   const tier1 = negativeItems.filter((item) => item?.is_action_required);
@@ -314,15 +350,12 @@ function buildVisibleAlerts(alerts, reviews) {
 }
 
 export default function Dashboard() {
-  const { user, userProfile, refreshUserProfile } = useAuth();
+  const { user } = useAuth();
 
   const [reviews, setReviews] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [keywordAnalytics, setKeywordAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
-  const isVip = userProfile?.tier === 'vip';
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -434,8 +467,6 @@ export default function Dashboard() {
           <AlertsSection
             alerts={visibleAlerts}
             loading={loading}
-            isVip={isVip}
-            onUpgrade={() => setIsUpgradeModalOpen(true)}
           />
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -480,11 +511,6 @@ export default function Dashboard() {
         </>
       )}
 
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onUpgraded={refreshUserProfile}
-      />
     </div>
   );
 }

@@ -14,7 +14,7 @@ export default function FeedbackToolbar({
     <div className="flex flex-col gap-3 px-5 py-3 border-b border-slate-700/50 bg-slate-900/30 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2 text-sm text-slate-400">
         <Filter size={16} />
-        <span>{isLoading ? 'Đang tải...' : `${count} phản hồi`}</span>
+        <span>{isLoading ? 'Đang tải...' : `${count} phản hồi trong trang này`}</span>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

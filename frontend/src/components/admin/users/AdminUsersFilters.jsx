@@ -6,11 +6,9 @@ export default function AdminUsersFilters({
   searchTerm,
   roleFilter,
   statusFilter,
-  tierFilter,
   onSearchTermChange,
   onRoleFilterChange,
   onStatusFilterChange,
-  onTierFilterChange,
   onResetFilters,
 }) {
   return (
@@ -46,16 +44,6 @@ export default function AdminUsersFilters({
             <option value="all">Tất cả trạng thái</option>
             <option value="active">Hoạt động</option>
             <option value="blocked">Bị khóa</option>
-          </select>
-
-          <select
-            value={tierFilter}
-            onChange={(event) => onTierFilterChange(event.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
-          >
-            <option value="all">Tất cả gói</option>
-            <option value="free">Free</option>
-            <option value="vip">VIP</option>
           </select>
 
           <button

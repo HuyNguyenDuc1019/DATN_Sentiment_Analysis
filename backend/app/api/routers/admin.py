@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta, timezone
@@ -52,11 +52,6 @@ class AdminFeedbackBulkReview(BaseModel):
 class AdminFeedbackExportSelected(BaseModel):
     admin_id: str
     feedback_ids: list[str]
-
-
-class AdminFeedbackAutoReview(BaseModel):
-    admin_id: str
-    limit: int = 1000
 
 
 class AdminRetrainFlagRequest(BaseModel):
@@ -154,8 +149,7 @@ async def get_admin_users(admin_id: str = Depends(verify_admin)):
             supabase
             .table("profiles")
             .select(
-                "id, email, full_name, role, status, tier, "
-                "vip_started_at, vip_expires_at, created_at"
+                "id, email, full_name, role, status, created_at"
             )
             .order("created_at", desc=True)
             .execute()
@@ -186,22 +180,6 @@ async def update_user_action(
             "status": "active",
         }
 
-    elif request.action == "upgrade_vip":
-        vip_expires_at = now + timedelta(days=30)
-
-        update_payload = {
-            "tier": "vip",
-            "vip_started_at": now.isoformat(),
-            "vip_expires_at": vip_expires_at.isoformat(),
-        }
-
-    elif request.action == "downgrade_vip":
-        update_payload = {
-            "tier": "free",
-            "vip_started_at": None,
-            "vip_expires_at": None,
-        }
-
     else:
         raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
 
@@ -224,8 +202,6 @@ async def update_user_action(
             action_message = {
                 "ban": "khóa tài khoản",
                 "unban": "mở khóa tài khoản",
-                "upgrade_vip": "nâng cấp VIP 30 ngày",
-                "downgrade_vip": "hạ xuống Free",
             }.get(request.action, request.action)
 
             supabase.table("admin_activity_logs").insert({
@@ -322,58 +298,119 @@ async def get_admin_feedbacks(admin_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/feedback/auto-review")
-async def auto_review_feedback(
-    request: AdminFeedbackAutoReview,
+@router.get("/feedback/paged")
+async def get_admin_feedbacks_paged(
+    status: str = "pending",
+    search: Optional[str] = None,
+    confidence: str = "all",
+    mismatch: str = "all",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    priority: str = "all",
+    cursor_created_at: Optional[str] = None,
+    cursor_id: Optional[str] = None,
+    limit: int = Query(default=50, ge=1, le=200),
     admin_id: str = Depends(verify_admin),
 ):
-    """Duyệt tự động các trường hợp người dùng xác nhận nhãn AI không đổi.
-
-    Mọi trường hợp người dùng sửa nhãn vẫn được giữ ở trạng thái pending để
-    admin kiểm tra. Quy tắc này giảm thao tác nhưng không tự duyệt dữ liệu có
-    xung đột giữa AI và con người.
-    """
     try:
-        safe_limit = min(max(int(request.limit or 1000), 1), 5000)
-        response = (
-            supabase
-            .table("feedback_data")
-            .select("id, old_ai_label, corrected_label")
-            .eq("status", "pending")
-            .limit(safe_limit)
-            .execute()
-        )
+        response = supabase.rpc(
+            "get_admin_feedback_queue",
+            {
+                "p_status": status,
+                "p_search": search,
+                "p_confidence": confidence,
+                "p_mismatch": mismatch,
+                "p_date_from": date_from,
+                "p_date_to": date_to,
+                "p_priority": priority,
+                "p_before_created_at": cursor_created_at,
+                "p_before_id": cursor_id,
+                "p_limit": limit,
+            },
+        ).execute()
 
         rows = response.data or []
-        safe_ids = [
-            row["id"]
-            for row in rows
-            if row.get("old_ai_label") is not None
-            and row.get("corrected_label") is not None
-            and normalize_ai_label(row.get("old_ai_label"))
-            == normalize_ai_label(row.get("corrected_label"))
-        ]
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
 
-        if safe_ids:
-            (
-                supabase
-                .table("feedback_data")
-                .update({"status": "approved"})
-                .in_("id", safe_ids)
-                .execute()
-            )
+        for item in page_rows:
+            item["profiles"] = {
+                "id": item.get("user_id"),
+                "email": item.pop("profile_email", None),
+                "full_name": item.pop("profile_full_name", None),
+            }
+
+        last_item = page_rows[-1] if page_rows else None
+
+        return {
+            "items": page_rows,
+            "has_more": has_more,
+            "next_cursor": {
+                "created_at": last_item.get("created_at"),
+                "id": last_item.get("id"),
+            } if last_item else None,
+        }
+
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.get("/feedback/stats")
+async def get_admin_feedback_stats(admin_id: str = Depends(verify_admin)):
+    try:
+        response = supabase.rpc("get_admin_feedback_stats").execute()
+        data = response.data or {}
+
+        if isinstance(data, list):
+            data = data[0] if data else {}
+
+        return data
+
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.put("/feedback/bulk-review-fast")
+async def bulk_review_feedback_fast(
+    request: AdminFeedbackBulkReview,
+    admin_id: str = Depends(verify_admin),
+):
+    if not request.feedback_ids:
+        raise HTTPException(status_code=400, detail="Chưa chọn phản hồi nào.")
+
+    if request.action in ("reject", "edit_label") and not (request.reason and request.reason.strip()):
+        raise HTTPException(
+            status_code=400,
+            detail="Vui lòng nhập lý do trước khi từ chối/sửa nhãn hàng loạt.",
+        )
+
+    if request.action == "edit_label" and request.new_label not in (0, 1):
+        raise HTTPException(status_code=400, detail="Nhãn mới phải là 0 hoặc 1.")
+
+    try:
+        response = supabase.rpc(
+            "admin_bulk_review_feedback",
+            {
+                "p_admin_id": admin_id,
+                "p_feedback_ids": request.feedback_ids,
+                "p_action": request.action,
+                "p_reason": request.reason,
+                "p_new_label": request.new_label,
+            },
+        ).execute()
+
+        affected = response.data or 0
+        if isinstance(affected, list):
+            affected = affected[0] if affected else 0
 
         return {
             "status": "success",
-            "auto_approved": len(safe_ids),
-            "requires_audit": len(rows) - len(safe_ids),
-            "scanned": len(rows),
-            "message": f"Đã tự động duyệt {len(safe_ids)} phản hồi an toàn.",
+            "processed": affected,
+            "message": f"Đã xử lý {affected} phản hồi.",
         }
+
     except Exception as error:
-        if isinstance(error, HTTPException):
-            raise error
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail=str(error)) from error
 
 
 @router.put("/feedback/review")
@@ -505,40 +542,18 @@ async def update_system_settings(
 @router.get("/metrics")
 async def get_admin_metrics(admin_id: str = Depends(verify_admin)):
     try:
-        reviews_res = (
-            supabase
-            .table("scraped_reviews")
-            .select("ai_label", count="exact")
-            .execute()
-        )
+        response = supabase.rpc("get_admin_dashboard_metrics").execute()
+        data = response.data or {}
 
-        users_res = (
-            supabase
-            .table("profiles")
-            .select("id", count="exact")
-            .execute()
-        )
-
-        feedback_res = (
-            supabase
-            .table("feedback_data")
-            .select("id", count="exact")
-            .eq("status", "pending")
-            .execute()
-        )
-
-        data = reviews_res.data or []
-        total_reviews = len(data)
-        positive_count = sum(
-            1 for item in data
-            if normalize_ai_label(item.get("ai_label")) == 1
-        )
+        if isinstance(data, list):
+            data = data[0] if data else {}
 
         return {
-            "total_api_calls": total_reviews,
-            "total_users": users_res.count if hasattr(users_res, "count") else 0,
-            "pending_feedbacks": feedback_res.count if hasattr(feedback_res, "count") else 0,
-            "global_positive_ratio": round((positive_count / total_reviews) * 100, 1) if total_reviews > 0 else 0,
+            "total_analyzed_reviews": int(data.get("total_analyzed_reviews") or 0),
+            "total_api_calls": int(data.get("total_analyzed_reviews") or 0),
+            "total_users": int(data.get("total_users") or 0),
+            "pending_feedbacks": int(data.get("pending_feedbacks") or 0),
+            "global_positive_ratio": float(data.get("global_positive_ratio") or 0),
         }
 
     except Exception as e:
@@ -552,55 +567,13 @@ async def get_admin_sentiment_chart(
 ):
     try:
         safe_days = max(int(days or 7), 1)
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=safe_days - 1)
-
         response = (
             supabase
-            .table("scraped_reviews")
-            .select("ai_label, created_at")
-            .gte("created_at", start_date.isoformat())
-            .lte("created_at", end_date.isoformat())
+            .rpc("get_admin_sentiment_chart", {"p_days": safe_days})
             .execute()
         )
 
-        rows = response.data or []
-
-        grouped = defaultdict(lambda: {
-            "positive": 0,
-            "negative": 0,
-            "total": 0,
-        })
-
-        for index in range(safe_days):
-            day = (start_date + timedelta(days=index)).date().isoformat()
-            grouped[day]
-
-        for row in rows:
-            created_at = row.get("created_at")
-
-            if not created_at:
-                continue
-
-            date_key = str(created_at)[:10]
-            label = normalize_ai_label(row.get("ai_label"))
-
-            if label == 1:
-                grouped[date_key]["positive"] += 1
-            else:
-                grouped[date_key]["negative"] += 1
-
-            grouped[date_key]["total"] += 1
-
-        chart_data = [
-            {
-                "date": date,
-                "positive": values["positive"],
-                "negative": values["negative"],
-                "total": values["total"],
-            }
-            for date, values in sorted(grouped.items())
-        ]
+        chart_data = response.data or []
 
         return {
             "chart_data": chart_data,
@@ -677,8 +650,14 @@ async def get_feedback_confidence_map(admin_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/transactions")
+@router.get("/transactions", include_in_schema=False)
 async def get_admin_transactions(admin_id: str = Depends(verify_admin)):
+    raise HTTPException(
+        status_code=410,
+        detail="Chức năng quản lý giao dịch nâng cấp đã được loại bỏ.",
+    )
+
+    # Legacy implementation kept unreachable to preserve old transaction data.
     try:
         res = (
             supabase
@@ -728,11 +707,17 @@ async def get_admin_transactions(admin_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/transactions/confirm")
+@router.put("/transactions/confirm", include_in_schema=False)
 async def confirm_admin_transaction(
     request: AdminTransactionActionRequest,
     admin_id: str = Depends(verify_admin),
 ):
+    raise HTTPException(
+        status_code=410,
+        detail="Luồng xác nhận thanh toán và nâng cấp tài khoản đã được loại bỏ.",
+    )
+
+    # Legacy implementation kept unreachable to preserve old transaction data.
     try:
         transaction_res = (
             supabase
@@ -831,11 +816,17 @@ async def confirm_admin_transaction(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/transactions/cancel")
+@router.put("/transactions/cancel", include_in_schema=False)
 async def cancel_admin_transaction(
     request: AdminTransactionActionRequest,
     admin_id: str = Depends(verify_admin),
 ):
+    raise HTTPException(
+        status_code=410,
+        detail="Chức năng quản lý giao dịch nâng cấp đã được loại bỏ.",
+    )
+
+    # Legacy implementation kept unreachable to preserve old transaction data.
     try:
         transaction_res = (
             supabase

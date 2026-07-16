@@ -1,7 +1,6 @@
-import { BadgeCheck, CalendarDays, Crown, History, Mail, Shield, Users, X } from 'lucide-react';
+import { BadgeCheck, CalendarDays, History, Mail, Shield, Users, X } from 'lucide-react';
 
 import StatusBadge from './StatusBadge';
-import TierBadge from './TierBadge';
 
 export default function UserDetailModal({
   selectedUser,
@@ -65,13 +64,6 @@ export default function UserDetailModal({
               label="Trạng thái"
             >
               <StatusBadge status={selectedUser.status} />
-            </UserInfoBox>
-
-            <UserInfoBox
-              icon={<Crown className="h-4 w-4" />}
-              label="Gói dịch vụ"
-            >
-              <TierBadge tier={selectedUser.tier} />
             </UserInfoBox>
 
             <UserInfoBox

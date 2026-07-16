@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 
-export default function AlertsSection({ alerts, loading, isVip, onUpgrade }) {
+export default function AlertsSection({ alerts, loading }) {
   const isSingleAlert = alerts.length === 1;
 
   return (
@@ -22,7 +22,7 @@ export default function AlertsSection({ alerts, loading, isVip, onUpgrade }) {
         </span>
       </div>
 
-      <div className={!isVip ? 'pointer-events-none blur-sm select-none' : ''}>
+      <div>
         {alerts.length ? (
           <div className={`grid grid-cols-1 gap-3 ${isSingleAlert ? '' : 'lg:grid-cols-2'}`}>
             {alerts.map((alert, index) => (
@@ -47,17 +47,6 @@ export default function AlertsSection({ alerts, loading, isVip, onUpgrade }) {
         )}
       </div>
 
-      {!isVip && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/45 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={onUpgrade}
-            className="rounded-xl border border-amber-400/30 bg-slate-950/80 px-5 py-3 text-sm font-semibold text-amber-200 shadow-lg shadow-rose-950/30 transition-colors hover:bg-slate-900"
-          >
-            👑 Nâng cấp VIP để xem cảnh báo khủng hoảng
-          </button>
-        </div>
-      )}
     </section>
   );
 }

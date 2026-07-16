@@ -3,7 +3,6 @@ import { AlertTriangle, Database, Trash2 } from 'lucide-react';
 import DatasetList from './DatasetList';
 
 export default function DataSettingsTab({
-  isVip,
   retentionDays,
   setRetentionDays,
   feedbackConfidenceThreshold,
@@ -32,23 +31,11 @@ export default function DataSettingsTab({
             onChange={(event) => setRetentionDays(Number(event.target.value))}
             className="w-full max-w-sm bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-xl py-3 px-4 focus:outline-none cursor-pointer"
           >
-            <option value={7}>7 ngày (Gói Free)</option>
-            <option value={30} disabled={!isVip}>
-              30 ngày (VIP)
-            </option>
-            <option value={90} disabled={!isVip}>
-              90 ngày (VIP)
-            </option>
-            <option value={9999} disabled={!isVip}>
-              Lưu trữ vĩnh viễn (VIP)
-            </option>
+            <option value={7}>7 ngày</option>
+            <option value={30}>30 ngày</option>
+            <option value={90}>90 ngày</option>
+            <option value={9999}>Lưu trữ vĩnh viễn</option>
           </select>
-
-          {!isVip && (
-            <p className="mt-2 text-xs text-slate-500">
-              Gói Free chỉ được lưu dữ liệu tối đa 7 ngày. Nâng cấp VIP để chọn 30/90 ngày.
-            </p>
-          )}
         </div>
 
         <div className="pt-6 border-t border-slate-700/50">

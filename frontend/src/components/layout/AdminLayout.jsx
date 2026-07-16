@@ -13,7 +13,6 @@ import {
   Sparkles,
   Home,
   LogOut,
-  CreditCard,
 } from 'lucide-react';
 import { getAdminRoleLabel, getDisplayInitials } from '../../pages/admin/adminHelpers'; 
 import Footer from './Footer';
@@ -159,9 +158,6 @@ const AdminLayout = () => {
           </NavLink>
 
 
-           <NavLink to="/admin/transactions" className={getLinkClass} onClick={() => setIsMobileMenuOpen(false)}>
-            <CreditCard className="w-5 h-5" />Quản lý Giao dịch
-          </NavLink>
                     <NavLink
             to="/admin/settings"
             className={getLinkClass}

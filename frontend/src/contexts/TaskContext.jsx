@@ -48,7 +48,7 @@ const detectUrlSource = (value) => {
 };
 
 export function TaskProvider({ children }) {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
 
   const batchAbortRef = useRef(null);
   const urlAbortRef = useRef(null);
@@ -237,15 +237,8 @@ export function TaskProvider({ children }) {
     if (urlLoading) return;
 
     const sourceInfo = detectUrlSource(cleanUrl);
-    const isVip = userProfile?.tier === 'vip';
-
     if (sourceInfo.type === 'unknown') {
       toast.error('Hệ thống hiện chỉ hỗ trợ link Foody và Google Maps.');
-      return;
-    }
-
-    if (sourceInfo.type === 'google_maps' && !isVip) {
-      toast.error('Tính năng phân tích Google Maps chỉ dành cho tài khoản VIP.');
       return;
     }
 
@@ -363,7 +356,6 @@ export function TaskProvider({ children }) {
       urlLoading,
       urlFilter,
       user?.id,
-      userProfile?.tier,
     ],
   );
 

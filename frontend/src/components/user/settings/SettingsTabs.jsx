@@ -1,9 +1,8 @@
-import { Bell, BrainCircuit, CreditCard, Database } from 'lucide-react';
+import { Bell, BrainCircuit, Database } from 'lucide-react';
 
 const tabs = [
   { id: 'ai', label: 'Cấu hình AI', icon: <BrainCircuit size={18} /> },
   { id: 'notifications', label: 'Thông báo', icon: <Bell size={18} /> },
-  { id: 'billing', label: 'Gói & Thanh toán', icon: <CreditCard size={18} /> },
   { id: 'data', label: 'Quản lý Dữ liệu', icon: <Database size={18} /> },
 ];
 

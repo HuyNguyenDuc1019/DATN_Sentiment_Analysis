@@ -1,8 +1,7 @@
-import { Crown, Loader2, RefreshCw, Save, Scale } from 'lucide-react';
+import { Loader2, RefreshCw, Save, Scale } from 'lucide-react';
 
 export default function CompareHeader({
   results,
-  isVip,
   isSaving,
   onReset,
   onSaveComparison,
@@ -40,7 +39,6 @@ export default function CompareHeader({
         >
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Lưu so sánh
-          {!isVip && <Crown className="h-4 w-4 text-amber-200" />}
         </button>
       </div>
     </div>

@@ -1,17 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
 
 from app.database import supabase
 
 router = APIRouter(prefix="/api/user", tags=["User"])
-
-
-class UpgradeRequest(BaseModel):
-    user_id: str
-    amount: float = 99000
 
 
 class UserSettingsUpdate(BaseModel):
@@ -25,52 +20,6 @@ class UserSettingsUpdate(BaseModel):
     retention_days: Optional[int] = None
     feedback_confidence_threshold: Optional[float] = None
 
-
-@router.put("/upgrade")
-async def upgrade_to_vip(req: UpgradeRequest):
-    try:
-        now = datetime.utcnow()
-        vip_expires_at = now + timedelta(days=30)
-
-        update_res = (
-            supabase
-            .table("profiles")
-            .update({
-                "tier": "vip",
-                "vip_started_at": now.isoformat(),
-                "vip_expires_at": vip_expires_at.isoformat(),
-            })
-            .eq("id", req.user_id)
-            .execute()
-        )
-
-        if not update_res.data:
-            raise HTTPException(status_code=400, detail="Không tìm thấy người dùng.")
-
-        transaction_data = {
-            "user_id": req.user_id,
-            "amount": req.amount,
-            "status": "paid",
-            "created_at": now.isoformat(),
-        }
-
-        try:
-            supabase.table("transactions").insert(transaction_data).execute()
-        except Exception as transaction_error:
-            print(f"⚠️ Không thể ghi giao dịch VIP: {transaction_error}")
-
-        return {
-            "status": "success",
-            "message": "Nâng cấp VIP thành công! Tài khoản có hiệu lực 30 ngày.",
-            "profile": update_res.data[0],
-            "vip_started_at": now.isoformat(),
-            "vip_expires_at": vip_expires_at.isoformat(),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/settings")
 async def get_user_settings(user_id: str):
@@ -279,7 +228,23 @@ async def delete_user_dataset(
                 "deleted_count": 0,
             }
 
-        supabase.table("scraped_reviews").delete().in_("id", review_ids).execute()
+        # feedback_data là bảng con và đang giữ khóa ngoại scraped_review_id.
+        # Phải xóa các phản hồi liên quan trước khi xóa scraped_reviews.
+        (
+            supabase
+            .table("feedback_data")
+            .delete()
+            .in_("scraped_review_id", review_ids)
+            .execute()
+        )
+
+        (
+            supabase
+            .table("scraped_reviews")
+            .delete()
+            .in_("id", review_ids)
+            .execute()
+        )
 
         return {
             "status": "success",
@@ -303,6 +268,16 @@ async def clear_user_data(user_id: str):
     try:
         if not user_id:
             raise HTTPException(status_code=400, detail="Thiếu user_id.")
+
+        # Xóa bảng con trước để không vi phạm
+        # feedback_data_scraped_review_id_fkey.
+        (
+            supabase
+            .table("feedback_data")
+            .delete()
+            .eq("user_id", user_id)
+            .execute()
+        )
 
         delete_res = (
             supabase

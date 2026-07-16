@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Clock3,
-  Crown,
   Download,
   LogIn,
   RefreshCw,
@@ -45,18 +44,6 @@ const ACTION_META = {
     tone: 'text-emerald-300 bg-emerald-500/10',
     title: 'Tài khoản được mở khóa',
     pluralText: (count) => `mở khóa ${count} tài khoản liên tiếp`,
-  },
-  user_upgraded_vip: {
-    icon: Crown,
-    tone: 'text-indigo-300 bg-indigo-500/10',
-    title: 'Nâng cấp VIP',
-    pluralText: (count) => `nâng cấp ${count} tài khoản lên VIP liên tiếp`,
-  },
-  user_downgraded_vip: {
-    icon: Crown,
-    tone: 'text-slate-300 bg-slate-500/10',
-    title: 'Hạ gói dịch vụ',
-    pluralText: (count) => `hạ ${count} tài khoản xuống Free liên tiếp`,
   },
   dataset_exported: {
     icon: Download,
@@ -251,7 +238,7 @@ const AdminActivityLog = () => {
         <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-8 text-center">
           <p className="font-semibold text-slate-200">Chưa có hoạt động nào</p>
           <p className="mt-2 text-sm text-slate-500">
-            Các thao tác duyệt phản hồi, khóa tài khoản, nâng cấp VIP... sẽ hiển thị tại đây.
+            Các thao tác duyệt phản hồi, khóa và mở khóa tài khoản sẽ hiển thị tại đây.
           </p>
         </div>
       ) : (

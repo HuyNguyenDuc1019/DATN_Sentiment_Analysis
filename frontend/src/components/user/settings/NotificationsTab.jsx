@@ -1,10 +1,8 @@
 export default function NotificationsTab({
-  isVip,
   alertEmail,
   setAlertEmail,
   weeklyReport,
   setWeeklyReport,
-  onUpgrade,
 }) {
   return (
     <div className="flex-1 flex flex-col">
@@ -17,23 +15,11 @@ export default function NotificationsTab({
           <div>
             <div className="text-sm font-medium text-white mb-1 flex items-center gap-2">
               Cảnh báo khủng hoảng tức thời
-              {!isVip && (
-                <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-500 text-[10px] uppercase font-bold rounded">
-                  VIP
-                </span>
-              )}
             </div>
           </div>
           <ToggleButton
-            checked={alertEmail && isVip}
-            disabled={!isVip}
-            onClick={() => {
-              if (!isVip) {
-                onUpgrade();
-                return;
-              }
-              setAlertEmail((prev) => !prev);
-            }}
+            checked={alertEmail}
+            onClick={() => setAlertEmail((prev) => !prev)}
           />
         </div>
 

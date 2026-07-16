@@ -13,14 +13,17 @@ export default function QueuePanel({
   mode,
 }) {
   return (
-    <div className="flex max-h-[720px] min-h-[520px] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/40">
+    <div className="flex max-h-[680px] min-h-[500px] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/40">
       <div className="shrink-0 border-b border-slate-700 p-4">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-white">
-          <List className="h-4 w-4 text-indigo-400" />
-          {mode === 'priority' ? 'Cần kiểm tra' : 'Danh sách bình luận'}
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-white">
+            <List className="h-4 w-4 text-indigo-400" />
+            {mode === 'priority' ? 'AI chưa chắc' : 'Danh sách bình luận'}
+          </h2>
+          <span className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-xs font-bold text-indigo-300">{queue.length}</span>
+        </div>
         <p className="mt-1 text-xs text-slate-500">
-          {loading ? 'Đang tải...' : `${queue.length} bình luận · đã xử lý ${reviewedCount}`}
+          {loading ? 'Đang tải...' : `Chọn bình luận để kiểm tra · đã xử lý ${reviewedCount}`}
         </p>
       </div>
 

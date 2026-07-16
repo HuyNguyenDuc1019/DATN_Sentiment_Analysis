@@ -121,7 +121,7 @@ export default function HelpCenterModal({ onClose }) {
                 <input
                   value={keyword}
                   onChange={(event) => handleSearch(event.target.value)}
-                  placeholder="Tìm CSV, VIP, cảnh báo..."
+                  placeholder="Tìm CSV, cảnh báo, báo cáo..."
                   className="h-11 w-full rounded-xl border border-slate-700 bg-slate-900/70 pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>

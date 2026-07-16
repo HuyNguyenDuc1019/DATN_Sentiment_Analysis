@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 
 # ==========================================
@@ -34,8 +34,12 @@ class FeedbackRequest(BaseModel):
     corrected_label: int
     user_id: str
     scraped_review_id: Optional[str] = None
-    status: str = "corrected"
+    status: Literal["confirmed", "corrected", "skipped"] = "corrected"
     include_retrain: bool = False
+
+
+class FeedbackBatchRequest(BaseModel):
+    items: List[FeedbackRequest] = Field(..., min_length=1, max_length=500)
 
 # ==========================================
 # CẤU TRÚC DỮ LIỆU DÀNH CHO ADMIN
@@ -48,7 +52,7 @@ class AdminSettingUpdate(BaseModel):
 class AdminActionRequest(BaseModel):
     admin_id: str
     target_user_id: str
-    action: str  # Nhận 1 trong 3 giá trị: "ban", "unban", "upgrade_vip"
+    action: str  # Nhận một trong hai giá trị: "ban", "unban"
 
 class AdminFeedbackReview(BaseModel):
     admin_id: str

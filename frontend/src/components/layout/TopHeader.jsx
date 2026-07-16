@@ -11,10 +11,8 @@ import {
   Link2,
   Search,
   X,
-  Crown,
 } from 'lucide-react';
 import { useTasks } from '../../contexts/TaskContext';
-import { useAuth } from '../../contexts/AuthContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
 function readThemeMode() {
@@ -28,7 +26,6 @@ function readThemeMode() {
 }
 
 export default function TopHeader() {
-  const { userProfile } = useAuth();
   const { fullName, avatarUrl, initials } = useUserProfile();
   const { batch, urlAnalyzer } = useTasks();
   const [keyword, setKeyword] = useState('');
@@ -38,7 +35,6 @@ export default function TopHeader() {
   const batchCount = batch.results?.length || 0;
   const urlCount = urlAnalyzer.count || urlAnalyzer.results?.length || 0;
   const isWorking = batch.loading || urlAnalyzer.loading;
-  const isVip = userProfile?.tier === 'vip';
 
   useEffect(() => {
     const syncTheme = () => setDarkMode(readThemeMode());
@@ -228,25 +224,16 @@ export default function TopHeader() {
 
         <Link
           to="/profile"
-          title={isVip ? `${fullName} - Tài khoản VIP` : `Mở hồ sơ của ${fullName}`}
+          title={`Mở hồ sơ của ${fullName}`}
           className={`relative ml-2 flex h-8 w-8 cursor-pointer items-center justify-center overflow-visible rounded-full border text-xs font-semibold transition-colors ${
             darkMode
-              ? isVip
-                ? 'border-amber-400/70 bg-slate-700 text-slate-300 shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:border-amber-300'
-                : 'border-slate-600 bg-slate-700 text-slate-300 hover:border-indigo-400'
-              : isVip
-                ? 'border-amber-400 bg-slate-100 text-slate-700 shadow-sm shadow-amber-300/40 hover:border-amber-500'
-                : 'border-slate-300 bg-slate-100 text-slate-700 hover:border-indigo-500'
+              ? 'border-slate-600 bg-slate-700 text-slate-300 hover:border-indigo-400'
+              : 'border-slate-300 bg-slate-100 text-slate-700 hover:border-indigo-500'
           }`}
         >
           <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full">
             {avatarUrl ? <img src={avatarUrl} alt={`Ảnh đại diện của ${fullName}`} className="h-full w-full object-cover" /> : initials}
           </span>
-          {isVip && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/30">
-              <Crown className="h-2.5 w-2.5" fill="currentColor" />
-            </span>
-          )}
         </Link>
       </div>
 

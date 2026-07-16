@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { useTasks } from '../../contexts/TaskContext';
-import { useAuth } from '../../contexts/AuthContext';
-import UpgradeModal from '../../components/common/UpgradeModal';
 
 import MiniStat from '../../components/user/batch/MiniStat';
 import UploadCard from '../../components/user/batch/UploadCard';
@@ -15,7 +12,6 @@ import { getBatchStats, normalizeBatchResults } from '../../utils/user/batchUtil
 
 export default function BatchPrediction() {
   const inputRef = useRef(null);
-  const { userProfile, refreshUserProfile } = useAuth();
   const { batch } = useTasks();
 
   const {
@@ -32,10 +28,7 @@ export default function BatchPrediction() {
   } = batch;
 
   const [page, setPage] = useState(1);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
   const pageSize = 8;
-  const isVip = userProfile?.tier === 'vip';
 
   useEffect(() => {
     setPage(1);
@@ -57,34 +50,11 @@ export default function BatchPrediction() {
       return;
     }
 
-    if (!isVip && selectedFile.size > 5 * 1024 * 1024) {
-      toast.error('Gói Free chỉ hỗ trợ file tối đa 5MB.');
-      setIsUpgradeModalOpen(true);
-      return;
-    }
-
     selectFile(selectedFile);
   };
 
   const handleAnalyze = async () => {
-    if (!isVip && texts.length > 50) {
-      toast.error('Gói Free chỉ hỗ trợ tối đa 50 bình luận/lần.');
-      setIsUpgradeModalOpen(true);
-      return;
-    }
-
-    try {
-      await analyze();
-    } catch (error) {
-      const status = error?.status || error?.response?.status;
-
-      if (status === 403 || String(error?.message || '').includes('403')) {
-        setIsUpgradeModalOpen(true);
-        return;
-      }
-
-      throw error;
-    }
+    await analyze();
   };
 
   return (
@@ -119,7 +89,6 @@ export default function BatchPrediction() {
             count={texts.length}
             inputRef={inputRef}
             onFile={handleFileSelect}
-            isVip={isVip}
           />
 
           <ConfigCard
@@ -130,7 +99,6 @@ export default function BatchPrediction() {
             loading={loading}
             onAnalyze={handleAnalyze}
             onStop={stop}
-            isVip={isVip}
           />
 
           <ProcessSummary
@@ -139,7 +107,6 @@ export default function BatchPrediction() {
             column={column}
             resultCount={tableData.length}
             averageConfidence={averageConfidence}
-            isVip={isVip}
           />
         </div>
 
@@ -151,19 +118,12 @@ export default function BatchPrediction() {
           page={page}
           totalPages={totalPages}
           onPageChange={setPage}
-          isVip={isVip}
-          onUpgrade={() => setIsUpgradeModalOpen(true)}
           positiveCount={positiveCount}
           negativeCount={negativeCount}
           averageConfidence={averageConfidence}
         />
       </div>
 
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onUpgraded={refreshUserProfile}
-      />
     </div>
   );
 }

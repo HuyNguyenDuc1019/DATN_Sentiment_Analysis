@@ -189,6 +189,12 @@ export const submitFeedback = (payload) => {
   return post(`${PYTHON_API}/feedback`, payload);
 };
 
+export const submitFeedbackBatch = (payloads) => {
+  return post(`${PYTHON_API}/feedback/batch`, {
+    items: payloads,
+  });
+};
+
 export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) => {
   return get(`${PYTHON_API}/api/dashboard/alerts`, {
     user_id: userId,
@@ -200,12 +206,5 @@ export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) => {
   return get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
-  });
-};
-
-export const createVipPayment = async (userId, amount = 50000) => {
-  return post(`${PYTHON_API}/payment/create`, {
-    user_id: userId,
-    amount,
   });
 };

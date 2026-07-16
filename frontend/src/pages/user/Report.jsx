@@ -3,7 +3,6 @@ import { Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
-import UpgradeModal from '../../components/common/UpgradeModal';
 
 import ReportSkeleton from '../../components/user/report/ReportSkeleton';
 import FilterBar from '../../components/user/report/FilterBar';
@@ -89,7 +88,7 @@ function getReviewSource(item) {
 }
 
 export default function Report() {
-  const { user, userProfile, refreshUserProfile } = useAuth();
+  const { user } = useAuth();
   const reportRef = useRef(null);
 
   const [reviews, setReviews] = useState([]);
@@ -101,9 +100,6 @@ export default function Report() {
   });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
-  const isVip = userProfile?.tier === 'vip';
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -240,11 +236,6 @@ export default function Report() {
   ]);
 
   const exportPdf = async () => {
-    if (!isVip) {
-      setIsUpgradeModalOpen(true);
-      return;
-    }
-
     if (!reportRef.current || exporting) return;
 
     setExporting(true);
@@ -307,14 +298,10 @@ export default function Report() {
           type="button"
           onClick={exportPdf}
           disabled={exporting || loading}
-          className={`flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 font-medium shadow-lg transition-colors disabled:opacity-60 ${
-            isVip
-              ? 'bg-indigo-600 text-white shadow-indigo-600/20 hover:bg-indigo-700'
-              : 'bg-slate-700 text-slate-300 shadow-slate-950/20 hover:bg-slate-600'
-          }`}
+          className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 font-medium text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-60"
         >
           <Download className="h-4 w-4" />
-          {exporting ? 'Đang tạo PDF...' : isVip ? 'Xuất PDF' : '🔒 Xuất PDF'}
+          {exporting ? 'Đang tạo PDF...' : 'Xuất PDF'}
         </button>
       </div>
 
@@ -336,11 +323,7 @@ export default function Report() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <ComparisonChartCard groups={report.groups} />
 
-          <WordCloudCard
-            words={report.words}
-            isVip={isVip}
-            onUpgrade={() => setIsUpgradeModalOpen(true)}
-          />
+          <WordCloudCard words={report.words} />
         </div>
 
         <PerformanceSummaryCard
@@ -351,11 +334,6 @@ export default function Report() {
         />
       </div>
 
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onUpgraded={refreshUserProfile}
-      />
     </div>
   );
 }

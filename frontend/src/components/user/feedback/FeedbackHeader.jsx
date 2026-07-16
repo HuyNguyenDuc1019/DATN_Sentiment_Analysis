@@ -8,7 +8,7 @@ export default function FeedbackHeader() {
       </div>
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white">Duyệt phản hồi</h1>
-        <p className="mt-1 text-sm text-slate-400">Xác nhận dự đoán đúng hoặc chọn lại nhãn khi AI đoán sai.</p>
+        <p className="mt-1 text-sm text-slate-400">Mỗi bình luận chỉ cần một lựa chọn: xác nhận AI đúng hoặc đổi sang nhãn còn lại.</p>
       </div>
     </div>
   );

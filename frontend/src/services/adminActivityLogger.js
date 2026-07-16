@@ -98,10 +98,10 @@ export async function fetchRecentAdminActivities(limit = 50) {
  *
  * Ví dụ:
  * await logAdminActivity({
- *   actionType: 'user_upgraded_vip',
+ *   actionType: 'user_banned',
  *   targetType: 'user',
  *   targetId: targetUser.id,
- *   description: `nâng cấp tài khoản ${targetUser.email} lên VIP`,
+ *   description: `khóa tài khoản ${targetUser.email}`,
  * });
  */
 export async function logAdminActivity({

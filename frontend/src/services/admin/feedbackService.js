@@ -92,23 +92,40 @@ export async function fetchAdminFeedback(adminId) {
   return response.json();
 }
 
-export async function autoReviewSafeFeedback({ adminId, limit = 1000 }) {
-  const response = await fetch(
-    `${API_BASE_URL}/api/admin/feedback/auto-review?admin_id=${encodeURIComponent(adminId)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        admin_id: adminId,
-        limit,
-      }),
-    },
-  );
+export async function fetchAdminFeedbackPage({ adminId, filters, cursor, limit = 50 }) {
+  const params = new URLSearchParams({
+    admin_id: adminId,
+    status: filters.status || 'pending',
+    confidence: filters.confidence || 'all',
+    mismatch: filters.mismatch || 'all',
+    priority: filters.priority || 'all',
+    limit: String(limit),
+  });
 
+  if (filters.search?.trim()) params.set('search', filters.search.trim());
+  if (filters.dateFrom) params.set('date_from', new Date(`${filters.dateFrom}T00:00:00`).toISOString());
+  if (filters.dateTo) params.set('date_to', new Date(`${filters.dateTo}T23:59:59.999`).toISOString());
+  if (cursor?.createdAt) params.set('cursor_created_at', cursor.createdAt);
+  if (cursor?.id) params.set('cursor_id', cursor.id);
+
+  const response = await fetch(`${API_BASE_URL}/api/admin/feedback/paged?${params.toString()}`);
   const data = await readJson(response);
 
   if (!response.ok) {
-    throw new Error(data?.detail || 'Không thể tự động xử lý phản hồi.');
+    throw new Error(data?.detail || 'Không tải được phản hồi.');
+  }
+
+  return data;
+}
+
+export async function fetchAdminFeedbackStats(adminId) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/admin/feedback/stats?admin_id=${encodeURIComponent(adminId)}`,
+  );
+  const data = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(data?.detail || 'Không tải được thống kê phản hồi.');
   }
 
   return data;
@@ -181,7 +198,7 @@ export async function exportRetrainDataset(adminId) {
 }
 
 export async function bulkReviewFeedback({ adminId, feedbackIds, action, reason, newLabel }) {
-  return fetch(`${API_BASE_URL}/api/admin/feedback/bulk-review?admin_id=${encodeURIComponent(adminId)}`, {
+  return fetch(`${API_BASE_URL}/api/admin/feedback/bulk-review-fast?admin_id=${encodeURIComponent(adminId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

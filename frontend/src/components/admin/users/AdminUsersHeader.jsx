@@ -10,7 +10,7 @@ export default function AdminUsersHeader({
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-wide text-white">Quản lý Người dùng</h1>
-        <p className="text-sm text-slate-400">Quản trị tài khoản, phân quyền và nâng cấp dịch vụ.</p>
+        <p className="text-sm text-slate-400">Quản trị tài khoản, phân quyền và trạng thái hoạt động.</p>
       </div>
 
       <div className="flex items-center gap-3">

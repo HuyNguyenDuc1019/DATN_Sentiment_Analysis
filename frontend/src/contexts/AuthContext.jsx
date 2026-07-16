@@ -28,10 +28,6 @@ function storeProfileState(profile) {
     localStorage.setItem('user_role', profile.role);
   }
 
-  if (profile.tier) {
-    localStorage.setItem('userTier', profile.tier);
-    localStorage.setItem('user_tier', profile.tier);
-  }
 }
 
 export function AuthProvider({ children }) {
@@ -54,7 +50,7 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabase
   .from('profiles')
   .select(
-    'id, email, full_name, avatar_url, role, status, tier, vip_started_at, vip_expires_at, created_at',
+    'id, email, full_name, avatar_url, role, status, created_at',
   )
   .eq('id', targetUserId)
   .maybeSingle();
