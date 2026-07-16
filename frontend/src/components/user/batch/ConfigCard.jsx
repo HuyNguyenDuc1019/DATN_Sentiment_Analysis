@@ -8,7 +8,6 @@ export default function ConfigCard({
   loading,
   onAnalyze,
   onStop,
-  isVip,
 }) {
   const ready = !disabled || loading;
 
@@ -103,11 +102,6 @@ export default function ConfigCard({
         </div>
       )}
 
-      {!isVip && (
-        <p className="mt-4 text-center text-xs text-slate-500">
-          Free: tối đa 50 bình luận/lần.
-        </p>
-      )}
     </div>
   );
 }

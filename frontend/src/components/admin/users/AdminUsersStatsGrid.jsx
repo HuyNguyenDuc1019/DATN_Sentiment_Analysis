@@ -1,4 +1,4 @@
-import { Crown, Shield, UserRound, Users } from 'lucide-react';
+import { Ban, BadgeCheck, Shield, Users } from 'lucide-react';
 
 const statCards = [
   {
@@ -14,16 +14,16 @@ const statCards = [
     valueClass: 'text-indigo-400',
   },
   {
-    key: 'normalUsers',
-    title: 'User thường',
-    icon: <UserRound className="h-5 w-5 text-sky-400" />,
-    valueClass: 'text-sky-400',
+    key: 'activeUsers',
+    title: 'Đang hoạt động',
+    icon: <BadgeCheck className="h-5 w-5 text-emerald-400" />,
+    valueClass: 'text-emerald-400',
   },
   {
-    key: 'vipUsers',
-    title: 'VIP',
-    icon: <Crown className="h-5 w-5 text-violet-400" />,
-    valueClass: 'text-violet-400',
+    key: 'blockedUsers',
+    title: 'Đã khóa',
+    icon: <Ban className="h-5 w-5 text-rose-400" />,
+    valueClass: 'text-rose-400',
   },
 ];
 

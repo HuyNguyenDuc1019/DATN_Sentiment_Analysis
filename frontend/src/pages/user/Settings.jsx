@@ -2,12 +2,10 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
-import UpgradeModal from '../../components/common/UpgradeModal';
 
 import SettingsTabs from '../../components/user/settings/SettingsTabs';
 import AiSettingsTab from '../../components/user/settings/AiSettingsTab';
 import NotificationsTab from '../../components/user/settings/NotificationsTab';
-import BillingTab from '../../components/user/settings/BillingTab';
 import DataSettingsTab from '../../components/user/settings/DataSettingsTab';
 import DatasetDeleteModal from '../../components/user/settings/DatasetDeleteModal';
 import ClearDataModal from '../../components/user/settings/ClearDataModal';
@@ -24,16 +22,12 @@ import {
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('ai');
 
-  const { user, profile, userProfile, refreshUserProfile } = useAuth();
-
-  const currentProfile = userProfile || profile;
+  const { user } = useAuth();
   const userId = user?.id;
-  const isVip = currentProfile?.tier === 'vip';
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
   const [threshold, setThreshold] = useState(50);
@@ -68,8 +62,7 @@ export default function Settings() {
           setAlertEmail(Boolean(data.alert_email ?? false));
           setWeeklyReport(Boolean(data.weekly_report ?? true));
 
-          const nextRetentionDays = Number(data.retention_days || (isVip ? 30 : 7));
-          setRetentionDays(isVip ? nextRetentionDays : 7);
+          setRetentionDays(Number(data.retention_days || 30));
 
           setFeedbackConfidenceThreshold(
             Math.min(
@@ -87,13 +80,7 @@ export default function Settings() {
     };
 
     loadSettings();
-  }, [userId, isVip]);
-
-  useEffect(() => {
-    if (!isVip && retentionDays !== 7) {
-      setRetentionDays(7);
-    }
-  }, [isVip, retentionDays]);
+  }, [userId]);
 
   const loadUserDatasets = async () => {
     if (!userId) return;
@@ -132,7 +119,7 @@ export default function Settings() {
         custom_sensitive_words: stopWords,
         alert_email: Boolean(alertEmail),
         weekly_report: Boolean(weeklyReport),
-        retention_days: isVip ? Number(retentionDays) : 7,
+        retention_days: Number(retentionDays),
         feedback_confidence_threshold: Number(feedbackConfidenceThreshold),
       });
 
@@ -266,38 +253,24 @@ export default function Settings() {
             <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 rounded-2xl p-8 min-h-[500px] h-full flex flex-col">
               {activeTab === 'ai' && (
                 <AiSettingsTab
-                  isVip={isVip}
                   threshold={threshold}
                   setThreshold={setThreshold}
                   stopWords={stopWords}
                   setStopWords={setStopWords}
-                  onUpgrade={() => setIsUpgradeModalOpen(true)}
                 />
               )}
 
               {activeTab === 'notifications' && (
                 <NotificationsTab
-                  isVip={isVip}
                   alertEmail={alertEmail}
                   setAlertEmail={setAlertEmail}
                   weeklyReport={weeklyReport}
                   setWeeklyReport={setWeeklyReport}
-                  onUpgrade={() => setIsUpgradeModalOpen(true)}
                 />
               )}
 
-              {activeTab === 'billing' && (
-  <BillingTab
-    isVip={isVip}
-    profile={currentProfile}
-    vipStartedAt={currentProfile?.vip_started_at}
-    vipExpiresAt={currentProfile?.vip_expires_at}
-    onUpgrade={() => setIsUpgradeModalOpen(true)}
-  />
-)}
               {activeTab === 'data' && (
                 <DataSettingsTab
-                  isVip={isVip}
                   retentionDays={retentionDays}
                   setRetentionDays={setRetentionDays}
                   feedbackConfidenceThreshold={feedbackConfidenceThreshold}
@@ -338,11 +311,6 @@ export default function Settings() {
         onConfirm={handleConfirmClearAllData}
       />
 
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onUpgraded={refreshUserProfile}
-      />
     </>
   );
 }

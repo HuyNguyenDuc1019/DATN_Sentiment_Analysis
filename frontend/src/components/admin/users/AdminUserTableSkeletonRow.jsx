@@ -4,7 +4,6 @@ export default function AdminUserTableSkeletonRow() {
       <td className="px-5 py-4"><div className="w-40 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
       <td className="px-5 py-4"><div className="w-16 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
       <td className="px-5 py-4"><div className="w-24 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
-      <td className="px-5 py-4"><div className="w-16 h-6 bg-slate-700/50 rounded-full animate-pulse" /></td>
       <td className="px-5 py-4"><div className="w-36 h-10 bg-slate-700/50 rounded animate-pulse" /></td>
       <td className="px-5 py-4"><div className="w-28 h-4 bg-slate-700/50 rounded animate-pulse" /></td>
       <td className="px-5 py-4 text-right">

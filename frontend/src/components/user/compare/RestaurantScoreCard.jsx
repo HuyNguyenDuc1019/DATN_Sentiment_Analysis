@@ -35,6 +35,12 @@ export default function RestaurantScoreCard({ item, index }) {
               Xem nguồn <ExternalLink className="h-3 w-3" />
             </a>
           )}
+          <p className="mt-2 text-xs text-slate-500">
+            Phân tích {Number(item.total_reviews || 0).toLocaleString('vi-VN')} bình luận
+            {Number(item.average_confidence || 0) > 0
+              ? ` · Độ tin cậy AI ${Number(item.average_confidence).toFixed(1)}%`
+              : ''}
+          </p>
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-2">

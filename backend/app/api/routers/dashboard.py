@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime
 import unicodedata
 import re
 import time
@@ -332,47 +332,6 @@ def build_alerts(rows, limit=20):
     return picked[:limit]
 
 
-def is_vip_still_active(vip_expires_at):
-    if not vip_expires_at:
-        return True
-
-    try:
-        expires_at = datetime.fromisoformat(
-            str(vip_expires_at).replace("Z", "+00:00")
-        )
-
-        return expires_at >= datetime.now(timezone.utc)
-    except Exception:
-        return True
-
-
-def get_user_access_info(user_id: str):
-    profile_res = (
-        supabase
-        .table("profiles")
-        .select("tier, role, vip_expires_at")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
-
-    profile = profile_res.data or {}
-
-    tier = profile.get("tier")
-    role = profile.get("role")
-    vip_expires_at = profile.get("vip_expires_at")
-
-    is_admin = role == "admin"
-    is_vip = tier == "vip" and is_vip_still_active(vip_expires_at)
-
-    return {
-        "profile": profile,
-        "is_admin": is_admin,
-        "is_vip": is_vip,
-        "can_use_vip_feature": is_admin or is_vip,
-    }
-
-
 @router.get("/api/last-scraped")
 async def get_last_scraped(source_url: str, user_id: str):
     try:
@@ -406,14 +365,6 @@ async def get_last_scraped(source_url: str, user_id: str):
 @router.get("/api/dashboard/alerts")
 async def get_dashboard_alerts(source_url: str, user_id: str):
     try:
-        access = get_user_access_info(user_id)
-
-        if not access["can_use_vip_feature"]:
-            raise HTTPException(
-                status_code=403,
-                detail="Tính năng Cảnh báo Đỏ chỉ dành cho tài khoản VIP hoặc Admin.",
-            )
-
         query = (
             supabase
             .table("scraped_reviews")
@@ -450,9 +401,6 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
 @router.get("/api/dashboard/keyword-analytics")
 async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
     try:
-        access = get_user_access_info(user_id)
-        can_use_vip_feature = access["can_use_vip_feature"]
-
         query = (
             supabase
             .table("scraped_reviews")
@@ -509,20 +457,19 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
 
         wordcloud_data = []
 
-        if can_use_vip_feature:
-            for kw, count in pos_counts.most_common(20):
-                wordcloud_data.append({
-                    "text": kw.capitalize(),
-                    "value": count * 10,
-                    "sentiment": "positive",
-                })
+        for kw, count in pos_counts.most_common(20):
+            wordcloud_data.append({
+                "text": kw.capitalize(),
+                "value": count * 10,
+                "sentiment": "positive",
+            })
 
-            for kw, count in neg_counts.most_common(20):
-                wordcloud_data.append({
-                    "text": kw.capitalize(),
-                    "value": count * 10,
-                    "sentiment": "negative",
-                })
+        for kw, count in neg_counts.most_common(20):
+            wordcloud_data.append({
+                "text": kw.capitalize(),
+                "value": count * 10,
+                "sentiment": "negative",
+            })
 
         return {
             "leaderboard": leaderboard_data,

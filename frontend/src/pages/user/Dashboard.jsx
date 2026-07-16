@@ -3,7 +3,6 @@ import { Globe, Hash, MessageSquare, Network } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
-import UpgradeModal from '../../components/common/UpgradeModal';
 import QuickConclusionCard from '../../components/user/dashboard/QuickConclusionCard';
 
 import AlertsSection from '../../components/user/dashboard/AlertsSection';
@@ -351,15 +350,12 @@ function buildVisibleAlerts(alerts, reviews) {
 }
 
 export default function Dashboard() {
-  const { user, userProfile, refreshUserProfile } = useAuth();
+  const { user } = useAuth();
 
   const [reviews, setReviews] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [keywordAnalytics, setKeywordAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
-  const isVip = userProfile?.tier === 'vip';
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -471,8 +467,6 @@ export default function Dashboard() {
           <AlertsSection
             alerts={visibleAlerts}
             loading={loading}
-            isVip={isVip}
-            onUpgrade={() => setIsUpgradeModalOpen(true)}
           />
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -517,11 +511,6 @@ export default function Dashboard() {
         </>
       )}
 
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onUpgraded={refreshUserProfile}
-      />
     </div>
   );
 }

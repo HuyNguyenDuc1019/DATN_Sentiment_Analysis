@@ -149,8 +149,7 @@ async def get_admin_users(admin_id: str = Depends(verify_admin)):
             supabase
             .table("profiles")
             .select(
-                "id, email, full_name, role, status, tier, "
-                "vip_started_at, vip_expires_at, created_at"
+                "id, email, full_name, role, status, created_at"
             )
             .order("created_at", desc=True)
             .execute()
@@ -181,22 +180,6 @@ async def update_user_action(
             "status": "active",
         }
 
-    elif request.action == "upgrade_vip":
-        vip_expires_at = now + timedelta(days=30)
-
-        update_payload = {
-            "tier": "vip",
-            "vip_started_at": now.isoformat(),
-            "vip_expires_at": vip_expires_at.isoformat(),
-        }
-
-    elif request.action == "downgrade_vip":
-        update_payload = {
-            "tier": "free",
-            "vip_started_at": None,
-            "vip_expires_at": None,
-        }
-
     else:
         raise HTTPException(status_code=400, detail="Hành động không hợp lệ!")
 
@@ -219,8 +202,6 @@ async def update_user_action(
             action_message = {
                 "ban": "khóa tài khoản",
                 "unban": "mở khóa tài khoản",
-                "upgrade_vip": "nâng cấp VIP 30 ngày",
-                "downgrade_vip": "hạ xuống Free",
             }.get(request.action, request.action)
 
             supabase.table("admin_activity_logs").insert({
@@ -669,8 +650,14 @@ async def get_feedback_confidence_map(admin_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/transactions")
+@router.get("/transactions", include_in_schema=False)
 async def get_admin_transactions(admin_id: str = Depends(verify_admin)):
+    raise HTTPException(
+        status_code=410,
+        detail="Chức năng quản lý giao dịch nâng cấp đã được loại bỏ.",
+    )
+
+    # Legacy implementation kept unreachable to preserve old transaction data.
     try:
         res = (
             supabase
@@ -720,11 +707,17 @@ async def get_admin_transactions(admin_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/transactions/confirm")
+@router.put("/transactions/confirm", include_in_schema=False)
 async def confirm_admin_transaction(
     request: AdminTransactionActionRequest,
     admin_id: str = Depends(verify_admin),
 ):
+    raise HTTPException(
+        status_code=410,
+        detail="Luồng xác nhận thanh toán và nâng cấp tài khoản đã được loại bỏ.",
+    )
+
+    # Legacy implementation kept unreachable to preserve old transaction data.
     try:
         transaction_res = (
             supabase
@@ -823,11 +816,17 @@ async def confirm_admin_transaction(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/transactions/cancel")
+@router.put("/transactions/cancel", include_in_schema=False)
 async def cancel_admin_transaction(
     request: AdminTransactionActionRequest,
     admin_id: str = Depends(verify_admin),
 ):
+    raise HTTPException(
+        status_code=410,
+        detail="Chức năng quản lý giao dịch nâng cấp đã được loại bỏ.",
+    )
+
+    # Legacy implementation kept unreachable to preserve old transaction data.
     try:
         transaction_res = (
             supabase

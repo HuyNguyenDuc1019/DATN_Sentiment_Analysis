@@ -3,37 +3,6 @@ export const EMPTY_RESTAURANT = {
   url: '',
 };
 
-export const DEMO_RESULT = [
-  {
-    id: 'demo-a',
-    restaurant_name: 'Quán A',
-    source_url: 'https://www.foody.vn/demo/quan-a',
-    total_reviews: 120,
-    positive_count: 94,
-    negative_count: 26,
-    positive_rate: 78.3,
-    negative_rate: 21.7,
-    risk_score: 31,
-    top_positive_keywords: ['ngon', 'phục vụ nhanh', 'đáng tiền'],
-    top_negative_keywords: ['giá hơi cao', 'hết bàn'],
-    recommendation: 'Phù hợp nếu bạn ưu tiên món ăn ngon và trải nghiệm ổn định.',
-  },
-  {
-    id: 'demo-b',
-    restaurant_name: 'Quán B',
-    source_url: 'https://www.foody.vn/demo/quan-b',
-    total_reviews: 96,
-    positive_count: 60,
-    negative_count: 36,
-    positive_rate: 62.5,
-    negative_rate: 37.5,
-    risk_score: 58,
-    top_positive_keywords: ['giá hợp lý', 'nhiều món', 'không gian rộng'],
-    top_negative_keywords: ['chờ lâu', 'phục vụ chậm', 'ồn'],
-    recommendation: 'Có thể chọn nếu ưu tiên giá, nhưng nên tránh giờ cao điểm.',
-  },
-];
-
 export function getRiskTone(score) {
   const risk = Number(score || 0);
 
@@ -87,7 +56,9 @@ export function inferRestaurantNameFromUrl(url, fallback = '') {
       .map((item) => item.trim())
       .filter(Boolean);
 
-    const slug = segments[segments.length - 1] || fallback || parsed.hostname;
+    const slug = decodeURIComponent(
+      segments[segments.length - 1] || fallback || parsed.hostname,
+    );
 
     return slug
       .replace(/[-_]+/g, ' ')

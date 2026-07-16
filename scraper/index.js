@@ -17,7 +17,11 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY || '';
 
 const compareCache = new Map();
 const COMPARE_CACHE_TTL_MS = 15 * 60 * 1000;
-const COMPARE_MAX_REVIEWS = 50;
+const COMPARE_MAX_REVIEWS = Math.max(
+  10,
+  Number.parseInt(process.env.COMPARE_MAX_REVIEWS || '300', 10) || 300,
+);
+const COMPARE_MAX_LOAD_MORE_CLICKS = 100;
 
 const runningScrapeTasks = new Map();
 
@@ -352,8 +356,12 @@ async function sendReviewsToPredictBatch({
   }
 }
 
-async function scrapeFoodyForCompare(url) {
-  const cachedReviews = getCompareCache(url);
+async function scrapeFoodyForCompare(
+  url,
+  maxReviews = COMPARE_MAX_REVIEWS,
+  forceRefresh = false,
+) {
+  const cachedReviews = forceRefresh ? null : getCompareCache(url);
 
   if (cachedReviews) {
     console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận cho ${url}`);
@@ -385,32 +393,35 @@ async function scrapeFoodyForCompare(url) {
 
     console.log('⏳ Đang tìm và click nút "Xem thêm bình luận" cho so sánh...');
 
-    let hasMoreComments = true;
     let clickCount = 0;
-    let previousCommentCount = 0;
+    let noGrowthCount = 0;
 
-    while (hasMoreComments && clickCount < 5) {
+    while (clickCount < COMPARE_MAX_LOAD_MORE_CLICKS) {
       try {
-        const currentCommentCount = await page.evaluate(() => document.querySelectorAll('.item-comment, .review-item').length);
-        
-        if (clickCount > 0 && currentCommentCount === previousCommentCount) {
-            console.log('✅ Số bình luận không tăng thêm, dừng click sớm.');
-            break;
-        }
-        previousCommentCount = currentCommentCount;
+        const countBefore = await page.evaluate(
+          () => document.querySelectorAll('.rd-des').length,
+        );
 
-        await page.waitForSelector('a.fd-btn-more', {
-          timeout: 3000,
-        });
+        if (countBefore >= maxReviews) {
+          console.log(`✅ Đã tải đủ ${maxReviews} bình luận để so sánh.`);
+          break;
+        }
+
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         const clicked = await page.evaluate(() => {
-          const buttons = document.querySelectorAll('a.fd-btn-more');
+          const buttons = Array.from(
+            document.querySelectorAll('a.fd-btn-more, button.fd-btn-more, a, button'),
+          );
 
           for (const btn of buttons) {
-            if (
-              btn.innerText.includes('Xem thêm') ||
-              btn.textContent.includes('Xem thêm')
-            ) {
+            const text = String(btn.innerText || btn.textContent || '').trim().toLowerCase();
+            const style = window.getComputedStyle(btn);
+            const isVisible = style.display !== 'none' && style.visibility !== 'hidden';
+
+            if (isVisible && text.includes('xem thêm') && text.includes('bình luận')) {
+              btn.scrollIntoView({ block: 'center' });
               btn.click();
               return true;
             }
@@ -420,18 +431,34 @@ async function scrapeFoodyForCompare(url) {
         });
 
         if (!clicked) {
-          console.log('✅ Đã hết nút "Xem thêm bình luận" hoặc đã mở đủ.');
-          hasMoreComments = false;
+          console.log('✅ Đã hết nút "Xem thêm bình luận".');
           break;
         }
 
         clickCount += 1;
         console.log(`👉 Compare đã click "Xem thêm" lần ${clickCount}...`);
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      } catch {
-        console.log('✅ Nút "Xem thêm" đã biến mất hoàn toàn.');
-        hasMoreComments = false;
+        try {
+          await page.waitForFunction(
+            (previousCount) =>
+              document.querySelectorAll('.rd-des').length >
+              previousCount,
+            { timeout: 6000 },
+            countBefore,
+          );
+          noGrowthCount = 0;
+        } catch {
+          noGrowthCount += 1;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+
+          if (noGrowthCount >= 2) {
+            console.log('✅ Bình luận không tăng sau 2 lần thử, dừng tải thêm.');
+            break;
+          }
+        }
+      } catch (error) {
+        console.log(`✅ Dừng tải thêm bình luận: ${error.message}`);
+        break;
       }
     }
 
@@ -466,11 +493,16 @@ async function scrapeFoodyForCompare(url) {
     });
 
     const cleanReviews = [];
+    const seenContents = new Set();
 
     for (const item of rawReviews) {
       const formattedText = cleanReviewText(item.text);
 
       if (isValidComment(formattedText)) {
+        const contentKey = formattedText.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (seenContents.has(contentKey)) continue;
+        seenContents.add(contentKey);
+
         const reviewDate = parseFoodyDate(item.date_str);
 
         cleanReviews.push({
@@ -480,7 +512,7 @@ async function scrapeFoodyForCompare(url) {
       }
     }
 
-    const limitedReviews = cleanReviews.slice(0, COMPARE_MAX_REVIEWS);
+    const limitedReviews = cleanReviews.slice(0, maxReviews);
 
     setCompareCache(url, limitedReviews);
 
@@ -494,8 +526,12 @@ async function scrapeFoodyForCompare(url) {
   }
 }
 
-async function scrapeGoogleMapsForCompare(url) {
-  const cachedReviews = getCompareCache(url);
+async function scrapeGoogleMapsForCompare(
+  url,
+  maxReviews = COMPARE_MAX_REVIEWS,
+  forceRefresh = false,
+) {
+  const cachedReviews = forceRefresh ? null : getCompareCache(url);
 
   if (cachedReviews) {
     console.log(`⚡ Compare cache hit: ${cachedReviews.length} bình luận Google Maps`);
@@ -536,41 +572,47 @@ async function scrapeGoogleMapsForCompare(url) {
 
     console.log('🔍 Bước 2: Tải bình luận Google Maps cho Compare...');
 
-    const reviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
-
-    const reviewRes = await axios.get(reviewUrl);
-    const rawReviews = reviewRes.data.reviews;
-
-    if (!rawReviews || rawReviews.length === 0) {
-      return [];
-    }
-
     const cleanReviews = [];
+    const seenContents = new Set();
+    let nextReviewUrl = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${dataId}&api_key=${SERPAPI_KEY}&hl=vi`;
+    let pageCount = 0;
 
-    for (const item of rawReviews) {
-      let rawText = item.snippet || item.details || '';
+    while (nextReviewUrl && cleanReviews.length < maxReviews && pageCount < 50) {
+      const reviewRes = await axios.get(nextReviewUrl);
+      const rawReviews = reviewRes.data.reviews || [];
 
-      if (typeof rawText === 'object' && rawText !== null) {
-        rawText = rawText.translated || rawText.original || rawText.text || '';
+      for (const item of rawReviews) {
+        let rawText = item.snippet || item.details || '';
+
+        if (typeof rawText === 'object' && rawText !== null) {
+          rawText = rawText.translated || rawText.original || rawText.text || '';
+        }
+
+        const content = cleanReviewText(String(rawText));
+        const contentKey = content.toLowerCase().replace(/\s+/g, ' ').trim();
+
+        if (!isValidComment(content) || seenContents.has(contentKey)) continue;
+        seenContents.add(contentKey);
+
+        const reviewDate = item.iso_date
+          ? new Date(item.iso_date)
+          : item.date
+            ? parseVietnameseDate(item.date)
+            : new Date();
+
+        cleanReviews.push({
+          content,
+          review_date: reviewDate.toISOString(),
+        });
+
+        if (cleanReviews.length >= maxReviews) break;
       }
 
-      const content = cleanReviewText(String(rawText));
-
-      if (!content || content.includes('[object Object]')) continue;
-
-      const reviewDate = item.iso_date
-        ? new Date(item.iso_date)
-        : item.date
-          ? parseVietnameseDate(item.date)
-          : new Date();
-
-      cleanReviews.push({
-        content,
-        review_date: reviewDate.toISOString(),
-      });
+      pageCount += 1;
+      nextReviewUrl = reviewRes.data.serpapi_pagination?.next || null;
     }
 
-    const limitedReviews = cleanReviews.slice(0, COMPARE_MAX_REVIEWS);
+    const limitedReviews = cleanReviews.slice(0, maxReviews);
 
     setCompareCache(url, limitedReviews);
 
@@ -1135,7 +1177,11 @@ app.post('/api/scrape', async (req, res) => {
 });
 
 app.post('/api/compare/scrape', async (req, res) => {
-  const { url } = req.body;
+  const { url, force_refresh = false } = req.body;
+  const requestedMaxReviews = Number.parseInt(req.body.max_reviews, 10);
+  const maxReviews = Number.isFinite(requestedMaxReviews)
+    ? Math.min(Math.max(requestedMaxReviews, 10), COMPARE_MAX_REVIEWS)
+    : COMPARE_MAX_REVIEWS;
 
   if (!url) {
     return res.status(400).json({
@@ -1158,10 +1204,10 @@ app.post('/api/compare/scrape', async (req, res) => {
 
     if (sourceInfo.type === 'foody') {
       console.log('⚖️ Phát hiện link Foody. Đang cào dữ liệu cho so sánh...');
-      reviews = await scrapeFoodyForCompare(url);
+      reviews = await scrapeFoodyForCompare(url, maxReviews, force_refresh);
     } else if (sourceInfo.type === 'google_maps') {
       console.log('⚖️ Phát hiện link Google Maps. Đang cào dữ liệu cho so sánh...');
-      reviews = await scrapeGoogleMapsForCompare(url);
+      reviews = await scrapeGoogleMapsForCompare(url, maxReviews, force_refresh);
     }
 
     return res.json({

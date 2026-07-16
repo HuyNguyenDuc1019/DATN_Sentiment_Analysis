@@ -15,7 +15,7 @@ export default function DataLimitCard({ settings, onChange }) {
           id="max_upload_size_free"
           name="max_upload_size_free"
           label="Dung lượng file tối đa (MB)"
-          description="Giới hạn dung lượng upload cho tài khoản gói Free để bảo vệ máy chủ."
+          description="Giới hạn dung lượng upload chung để bảo vệ tài nguyên máy chủ."
           value={settings.max_upload_size_free}
           onChange={onChange}
           suffix="MB"

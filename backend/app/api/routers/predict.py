@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from app.database import supabase
 from app.schemas import PredictRequest, PredictResponse, BatchPredictRequest
 
@@ -37,27 +37,6 @@ async def predict_sentiment(req_obj: Request, request: PredictRequest):
         raise HTTPException(status_code=400, detail="Văn bản không để trống.")
 
     try:
-        user_id = request.user_id 
-        profile_res = supabase.table('profiles').select('tier').eq('id', user_id).single().execute()
-        is_vip = profile_res.data and profile_res.data.get('tier') == 'vip'
-
-        if not is_vip:
-            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0).isoformat()
-            
-            count_res = supabase.table('scraped_reviews').select('id', count='exact') \
-                .eq('user_id', user_id) \
-                .gte('created_at', today_start) \
-                .execute()
-            
-            daily_usage = count_res.count if count_res.count else 0
-            
-            if daily_usage >= 100:
-                raise HTTPException(status_code=429, detail="Bạn đã hết 100 lượt phân tích miễn phí hôm nay. Hãy nâng cấp VIP!")
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-
-    try:
         result = predictor.predict(request.text)
         return result
     except Exception as e:
@@ -69,12 +48,6 @@ async def predict_batch(req_obj: Request, request: BatchPredictRequest):
     if predictor is None:
         raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")
         
-    profile = supabase.table('profiles').select('tier').eq('id', request.user_id).single().execute()
-    is_vip = profile.data and profile.data.get('tier') == 'vip'
-
-    if not is_vip and len(request.reviews) > 50:
-        raise HTTPException(status_code=403, detail="Tài khoản Free chỉ phân tích tối đa 50 bình luận/lần. Vui lòng nâng cấp VIP!")
-
     try:
         settings_res = supabase.table("system_settings").select("*").eq("id", 1).single().execute()
         sys_settings = settings_res.data
@@ -84,41 +57,35 @@ async def predict_batch(req_obj: Request, request: BatchPredictRequest):
         
         dynamic_aspects = admin_aspects.copy()
         sensitive_words_str = admin_sensitive
-        retention_days = 7 
+        retention_days = 30
+        user_threshold = None
+        user_res = supabase.table('user_settings').select('*').eq('user_id', request.user_id).execute()
 
-        if is_vip:
-            user_res = supabase.table('user_settings').select('*').eq('user_id', request.user_id).execute()
-            
-            if user_res.data and len(user_res.data) > 0:
-                user_settings = user_res.data[0]
-                
-                user_sensitive = user_settings.get("custom_sensitive_words", "")
-                if user_sensitive:
-                    sensitive_words_str = f"{admin_sensitive}, {user_sensitive}"
-                
-                user_aspects = user_settings.get("custom_aspects", {})
-                if isinstance(user_aspects, dict):
-                    for aspect, keywords in user_aspects.items():
-                        if aspect in dynamic_aspects:
-                            dynamic_aspects[aspect] = f"{dynamic_aspects[aspect]}, {keywords}" 
-                        else:
-                            dynamic_aspects[aspect] = keywords 
-                
-                retention_days = user_settings.get("retention_days", 30)
-                
-                user_threshold = user_settings.get("custom_threshold", 50) / 100.0
+        if user_res.data and len(user_res.data) > 0:
+            user_settings = user_res.data[0]
 
-        else:
-            dynamic_aspects = {}      
-            sensitive_words_str = ""  
-            crisis_enabled = False    
+            user_sensitive = user_settings.get("custom_sensitive_words", "")
+            if user_sensitive:
+                sensitive_words_str = f"{admin_sensitive}, {user_sensitive}"
+
+            user_aspects = user_settings.get("custom_aspects", {})
+            if isinstance(user_aspects, dict):
+                for aspect, keywords in user_aspects.items():
+                    if aspect in dynamic_aspects:
+                        dynamic_aspects[aspect] = f"{dynamic_aspects[aspect]}, {keywords}"
+                    else:
+                        dynamic_aspects[aspect] = keywords
+
+            retention_days = user_settings.get("retention_days", 30)
+            user_threshold = user_settings.get("custom_threshold", 50) / 100.0
             
     except Exception as e:
         print(f"⚠️ Lỗi khi tải cấu hình từ DB, dùng mặc định. Chi tiết: {e}")
         dynamic_aspects = {}
         sensitive_words_str = ""
-        crisis_enabled = is_vip
-        retention_days = 7
+        crisis_enabled = True
+        retention_days = 30
+        user_threshold = None
 
     try:
         cutoff_date = (datetime.now() - timedelta(days=retention_days)).isoformat()
@@ -140,7 +107,7 @@ async def predict_batch(req_obj: Request, request: BatchPredictRequest):
             label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
             confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
             
-            if is_vip and 'user_threshold' in locals():
+            if user_threshold is not None:
                 if confidence < user_threshold and label == "Tích cực":
                     label = "Tiêu cực" 
 

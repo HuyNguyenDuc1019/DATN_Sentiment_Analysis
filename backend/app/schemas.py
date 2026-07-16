@@ -52,7 +52,7 @@ class AdminSettingUpdate(BaseModel):
 class AdminActionRequest(BaseModel):
     admin_id: str
     target_user_id: str
-    action: str  # Nhận 1 trong 3 giá trị: "ban", "unban", "upgrade_vip"
+    action: str  # Nhận một trong hai giá trị: "ban", "unban"
 
 class AdminFeedbackReview(BaseModel):
     admin_id: str

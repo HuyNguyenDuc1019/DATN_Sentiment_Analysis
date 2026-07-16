@@ -10,7 +10,6 @@ from app.api.routers import (
     dashboard,
     feedback,
     compare,
-    payment,
 )
 
 app = FastAPI(
@@ -58,7 +57,6 @@ app.include_router(predict.router)
 app.include_router(dashboard.router)
 app.include_router(feedback.router)
 app.include_router(compare.router)
-app.include_router(payment.router)
 
 
 @app.get("/")

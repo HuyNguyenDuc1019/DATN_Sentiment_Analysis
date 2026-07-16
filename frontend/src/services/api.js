@@ -208,10 +208,3 @@ export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) => {
     source_url: sourceUrl || 'all',
   });
 };
-
-export const createVipPayment = async (userId, amount = 50000) => {
-  return post(`${PYTHON_API}/payment/create`, {
-    user_id: userId,
-    amount,
-  });
-};

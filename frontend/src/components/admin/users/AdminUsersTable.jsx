@@ -20,7 +20,6 @@ export default function AdminUsersTable({
             <th className="px-5 py-4">Tài khoản (Email)</th>
             <th className="px-5 py-4">Vai trò</th>
             <th className="px-5 py-4">Trạng thái</th>
-            <th className="px-5 py-4">Gói dịch vụ</th>
             <th className="px-5 py-4">Hoạt động dữ liệu</th>
             <th className="px-5 py-4">Ngày tạo</th>
             <th className="px-5 py-4 text-right">Thao tác</th>
@@ -34,7 +33,7 @@ export default function AdminUsersTable({
               .map((_, index) => <AdminUserTableSkeletonRow key={index} />)
           ) : filteredUsers.length === 0 ? (
             <tr>
-              <td colSpan="7" className="px-5 py-12 text-center text-slate-500 text-sm">
+              <td colSpan="6" className="px-5 py-12 text-center text-slate-500 text-sm">
                 Không có người dùng phù hợp.
               </td>
             </tr>

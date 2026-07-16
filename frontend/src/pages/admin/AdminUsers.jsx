@@ -34,8 +34,6 @@ function getUserActionSuccessMessage(action) {
   const messages = {
     ban: 'Đã khóa tài khoản người dùng thành công.',
     unban: 'Đã mở khóa tài khoản người dùng thành công.',
-    upgrade_vip: 'Đã nâng cấp tài khoản lên VIP thành công.',
-    downgrade_vip: 'Đã hạ cấp tài khoản về gói Free thành công.',
   };
 
   return messages[action] || 'Đã cập nhật tài khoản người dùng thành công.';
@@ -46,7 +44,6 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [tierFilter, setTierFilter] = useState('all');
   const [selectedUser, setSelectedUser] = useState(null);
   const [activitySummary, setActivitySummary] = useState({});
   const [userHistory, setUserHistory] = useState([]);
@@ -136,9 +133,8 @@ export default function AdminUsers() {
         searchTerm,
         roleFilter,
         statusFilter,
-        tierFilter,
       }),
-    [searchTerm, users, roleFilter, statusFilter, tierFilter],
+    [searchTerm, users, roleFilter, statusFilter],
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE));
@@ -150,7 +146,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, roleFilter, statusFilter, tierFilter]);
+  }, [searchTerm, roleFilter, statusFilter]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -162,7 +158,6 @@ export default function AdminUsers() {
     setSearchTerm('');
     setRoleFilter('all');
     setStatusFilter('all');
-    setTierFilter('all');
   };
 
   const handleAction = async (targetUser, action, reason = '') => {
@@ -177,14 +172,9 @@ export default function AdminUsers() {
         action,
       });
 
-      const updatePayload =
-        action === 'ban'
-          ? { status: 'blocked' }
-          : action === 'unban'
-            ? { status: 'active' }
-            : action === 'upgrade_vip'
-              ? { tier: 'vip' }
-              : { tier: 'free' };
+      const updatePayload = action === 'ban'
+        ? { status: 'blocked' }
+        : { status: 'active' };
 
       setUsers((current) =>
         current.map((user) => (user.id === targetUser.id ? { ...user, ...updatePayload } : user)),
@@ -204,8 +194,6 @@ export default function AdminUsers() {
       const actionMeta = {
         ban: { type: 'user_banned', text: `khóa tài khoản ${targetLabel}.${reasonText}` },
         unban: { type: 'user_unbanned', text: `mở khóa tài khoản ${targetLabel}` },
-        upgrade_vip: { type: 'user_upgraded_vip', text: `nâng cấp tài khoản ${targetLabel} lên VIP` },
-        downgrade_vip: { type: 'user_downgraded_vip', text: `hạ tài khoản ${targetLabel} xuống gói Free` },
       }[action];
 
       if (actionMeta) {
@@ -274,11 +262,9 @@ export default function AdminUsers() {
         searchTerm={searchTerm}
         roleFilter={roleFilter}
         statusFilter={statusFilter}
-        tierFilter={tierFilter}
         onSearchTermChange={setSearchTerm}
         onRoleFilterChange={setRoleFilter}
         onStatusFilterChange={setStatusFilter}
-        onTierFilterChange={setTierFilter}
         onResetFilters={resetFilters}
       />
 

@@ -20,16 +20,12 @@ import Report from './pages/user/Report';
 import Settings from './pages/user/Settings';
 import Profile from './pages/user/Profile';
 import RestaurantCompare from './pages/user/RestaurantCompare';
-import UpgradeVIP from './pages/user/UpgradeVIP';
-
-import VnpayReturn from './pages/payment/VnpayReturn';
 
 import AdminLayout from './components/layout/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminFeedback from './pages/admin/AdminFeedback';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminSettings from './pages/admin/AdminSettings';
-import AdminTransactions from './pages/admin/AdminTransactions';
 
 function App() {
   return (
@@ -43,8 +39,6 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
           </Route>
 
-          <Route path="/payment/vnpay-return" element={<VnpayReturn />} />
-
           <Route path="/admin" element={<AdminProtectedRoute />}>
             <Route element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
@@ -53,7 +47,6 @@ function App() {
               <Route path="users" element={<AdminUsers />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="transactions" element={<AdminTransactions />} />
             </Route>
           </Route>
 
@@ -67,7 +60,6 @@ function App() {
               <Route path="/report" element={<Report />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/upgrade-vip" element={<UpgradeVIP />} />
             </Route>
           </Route>
 

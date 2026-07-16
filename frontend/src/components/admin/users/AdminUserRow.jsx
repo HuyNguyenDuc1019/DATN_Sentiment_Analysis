@@ -1,7 +1,6 @@
-import { Ban, Crown, FileText, Loader2, MessageSquare, Unlock } from 'lucide-react';
+import { Ban, FileText, Loader2, MessageSquare, Unlock } from 'lucide-react';
 
 import StatusBadge from './StatusBadge';
-import TierBadge from './TierBadge';
 import { formatDate } from '../../../utils/admin/usersUtils';
 
 export default function AdminUserRow({
@@ -35,10 +34,6 @@ export default function AdminUserRow({
 
       <td className="px-5 py-4">
         <StatusBadge status={user.status} />
-      </td>
-
-      <td className="px-5 py-4">
-        <TierBadge tier={user.tier} />
       </td>
 
       <td className="px-5 py-4">
@@ -99,41 +94,6 @@ export default function AdminUserRow({
             </button>
           )}
 
-          {String(user.tier || '').toLowerCase() !== 'vip' ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onUserAction(user, 'upgrade_vip');
-              }}
-              disabled={processingId === user.id || user.status === 'blocked'}
-              className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Nâng cấp lên VIP"
-            >
-              {processingId === user.id ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Crown size={18} />
-              )}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onUserAction(user, 'downgrade_vip');
-              }}
-              disabled={processingId === user.id}
-              className="p-1.5 text-indigo-400 hover:text-slate-400 hover:bg-slate-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Hạ xuống gói Free"
-            >
-              {processingId === user.id ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Crown size={18} fill="currentColor" />
-              )}
-            </button>
-          )}
         </div>
       </td>
     </tr>

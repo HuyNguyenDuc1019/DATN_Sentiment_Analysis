@@ -8,9 +8,8 @@ import {
   wordColor,
 } from '../../../utils/user/reportUtils';
 
-export default function WordCloudCard({ words, isVip, onUpgrade }) {
+export default function WordCloudCard({ words }) {
   const [layoutWords, setLayoutWords] = useState([]);
-  const isLocked = !isVip || !words.length;
 
   const cloudWords = useMemo(() => {
     const normalized = words.map((word) => ({
@@ -53,16 +52,7 @@ export default function WordCloudCard({ words, isVip, onUpgrade }) {
       <p className="mb-4 text-xs text-slate-500">Từ càng lớn nghĩa là khách nhắc càng nhiều.</p>
 
       <div className="flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50 p-5">
-        {isLocked ? (
-          <button
-            type="button"
-            onClick={onUpgrade}
-            className="flex min-h-[220px] w-full flex-col items-center justify-center rounded-xl border border-amber-400/25 bg-slate-950/40 px-6 text-center text-sm text-slate-300 transition-colors hover:bg-slate-950/60"
-          >
-            <span className="mb-3 text-3xl">🔒</span>
-            <span className="font-semibold text-amber-200">Mở khóa biểu đồ Đám mây từ khóa trực quan với gói VIP</span>
-          </button>
-        ) : layoutWords.length ? (
+        {layoutWords.length ? (
           <div className="relative h-[300px] w-full max-w-[440px]">
             {layoutWords.map((word) => (
               <span

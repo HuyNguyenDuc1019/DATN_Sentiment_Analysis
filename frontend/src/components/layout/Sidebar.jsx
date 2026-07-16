@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import HelpCenterModal from '../help/HelpCenterModal';
-import UpgradeModal from '../common/UpgradeModal';
 import {
   BarChart2,
   HelpCircle,
@@ -16,18 +15,15 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
-  Crown,
   Scale,
 } from 'lucide-react';
 
 export default function Sidebar() {
   const location = useLocation();
-  const { signOut, userProfile, refreshUserProfile } = useAuth();
+  const { signOut } = useAuth();
   const { fullName, avatarUrl, initials, role, isAdmin } = useUserProfile();
 
   const [helpOpen, setHelpOpen] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-  const isVip = userProfile?.tier === 'vip';
 
   const getLinkClass = (path) =>
     location.pathname === path
@@ -76,27 +72,6 @@ export default function Sidebar() {
           )}
         </nav>
 
-        <div className="px-4 mb-2 mt-auto">
-          {isVip ? (
-            <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-indigo-500/15 border border-amber-400/30 text-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.12)]">
-              <Crown size={20} className="text-yellow-400" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-5">Tài khoản VIP</p>
-                <p className="text-[11px] text-amber-100/70">Đã mở khóa toàn bộ tính năng</p>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsUpgradeModalOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 text-white hover:border-indigo-400 hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] transition-all duration-300"
-            >
-              <Crown size={20} className="text-yellow-400" />
-              <span className="font-semibold text-sm">Nâng cấp VIP</span>
-            </button>
-          )}
-        </div>
-
         <div className="px-4 pb-4 space-y-1">
           <button
             type="button"
@@ -126,21 +101,13 @@ export default function Sidebar() {
             )}
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-white text-sm font-semibold truncate">{fullName}</p>
-              {isVip && <Crown size={13} className="shrink-0 text-yellow-400" fill="currentColor" />}
-            </div>
-            <p className="text-slate-500 text-xs">{isVip ? 'VIP' : role}</p>
+            <p className="text-white text-sm font-semibold truncate">{fullName}</p>
+            <p className="text-slate-500 text-xs">{role}</p>
           </div>
         </Link>
       </aside>
 
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
-      <UpgradeModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onUpgraded={refreshUserProfile}
-      />
     </>
   );
 }

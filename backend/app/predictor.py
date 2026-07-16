@@ -85,3 +85,43 @@ class SentimentPredictor:
             "sentiment": sentiment_label,
             "confidence": round(confidence_score, 2)
         }
+
+    def predict_many(self, texts, batch_size: int = 32):
+        """Phân tích nhiều bình luận theo batch để phục vụ so sánh dữ liệu thật."""
+        normalized_texts = [str(text or "").strip() for text in texts]
+        results = []
+
+        for start in range(0, len(normalized_texts), batch_size):
+            batch = normalized_texts[start:start + batch_size]
+            clean_batch = [self.preprocess_text(text) for text in batch]
+
+            inputs = self.tokenizer(
+                clean_batch,
+                return_tensors="pt",
+                truncation=True,
+                padding=True,
+                max_length=128,
+            )
+
+            input_ids = inputs["input_ids"].to(self.device)
+            attention_mask = inputs["attention_mask"].to(self.device)
+
+            with torch.no_grad():
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                )
+                probabilities = F.softmax(outputs.logits, dim=1)
+                confidences, predicted_classes = torch.max(probabilities, dim=1)
+
+            for predicted_class, confidence in zip(
+                predicted_classes.tolist(),
+                confidences.tolist(),
+            ):
+                results.append({
+                    "label": predicted_class,
+                    "sentiment": "Tích cực" if predicted_class == 1 else "Tiêu cực",
+                    "confidence": round(confidence * 100, 2),
+                })
+
+        return results
