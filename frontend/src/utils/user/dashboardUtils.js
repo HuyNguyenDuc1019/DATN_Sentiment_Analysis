@@ -33,6 +33,63 @@ export function buildTrendData(reviews) {
   });
 }
 
+function normalizeReviewAspects(value) {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => normalizeReviewAspects(item));
+  }
+
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, enabled]) => enabled !== false && enabled !== null)
+      .map(([name]) => String(name).trim())
+      .filter(Boolean);
+  }
+
+  const text = String(value).trim();
+  if (!text) return [];
+
+  if (text.startsWith('[') || text.startsWith('{')) {
+    try {
+      return normalizeReviewAspects(JSON.parse(text));
+    } catch {
+      // Dữ liệu cũ có thể được lưu dưới dạng chuỗi phân tách bằng dấu phẩy.
+    }
+  }
+
+  return text
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function buildAspectSentimentData(reviews, limit = 8) {
+  const aspectMap = new Map();
+
+  (Array.isArray(reviews) ? reviews : []).forEach((review) => {
+    const isPositive = Number(review?.ai_label) === 1;
+    const uniqueAspects = new Set(normalizeReviewAspects(review?.aspects));
+
+    uniqueAspects.forEach((aspect) => {
+      const current = aspectMap.get(aspect) || {
+        aspect,
+        positive: 0,
+        negative: 0,
+        total: 0,
+      };
+
+      current[isPositive ? 'positive' : 'negative'] += 1;
+      current.total += 1;
+      aspectMap.set(aspect, current);
+    });
+  });
+
+  return [...aspectMap.values()]
+    .sort((a, b) => b.total - a.total || b.negative - a.negative)
+    .slice(0, limit);
+}
+
 export function uniqueAlerts(alerts) {
   const seen = new Set();
 

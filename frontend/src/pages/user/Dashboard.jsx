@@ -8,14 +8,15 @@ import QuickConclusionCard from '../../components/user/dashboard/QuickConclusion
 import AlertsSection from '../../components/user/dashboard/AlertsSection';
 import DashboardSkeleton from '../../components/user/dashboard/DashboardSkeleton';
 import EmptyDashboardState from '../../components/user/dashboard/EmptyDashboardState';
+import AspectSentimentCard from '../../components/user/dashboard/AspectSentimentCard';
 import LeaderboardCard from '../../components/user/dashboard/LeaderboardCard';
 import PositiveRateCard from '../../components/user/dashboard/PositiveRateCard';
-import RecentReviews from '../../components/user/dashboard/RecentReviews';
 import StatCard from '../../components/user/dashboard/StatCard';
 import TrendCard from '../../components/user/dashboard/TrendCard';
 
 import {
   buildBusinessLeaderboard,
+  buildAspectSentimentData,
   buildTrendData,
   isCriticalAlert,
   isInRange,
@@ -435,6 +436,7 @@ export default function Dashboard() {
   }, [reviews, statsReferenceTime]);
 
   const trendData = useMemo(() => buildTrendData(reviews), [reviews]);
+  const aspectData = useMemo(() => buildAspectSentimentData(reviews), [reviews]);
 
   const leaderboard = useMemo(() => {
     const value = keywordAnalytics?.leaderboard || keywordAnalytics?.data?.leaderboard;
@@ -506,9 +508,8 @@ export default function Dashboard() {
             />
           </div>
 
+          <AspectSentimentCard data={aspectData} />
           <LeaderboardCard leaderboard={leaderboard} />
-
-          <RecentReviews reviews={reviews} />
         </>
       )}
 

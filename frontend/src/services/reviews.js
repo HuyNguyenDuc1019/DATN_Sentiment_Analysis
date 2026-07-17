@@ -2,13 +2,16 @@ import { supabase } from './supabaseClient';
 
 export async function fetchUserReviews(userId, filters = {}) {
   const pageSize = 1000;
+  const selectFields =
+    filters.selectFields ||
+    'id,source_url,content,ai_label,confidence,created_at,user_id';
   let from = 0;
   let rows = [];
 
   while (true) {
     let query = supabase
       .from('scraped_reviews')
-      .select('id,source_url,content,ai_label,confidence,created_at,user_id')
+      .select(selectFields)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 

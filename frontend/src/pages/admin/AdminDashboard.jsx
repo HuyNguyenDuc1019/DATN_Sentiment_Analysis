@@ -99,16 +99,16 @@ export default function AdminDashboard() {
 
   const cardConfig = useMemo(() => getAdminDashboardCards(stats), [stats]);
 
-  const handleExportPdf = useCallback(() => {
+  const handleExportPdf = useCallback(async () => {
     try {
-      exportAdminDashboardReport({
+      await exportAdminDashboardReport({
         stats,
         chartData,
         recentUsers,
         formatNumber,
       });
 
-      toast.success('Đã mở bản báo cáo. Chọn Save as PDF để lưu file.');
+      toast.success('Đã tải báo cáo PDF xuống máy.');
     } catch (error) {
       console.error('Export admin report failed:', error);
       toast.error(`Không thể xuất báo cáo: ${error.message}`);

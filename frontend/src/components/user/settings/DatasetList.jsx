@@ -1,6 +1,10 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 
+import Pagination from '../../ui/Pagination';
 import { formatDatasetType, formatVietnameseDate } from '../../../utils/user/settingsUtils';
+
+const PAGE_SIZE = 5;
 
 const formatDatasetDisplayName = (dataset) => {
   const rawValue =
@@ -55,13 +59,25 @@ const formatDatasetDisplayName = (dataset) => {
 };
 
 export default function DatasetList({ datasets, isLoading, deletingDatasetId, onDelete }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(datasets.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [totalPages]);
+
+  const visibleDatasets = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return datasets.slice(start, start + PAGE_SIZE);
+  }, [datasets, page]);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/30">
       {isLoading ? (
         <div className="p-4 text-sm text-slate-400">Đang tải danh sách dữ liệu...</div>
       ) : datasets.length ? (
         <div className="divide-y divide-slate-700/60">
-          {datasets.map((dataset) => {
+          {visibleDatasets.map((dataset) => {
             const rowKey = dataset.dataset_id || dataset.source_url || dataset.dataset_name;
             const deletingKey = dataset.dataset_id || dataset.source_url;
             const isDeleting = deletingDatasetId === deletingKey;
@@ -106,6 +122,14 @@ export default function DatasetList({ datasets, isLoading, deletingDatasetId, on
               </div>
             );
           })}
+          {totalPages > 1 && (
+            <div className="flex flex-col gap-3 border-t border-slate-700/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
+                Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, datasets.length)} trên {datasets.length} mục
+              </p>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          )}
         </div>
       ) : (
         <div className="p-4 text-sm text-slate-500">
