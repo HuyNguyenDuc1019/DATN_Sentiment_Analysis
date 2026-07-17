@@ -10,7 +10,10 @@ import {
 } from '../../utils/user/dashboardUtils';
 
 export async function fetchDashboardReviews(userId) {
-  return fetchUserReviews(userId);
+  return fetchUserReviews(userId, {
+    selectFields:
+      'id,source_url,content,ai_label,confidence,aspects,keywords,is_action_required,review_date,created_at,user_id',
+  });
 }
 
 export async function fetchDashboardKeywordAnalytics({ userId, sourceUrl }) {

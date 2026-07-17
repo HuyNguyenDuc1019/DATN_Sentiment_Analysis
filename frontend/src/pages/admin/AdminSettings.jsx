@@ -228,7 +228,7 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-7xl animate-in fade-in duration-500 font-sans">
+    <div className="mx-auto w-full max-w-7xl space-y-8 p-6 font-sans animate-in fade-in duration-500 md:p-8">
       <input
         type="file"
         accept=".json"
