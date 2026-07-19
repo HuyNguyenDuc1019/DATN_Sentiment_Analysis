@@ -14,6 +14,8 @@ backend/phobert_v1/*.bin
 backend/phobert_v1/*.safetensors
 backend/phobert_v2/*.bin
 backend/phobert_v2/*.safetensors
+backend/phobert_v3/*.bin
+backend/phobert_v3/*.safetensors
 ml_training/*.pkl
 ml_training/*.mp4
 

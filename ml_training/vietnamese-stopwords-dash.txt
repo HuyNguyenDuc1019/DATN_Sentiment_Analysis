@@ -231,7 +231,6 @@ chăng_chắc
 chăng_nữa
 chơi
 chơi_họ
-chưa
 chưa_bao_giờ
 chưa_chắc
 chưa_có
@@ -254,7 +253,6 @@ chắc_ăn
 chẳng_lẽ
 chẳng_những
 chẳng_nữa
-chẳng_phải
 chết_nỗi
 chết_thật
 chết_tiệt
@@ -276,7 +274,6 @@ chọn
 chọn_bên
 chọn_ra
 chốc_chốc
-chớ
 chớ_chi
 chớ_gì
 chớ_không
@@ -605,7 +602,6 @@ khó_nghĩ
 khó_nói
 khó_thấy
 khó_tránh
-không
 không_ai
 không_bao_giờ
 không_bao_lâu
@@ -626,7 +622,6 @@ không_kể
 không_ngoài
 không_nhận
 không_những
-không_phải
 không_phải_không
 không_thể
 không_tính
@@ -938,7 +933,6 @@ như_trước
 như_tuồng
 như_vậy
 như_ý
-nhưng
 nhưng_mà
 nhược_bằng
 nhất
@@ -1131,7 +1125,6 @@ quay_bước
 quay_lại
 quay_số
 quay_đi
-quá
 quá_bán
 quá_bộ
 quá_giờ
@@ -1186,7 +1179,6 @@ rõ_thật
 rút_cục
 răng
 răng_răng
-rất
 rất_lâu
 rằng
 rằng_là
@@ -1458,7 +1450,6 @@ trực_tiếp_làm
 tuy
 tuy_có
 tuy_là
-tuy_nhiên
 tuy_rằng
 tuy_thế
 tuy_vậy

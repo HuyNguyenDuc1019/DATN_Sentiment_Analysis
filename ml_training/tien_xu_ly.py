@@ -5,10 +5,10 @@ from pyvi import ViTokenizer
 # 1. Tải danh sách từ dừng
 print("⏳ Đang tải danh sách từ dừng...")
 try:
-    with open('vietnamese-stopwords-custom.txt', 'r', encoding='utf-8') as f:
+    with open('vietnamese-stopwords-dash.txt', 'r', encoding='utf-8') as f:
         stopwords = set([line.strip() for line in f])
 except FileNotFoundError:
-    print("❌ Lỗi: Không tìm thấy file 'vietnamese-stopwords-custom.txt'.")
+    print("❌ Lỗi: Không tìm thấy file 'vietnamese-stopwords-dash.txt'.")
     exit()
 
 # 2. Từ điển Chuẩn hóa Teencode
@@ -49,8 +49,8 @@ def remove_stopwords_for_svm(tokenized_text):
 
 # 5. Khởi chạy xử lý file
 def process_dataset():
-    input_file = 'food_retrain_dataset.xlsx'  
-    output_file = 'dataset_3000_clean.csv'
+    input_file = 'foody_dataset_retrain2.csv'  
+    output_file = 'dataset_final.csv'
     
     # Đã cập nhật đúng tên cột theo ảnh bạn chụp
     column_name = 'Comment'  # Cột chứa bình luận trong file Excel      
@@ -99,4 +99,4 @@ if __name__ == "__main__":
     # (Tạm thời comment lại bằng dấu # để Terminal chỉ hiện mỗi cái khung báo cáo cho dễ chụp ảnh. 
     # Khi nào bạn muốn xử lý file Excel thì bỏ dấu # đi nhé)
     
-    # process_dataset()
+    process_dataset()

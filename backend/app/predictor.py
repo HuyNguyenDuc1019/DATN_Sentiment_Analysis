@@ -58,7 +58,7 @@ class SentimentPredictor:
             return_tensors="pt",
             truncation=True,
             padding="max_length",
-            max_length=128  # Đã điều chỉnh về 128 để khớp với model Colab
+            max_length=256
         )
         
         # Đưa tensor lên CPU
@@ -100,7 +100,7 @@ class SentimentPredictor:
                 return_tensors="pt",
                 truncation=True,
                 padding=True,
-                max_length=128,
+                max_length=256,
             )
 
             input_ids = inputs["input_ids"].to(self.device)
