@@ -2,13 +2,110 @@ from fastapi import APIRouter, HTTPException
 from typing import Optional
 from collections import Counter
 from datetime import datetime
+from urllib.parse import unquote, urlsplit, urlunsplit
 import unicodedata
 import re
 import time
 
 from app.database import supabase
+from app.cache import analytics_cache, user_cache_key
 
 router = APIRouter(tags=["Dashboard & Alerts"])
+
+
+DASHBOARD_PAGE_SIZE = 1000
+
+
+def normalize_source_url(value):
+    """Tạo khóa ổn định để các biến thể URL của cùng một quán được gom chung."""
+    source_url = str(value or "").strip()
+
+    if not source_url:
+        return ""
+
+    if source_url.lower() == "csv_upload":
+        return "csv_upload"
+
+    try:
+        parsed = urlsplit(source_url)
+        host = parsed.netloc.lower()
+
+        if host.startswith("www."):
+            host = host[4:]
+
+        path = unquote(parsed.path or "").strip().rstrip("/").lower()
+        path = re.sub(r"/+", "/", path)
+
+        return urlunsplit(("https", host, path, "", ""))
+    except Exception:
+        return source_url.rstrip("/").lower()
+
+
+def get_dashboard_group_key(item):
+    source_url = str(item.get("source_url") or "").strip()
+    dataset_type = normalize_text(item.get("dataset_type"))
+
+    # Các file CSV không đại diện cho một quán có URL riêng nên gom thành một nguồn.
+    if source_url.lower() == "csv_upload" or dataset_type == "csv":
+        return "source:csv_upload"
+
+    normalized_url = normalize_source_url(source_url)
+
+    if normalized_url:
+        return f"url:{normalized_url}"
+
+    dataset_key = item.get("dataset_id") or item.get("dataset_name") or item.get("id")
+    return f"dataset:{dataset_key}"
+
+
+def get_dashboard_group_name(item):
+    dataset_name = str(item.get("dataset_name") or "").strip()
+    source_url = str(item.get("source_url") or "").strip()
+
+    if source_url.lower() == "csv_upload" or normalize_text(item.get("dataset_type")) == "csv":
+        return "Dữ liệu CSV"
+
+    if dataset_name and dataset_name.lower() not in ["foody", "google", "google maps"]:
+        return dataset_name
+
+    if source_url and source_url.lower() != "csv_upload":
+        try:
+            slug = unquote(urlsplit(source_url).path).strip("/").split("/")[-1]
+            if slug:
+                return re.sub(r"[-_]+", " ", slug).strip().title()
+        except Exception:
+            pass
+
+    return dataset_name or "Dữ liệu đã phân tích"
+
+
+def fetch_dashboard_source_rows(user_id):
+    """Đọc theo trang để danh sách quán không bị giới hạn 1.000 dòng của Supabase."""
+    rows = []
+    offset = 0
+
+    while True:
+        response = (
+            supabase
+            .table("scraped_reviews")
+            .select(
+                "id, dataset_id, dataset_name, dataset_type, source_url, "
+                "ai_label, confidence, review_date, created_at"
+            )
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .range(offset, offset + DASHBOARD_PAGE_SIZE - 1)
+            .execute()
+        )
+        page = response.data or []
+        rows.extend(page)
+
+        if len(page) < DASHBOARD_PAGE_SIZE:
+            break
+
+        offset += DASHBOARD_PAGE_SIZE
+
+    return rows
 
 
 def get_dynamic_keywords():
@@ -311,8 +408,174 @@ async def get_last_scraped(source_url: str, user_id: str):
         return {"last_scraped_date": None}
 
 
+@router.get("/api/dashboard/restaurants")
+async def get_dashboard_restaurants(user_id: str, refresh: bool = False):
+    """Trả về các quán/bộ dữ liệu của một người dùng để lọc Dashboard."""
+    cache_key = user_cache_key(user_id, "restaurants")
+    cached = None if refresh else analytics_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        # PostgreSQL gom nhom truc tiep, nhanh hon nhieu so voi tai toan bo review ve Python.
+        rpc_response = supabase.rpc(
+            "get_dashboard_restaurants_fast",
+            {"p_user_id": user_id},
+        ).execute()
+        restaurants = rpc_response.data or []
+
+        payload = {
+            "status": "success",
+            "data": restaurants,
+            "total": len(restaurants),
+        }
+        return analytics_cache.set(cache_key, payload)
+    except Exception as rpc_error:
+        # Cho phep chay tuong thich trong luc migration chua duoc ap dung.
+        print(f"Dashboard restaurant RPC fallback: {rpc_error}")
+
+    try:
+        rows = fetch_dashboard_source_rows(user_id)
+        grouped = {}
+
+        for row in rows:
+            group_key = get_dashboard_group_key(row)
+            source_url = str(row.get("source_url") or "").strip()
+            created_at = row.get("review_date") or row.get("created_at")
+
+            item = grouped.setdefault(group_key, {
+                "key": group_key,
+                "name": get_dashboard_group_name(row),
+                "dataset_type": row.get("dataset_type") or "reviews",
+                "source_url": source_url,
+                "source_urls": [],
+                "review_count": 0,
+                "positive_count": 0,
+                "negative_count": 0,
+                "latest_at": created_at,
+            })
+
+            if source_url and source_url not in item["source_urls"]:
+                item["source_urls"].append(source_url)
+
+            item["review_count"] += 1
+
+            if is_positive_label(row.get("ai_label")):
+                item["positive_count"] += 1
+            elif is_negative_label(row.get("ai_label")):
+                item["negative_count"] += 1
+
+            if created_at and str(created_at) > str(item.get("latest_at") or ""):
+                item["latest_at"] = created_at
+
+        restaurants = sorted(
+            grouped.values(),
+            key=lambda item: (
+                -parse_time(item.get("latest_at")),
+                normalize_text(item.get("name")),
+            ),
+        )
+
+        payload = {
+            "status": "success",
+            "data": restaurants,
+            "total": len(restaurants),
+        }
+        return analytics_cache.set(cache_key, payload)
+
+    except Exception as e:
+        print(f"Lỗi API danh sách quán Dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/dashboard/summary")
+async def get_dashboard_summary(
+    user_id: str,
+    source_urls: Optional[str] = None,
+    refresh: bool = False,
+):
+    """KPI, xu huong va khia canh cua Dashboard trong mot truy van PostgreSQL."""
+    normalized_urls = sorted(
+        value.strip()
+        for value in str(source_urls or "").split(",")
+        if value.strip()
+    )
+    cache_key = user_cache_key(user_id, "dashboard-summary", "|".join(normalized_urls) or "all")
+    cached = None if refresh else analytics_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        response = supabase.rpc(
+            "get_dashboard_summary_fast",
+            {
+                "p_user_id": user_id,
+                "p_source_urls": normalized_urls or None,
+            },
+        ).execute()
+        return analytics_cache.set(
+            cache_key,
+            {"status": "success", "data": response.data or {}},
+        )
+    except Exception as e:
+        print(f"Loi API dashboard summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/report/summary")
+async def get_report_summary(
+    user_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    source: Optional[str] = "all",
+    source_urls: Optional[str] = None,
+    refresh: bool = False,
+):
+    """Thong ke Report da tong hop san, khong tra ve tung binh luan."""
+    selected_urls = sorted(
+        value.strip()
+        for value in str(source_urls or "").split(",")
+        if value.strip()
+    )
+    cache_key = user_cache_key(
+        user_id,
+        "report-summary",
+        start_date or "",
+        end_date or "",
+        source or "all",
+        "|".join(selected_urls) or "all",
+    )
+    cached = None if refresh else analytics_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        response = supabase.rpc(
+            "get_report_summary_fast",
+            {
+                "p_user_id": user_id,
+                "p_start_date": start_date or None,
+                "p_end_date": end_date or None,
+                "p_source": source or "all",
+                "p_source_urls": selected_urls or None,
+            },
+        ).execute()
+        return analytics_cache.set(
+            cache_key,
+            {"status": "success", "data": response.data or {}},
+        )
+    except Exception as e:
+        print(f"Loi API report summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/api/dashboard/alerts")
-async def get_dashboard_alerts(source_url: str, user_id: str):
+async def get_dashboard_alerts(source_url: str, user_id: str, refresh: bool = False):
+    cache_key = user_cache_key(user_id, "alerts", source_url or "all")
+    cached = None if refresh else analytics_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         # Bước 1: Kéo danh sách từ khóa động từ Database
         danger_kws, positive_kws, negative_signal_kws = get_dynamic_keywords()
@@ -340,7 +603,7 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
         # Bước 3: Đưa từ khóa động vào thuật toán để phân loại
         alerts = build_alerts(rows, danger_kws, positive_kws, negative_signal_kws, limit=20)
 
-        return {"alerts": alerts}
+        return analytics_cache.set(cache_key, {"alerts": alerts}, ttl_seconds=30)
 
     except HTTPException:
         raise
@@ -350,7 +613,16 @@ async def get_dashboard_alerts(source_url: str, user_id: str):
 
 
 @router.get("/api/dashboard/keyword-analytics")
-async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
+async def get_keyword_analytics(
+    user_id: str,
+    source_url: Optional[str] = None,
+    refresh: bool = False,
+):
+    cache_key = user_cache_key(user_id, "keywords", source_url or "all")
+    cached = None if refresh else analytics_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         query = (
             supabase
@@ -398,10 +670,11 @@ async def get_keyword_analytics(user_id: str, source_url: Optional[str] = None):
         for kw, count in neg_counts.most_common(20):
             wordcloud_data.append({"text": kw.capitalize(), "value": count * 10, "sentiment": "negative"})
 
-        return {
+        payload = {
             "leaderboard": leaderboard_data,
             "wordcloud": wordcloud_data,
         }
+        return analytics_cache.set(cache_key, payload)
 
     except Exception as e:
         print(f"Lỗi API keyword analytics: {e}")

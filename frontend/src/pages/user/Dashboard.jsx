@@ -1,5 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Globe, Hash, MessageSquare, Network } from 'lucide-react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  ChevronDown,
+  Globe,
+  Hash,
+  MessageSquare,
+  Network,
+  RefreshCcw,
+  Search,
+  Store,
+  WifiOff,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,26 +19,28 @@ import QuickConclusionCard from '../../components/user/dashboard/QuickConclusion
 import AlertsSection from '../../components/user/dashboard/AlertsSection';
 import DashboardSkeleton from '../../components/user/dashboard/DashboardSkeleton';
 import EmptyDashboardState from '../../components/user/dashboard/EmptyDashboardState';
-import AspectSentimentCard from '../../components/user/dashboard/AspectSentimentCard';
 import LeaderboardCard from '../../components/user/dashboard/LeaderboardCard';
 import PositiveRateCard from '../../components/user/dashboard/PositiveRateCard';
 import StatCard from '../../components/user/dashboard/StatCard';
-import TrendCard from '../../components/user/dashboard/TrendCard';
+import LazyVisible from '../../components/common/LazyVisible';
+
+const TrendCard = lazy(() => import('../../components/user/dashboard/TrendCard'));
+const AspectSentimentCard = lazy(() => import('../../components/user/dashboard/AspectSentimentCard'));
 
 import {
   buildBusinessLeaderboard,
-  buildAspectSentimentData,
-  buildTrendData,
   isCriticalAlert,
-  isInRange,
   normalizeAlert,
 } from '../../utils/user/dashboardUtils';
 
 import {
   fetchAlertsForSources,
-  fetchDashboardKeywordAnalytics,
-  fetchDashboardReviews,
+  fetchDashboardRestaurantOptions,
+  fetchDashboardSummary,
 } from '../../services/user/dashboardService';
+
+const ALL_RESTAURANTS_KEY = 'all';
+const DASHBOARD_RESTAURANT_STORAGE_KEY = 'almotion.dashboard.restaurant';
 
 const DANGER_KEYWORDS = [
   'tệ',
@@ -352,116 +365,378 @@ function buildVisibleAlerts(alerts, reviews) {
 export default function Dashboard() {
   const { user } = useAuth();
 
-  const [reviews, setReviews] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [keywordAnalytics, setKeywordAnalytics] = useState(null);
+  const [restaurantOptions, setRestaurantOptions] = useState([]);
+  const [selectedRestaurantKey, setSelectedRestaurantKey] = useState(
+    ALL_RESTAURANTS_KEY,
+  );
+  const [restaurantMenuOpen, setRestaurantMenuOpen] = useState(false);
+  const [restaurantSearch, setRestaurantSearch] = useState('');
+  const [optionsReady, setOptionsReady] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const restaurantMenuRef = useRef(null);
+  const loadSequenceRef = useRef(0);
 
-  const load = useCallback(async () => {
-    if (!user?.id) return;
+  useEffect(() => {
+    if (!user?.id) return undefined;
 
+    let active = true;
+
+    const loadRestaurantOptions = async () => {
+      setOptionsReady(false);
+
+      try {
+        const rows = await fetchDashboardRestaurantOptions(user.id);
+        if (!active) return;
+
+        const safeRows = Array.isArray(rows) ? rows : [];
+        const storedKey = window.localStorage.getItem(
+          DASHBOARD_RESTAURANT_STORAGE_KEY,
+        );
+        const nextKey = safeRows.some((item) => item.key === storedKey)
+          ? storedKey
+          : ALL_RESTAURANTS_KEY;
+
+        setRestaurantOptions(safeRows);
+        setSelectedRestaurantKey(nextKey);
+      } catch (error) {
+        if (!active) return;
+        setRestaurantOptions([]);
+        setSelectedRestaurantKey(ALL_RESTAURANTS_KEY);
+        toast.error(error.message || 'Không tải được danh sách quán.');
+      } finally {
+        if (active) setOptionsReady(true);
+      }
+    };
+
+    loadRestaurantOptions();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const selectedRestaurant = useMemo(
+    () => restaurantOptions.find((item) => item.key === selectedRestaurantKey) || null,
+    [restaurantOptions, selectedRestaurantKey],
+  );
+
+  const totalRestaurantReviews = useMemo(
+    () => restaurantOptions.reduce(
+      (total, item) => total + Number(item.review_count || 0),
+      0,
+    ),
+    [restaurantOptions],
+  );
+
+  const filteredRestaurantOptions = useMemo(() => {
+    const query = restaurantSearch.trim().toLocaleLowerCase('vi-VN');
+    if (!query) return restaurantOptions;
+
+    return restaurantOptions.filter((item) =>
+      String(item.name || '').toLocaleLowerCase('vi-VN').includes(query),
+    );
+  }, [restaurantOptions, restaurantSearch]);
+
+  useEffect(() => {
+    if (!restaurantMenuOpen) return undefined;
+
+    const closeMenu = () => {
+      setRestaurantMenuOpen(false);
+      setRestaurantSearch('');
+    };
+
+    const handlePointerDown = (event) => {
+      if (!restaurantMenuRef.current?.contains(event.target)) closeMenu();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [restaurantMenuOpen]);
+
+  const selectedSourceUrls = useMemo(
+    () => (selectedRestaurant ? selectedRestaurant.source_urls || [] : []),
+    [selectedRestaurant],
+  );
+
+  const load = useCallback(async (force = false) => {
+    if (!user?.id || !optionsReady) return;
+
+    const sequence = ++loadSequenceRef.current;
     setLoading(true);
+    setLoadError('');
 
     try {
-      const reviewRows = await fetchDashboardReviews(user.id);
-      const safeReviews = Array.isArray(reviewRows) ? reviewRows : [];
-
-      const [alertRows, keywordPayload] = await Promise.allSettled([
-        fetchAlertsForSources(user.id, safeReviews),
-        fetchDashboardKeywordAnalytics({
+      const [summaryPayload, alertRows] = await Promise.allSettled([
+        fetchDashboardSummary({
           userId: user.id,
-          sourceUrl: 'all',
+          sourceUrls: selectedSourceUrls,
+          force,
         }),
+        fetchAlertsForSources(user.id, selectedSourceUrls, force),
       ]);
+
+      if (summaryPayload.status !== 'fulfilled') throw summaryPayload.reason;
+      if (sequence !== loadSequenceRef.current) return;
 
       const safeAlerts =
         alertRows.status === 'fulfilled' && Array.isArray(alertRows.value)
           ? alertRows.value
           : [];
 
-      const safeKeywordAnalytics =
-        keywordPayload.status === 'fulfilled' ? keywordPayload.value : null;
-
       /**
        * Set state sau khi đã lấy xong cả reviews + alerts.
        * Giảm tình trạng UI render một lượt review trước, rồi nhảy khi alerts về sau.
        */
-      setReviews(safeReviews);
+      setSummary(summaryPayload.value || {});
       setAlerts(safeAlerts);
-      setKeywordAnalytics(safeKeywordAnalytics);
+      setKeywordAnalytics({ leaderboard: summaryPayload.value?.leaderboard || {} });
+      setUpdatedAt(new Date());
     } catch (error) {
+      if (sequence !== loadSequenceRef.current) return;
+      setLoadError(error.message || 'Không tải được dữ liệu tổng quan.');
       toast.error(error.message || 'Không tải được dữ liệu tổng quan.');
     } finally {
-      setLoading(false);
+      if (sequence === loadSequenceRef.current) setLoading(false);
     }
-  }, [user?.id]);
+  }, [optionsReady, selectedSourceUrls, user?.id]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const [statsReferenceTime] = useState(() => Date.now());
+  const handleRestaurantSelect = (nextKey) => {
+    setRestaurantMenuOpen(false);
+    setRestaurantSearch('');
+
+    if (nextKey === selectedRestaurantKey) return;
+
+    loadSequenceRef.current += 1;
+    setLoading(true);
+    setSummary(null);
+    setAlerts([]);
+    setKeywordAnalytics(null);
+    setSelectedRestaurantKey(nextKey);
+    window.localStorage.setItem(DASHBOARD_RESTAURANT_STORAGE_KEY, nextKey);
+  };
 
   const stats = useMemo(() => {
-    const positive = reviews.filter((item) => normalizeLabel(item.ai_label) === 1).length;
-    const negative = reviews.length - positive;
-    const sources = new Set(reviews.map((item) => item.source_url).filter(Boolean)).size;
-
-    const now = statsReferenceTime;
-    const week = 7 * 24 * 60 * 60 * 1000;
-
-    const current = reviews.filter((item) =>
-      isInRange(item.created_at, now - week, now),
-    ).length;
-
-    const previous = reviews.filter((item) =>
-      isInRange(item.created_at, now - week * 2, now - week),
-    ).length;
-
-    const growth =
-      previous > 0
-        ? ((current - previous) / previous) * 100
-        : current > 0
-          ? 100
-          : 0;
+    const total = Number(summary?.total || 0);
+    const positive = Number(summary?.positive || 0);
+    const negative = Number(summary?.negative || 0);
+    const sources = selectedRestaurant
+      ? 1
+      : restaurantOptions.length;
 
     return {
-      total: reviews.length,
+      total,
       positive,
       negative,
       sources,
-      positiveRate: reviews.length ? positive / reviews.length : 0,
-      growth,
+      positiveRate: Number(summary?.positive_rate || 0),
+      growth: Number(summary?.growth || 0),
     };
-  }, [reviews, statsReferenceTime]);
+  }, [restaurantOptions.length, selectedRestaurant, summary]);
 
-  const trendData = useMemo(() => buildTrendData(reviews), [reviews]);
-  const aspectData = useMemo(() => buildAspectSentimentData(reviews), [reviews]);
+  const trendData = useMemo(() => summary?.trend || [], [summary]);
+  const aspectData = useMemo(() => summary?.aspects || [], [summary]);
 
   const leaderboard = useMemo(() => {
     const value = keywordAnalytics?.leaderboard || keywordAnalytics?.data?.leaderboard;
 
-    return buildBusinessLeaderboard(value, reviews);
-  }, [keywordAnalytics, reviews]);
+    return buildBusinessLeaderboard(value, []);
+  }, [keywordAnalytics]);
 
   const visibleAlerts = useMemo(() => {
-    return buildVisibleAlerts(alerts, reviews);
-  }, [alerts, reviews]);
+    return buildVisibleAlerts(alerts, []);
+  }, [alerts]);
 
-  if (loading && !reviews.length) {
+  if (loading && !summary) {
     return <DashboardSkeleton />;
   }
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-500 font-sans">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-wide text-white">
-          Tổng quan hoạt động
-        </h1>
-        <p className="text-sm text-slate-400">
-          Theo dõi phản hồi khách hàng, điểm nổi bật và vấn đề cần xử lý.
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold tracking-wide text-white">
+            {selectedRestaurant
+              ? `Dashboard · ${selectedRestaurant.name}`
+              : 'Tổng quan hoạt động'}
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {selectedRestaurant
+              ? `${Number(selectedRestaurant.review_count || 0).toLocaleString('vi-VN')} phản hồi của quán đang chọn.`
+              : 'Theo dõi phản hồi khách hàng, điểm nổi bật và vấn đề cần xử lý.'}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            {updatedAt
+              ? `Cập nhật lúc ${updatedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+              : 'Chưa cập nhật dữ liệu'}
+          </p>
+        </div>
+
+        <div ref={restaurantMenuRef} className="relative min-w-0 lg:w-[380px]">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Dashboard theo quán
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setRestaurantMenuOpen((current) => !current)}
+            disabled={!optionsReady}
+            aria-haspopup="listbox"
+            aria-expanded={restaurantMenuOpen}
+            className="group flex min-h-14 w-full items-center gap-3 rounded-2xl border border-slate-700/80 bg-slate-900/75 px-3 py-2.5 text-left shadow-sm outline-none transition duration-200 hover:border-indigo-500/50 hover:bg-slate-900 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 disabled:cursor-wait disabled:opacity-60"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300 transition group-hover:bg-indigo-500/15">
+              <Store className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-slate-100">
+                {selectedRestaurant?.name || 'Tất cả quán'}
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-slate-400">
+                {selectedRestaurant
+                  ? `${Number(selectedRestaurant.review_count || 0).toLocaleString('vi-VN')} phản hồi`
+                  : `${restaurantOptions.length.toLocaleString('vi-VN')} quán · ${totalRestaurantReviews.toLocaleString('vi-VN')} phản hồi`}
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+                restaurantMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {restaurantMenuOpen && (
+            <div className="absolute right-0 z-50 mt-2 w-full min-w-[320px] overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/35 backdrop-blur-xl">
+              <div className="relative mb-2">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="search"
+                  value={restaurantSearch}
+                  onChange={(event) => setRestaurantSearch(event.target.value)}
+                  placeholder="Tìm tên quán..."
+                  autoFocus
+                  className="h-10 w-full rounded-xl border border-slate-700/80 bg-slate-900/80 pl-9 pr-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-indigo-500/70 focus:ring-2 focus:ring-indigo-500/15"
+                />
+              </div>
+
+              <div className="max-h-72 space-y-1 overflow-y-auto pr-1" role="listbox">
+                {!restaurantSearch.trim() && (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selectedRestaurantKey === ALL_RESTAURANTS_KEY}
+                    onClick={() => handleRestaurantSelect(ALL_RESTAURANTS_KEY)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                      selectedRestaurantKey === ALL_RESTAURANTS_KEY
+                        ? 'bg-indigo-500/15 text-indigo-100'
+                        : 'text-slate-200 hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-indigo-300">
+                      <Network className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">Tất cả quán</span>
+                      <span className="block text-xs text-slate-400">
+                        {restaurantOptions.length.toLocaleString('vi-VN')} quán · {totalRestaurantReviews.toLocaleString('vi-VN')} phản hồi
+                      </span>
+                    </span>
+                    {selectedRestaurantKey === ALL_RESTAURANTS_KEY && (
+                      <Check className="h-4 w-4 shrink-0 text-indigo-300" />
+                    )}
+                  </button>
+                )}
+
+                {filteredRestaurantOptions.map((item) => {
+                  const isSelected = item.key === selectedRestaurantKey;
+
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => handleRestaurantSelect(item.key)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                        isSelected
+                          ? 'bg-indigo-500/15 text-indigo-100'
+                          : 'text-slate-200 hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        isSelected
+                          ? 'bg-indigo-500/20 text-indigo-300'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        <Store className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{item.name}</span>
+                        <span className="block text-xs text-slate-400">
+                          {Number(item.review_count || 0).toLocaleString('vi-VN')} phản hồi
+                        </span>
+                      </span>
+                      {isSelected && <Check className="h-4 w-4 shrink-0 text-indigo-300" />}
+                    </button>
+                  );
+                })}
+
+                {filteredRestaurantOptions.length === 0 && (
+                  <div className="px-4 py-8 text-center">
+                    <Search className="mx-auto h-5 w-5 text-slate-600" />
+                    <p className="mt-2 text-sm font-medium text-slate-300">Không tìm thấy quán</p>
+                    <p className="mt-1 text-xs text-slate-500">Thử nhập tên ngắn hơn.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {loading && summary && (
+        <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-sm text-indigo-200">
+          Đang cập nhật số liệu cho quán đã chọn...
+        </div>
+      )}
+
+      {loadError && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3 text-rose-100">
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+            <div>
+              <p className="font-semibold">Không thể cập nhật Dashboard</p>
+              <p className="mt-0.5 text-xs leading-5 text-rose-200/80">{loadError}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => load(true)}
+            disabled={loading}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-300/30 bg-rose-500/10 px-4 py-2 font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
+          >
+            <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Thử lại
+          </button>
+        </div>
+      )}
 
       {!loading && stats.total === 0 ? (
         <EmptyDashboardState />
@@ -472,7 +747,7 @@ export default function Dashboard() {
             loading={loading}
           />
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-3">
             <StatCard
               title="Tổng phản hồi"
               value={stats.total.toLocaleString('vi-VN')}
@@ -484,7 +759,7 @@ export default function Dashboard() {
             <PositiveRateCard rate={stats.positiveRate} />
 
             <StatCard
-              title="Nguồn đang theo dõi"
+              title={selectedRestaurant ? 'Quán đang xem' : 'Quán đang theo dõi'}
               value={stats.sources.toLocaleString('vi-VN')}
               icon={<Network className="h-5 w-5 text-indigo-400" />}
               subIcons={
@@ -497,8 +772,12 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <TrendCard data={trendData} />
+          <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
+            <LazyVisible minHeight={420} className="h-full min-w-0 lg:col-span-2">
+              <Suspense fallback={<div className="h-full min-h-[420px] animate-pulse rounded-2xl border border-slate-700 bg-slate-800/40" />}>
+                <TrendCard data={trendData} />
+              </Suspense>
+            </LazyVisible>
 
             <QuickConclusionCard
               totalFeedback={stats.total}
@@ -508,7 +787,11 @@ export default function Dashboard() {
             />
           </div>
 
-          <AspectSentimentCard data={aspectData} />
+          <LazyVisible minHeight={420}>
+            <Suspense fallback={<div className="min-h-[420px] animate-pulse rounded-2xl border border-slate-700 bg-slate-800/40" />}>
+              <AspectSentimentCard data={aspectData} />
+            </Suspense>
+          </LazyVisible>
           <LeaderboardCard leaderboard={leaderboard} />
         </>
       )}

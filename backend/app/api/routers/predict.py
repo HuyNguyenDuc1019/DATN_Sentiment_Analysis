@@ -3,6 +3,7 @@ import time
 from datetime import datetime, timedelta
 from app.database import supabase
 from app.schemas import PredictRequest, PredictResponse, BatchPredictRequest
+from app.cache import analytics_cache
 
 router = APIRouter(prefix="/predict", tags=["AI Prediction"])
 
@@ -99,17 +100,20 @@ async def predict_batch(req_obj: Request, request: BatchPredictRequest):
     db_records = []
 
     try:
-        for item in request.reviews:
-            if not item.content.strip():
-                continue
-                
-            pred_result = predictor.predict(item.content)
-            label = pred_result.label if hasattr(pred_result, 'label') else pred_result['label']
-            confidence = pred_result.confidence if hasattr(pred_result, 'confidence') else pred_result['confidence']
-            
-            if user_threshold is not None:
-                if confidence < user_threshold and label == "Tích cực":
-                    label = "Tiêu cực" 
+        valid_reviews = [
+            item for item in request.reviews
+            if item.content and item.content.strip()
+        ]
+        contents = [item.content.strip() for item in valid_reviews]
+        predictions = predictor.predict_many(contents, batch_size=32)
+
+        for item, pred_result in zip(valid_reviews, predictions):
+            label = int(pred_result.get("label", 0))
+            confidence = float(pred_result.get("confidence", 0))
+
+            # predict_many trả confidence theo phần trăm, còn threshold lưu theo tỉ lệ 0..1.
+            if user_threshold is not None and confidence / 100 < user_threshold and label == 1:
+                label = 0
 
             aspects, keywords, is_action = extract_insights(
                 item.content, label, dynamic_aspects, sensitive_words_str, crisis_enabled
@@ -124,8 +128,15 @@ async def predict_batch(req_obj: Request, request: BatchPredictRequest):
                 "user_id": request.user_id, "source_url": request.source_url 
             })
 
-        if db_records:
-            supabase.table("scraped_reviews").insert(db_records).execute()
+        # Chia nhỏ lần ghi để tránh payload quá lớn khi xử lý file/cào hàng nghìn bình luận.
+        insert_batch_size = 500
+        for start in range(0, len(db_records), insert_batch_size):
+            supabase.table("scraped_reviews").insert(
+                db_records[start:start + insert_batch_size]
+            ).execute()
+
+        # Dữ liệu vừa thay đổi nên không để Dashboard/Report hiển thị cache cũ.
+        analytics_cache.invalidate_prefix(f"user:{request.user_id}:")
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi phân tích AI: {str(e)}")

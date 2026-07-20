@@ -161,26 +161,26 @@ export default function QuickConclusionCard({
   const Icon = conclusion.icon;
 
   return (
-    <section className={`rounded-2xl border p-6 shadow-xl ${tone.card}`}>
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone.icon}`}>
-            <Icon className="h-6 w-6" />
+    <section className={`flex h-full min-h-[420px] flex-col rounded-2xl border p-5 shadow-xl ${tone.card}`}>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
+            <Icon className="h-5 w-5" />
           </div>
 
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Kết luận nhanh</p>
-            <h2 className={`mt-1 text-2xl font-extrabold ${tone.title}`}>{conclusion.title}</h2>
+            <h2 className={`mt-1 text-xl font-extrabold leading-tight ${tone.title}`}>{conclusion.title}</h2>
           </div>
         </div>
 
-        <span className={`rounded-full border px-3 py-1 text-xs font-bold ${tone.badge}`}>{conclusion.badge}</span>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold ${tone.badge}`}>{conclusion.badge}</span>
       </div>
 
       <p className="text-sm font-semibold text-slate-100">{conclusion.description}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{conclusion.suggestion}</p>
+      <p className="mt-1.5 text-sm leading-5 text-slate-400">{conclusion.suggestion}</p>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
           <span>Chỉ số hài lòng</span>
           <span>{conclusion.positiveRate}%</span>
@@ -193,8 +193,8 @@ export default function QuickConclusionCard({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3">
-        <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-slate-950/30 px-4 py-3">
+      <div className="mt-4 grid gap-2.5">
+        <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-slate-950/30 px-4 py-2.5">
           <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
             <TrendingUp className="h-4 w-4 text-emerald-300" />
             Khách hài lòng
@@ -205,7 +205,7 @@ export default function QuickConclusionCard({
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-rose-500/20 bg-slate-950/30 px-4 py-3">
+        <div className="flex items-center justify-between rounded-xl border border-rose-500/20 bg-slate-950/30 px-4 py-2.5">
           <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
             <TrendingDown className="h-4 w-4 text-rose-300" />
             Khách chưa hài lòng
@@ -216,7 +216,7 @@ export default function QuickConclusionCard({
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-amber-500/20 bg-slate-950/30 px-4 py-3">
+        <div className="flex items-center justify-between rounded-xl border border-amber-500/20 bg-slate-950/30 px-4 py-2.5">
           <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
             Cảnh báo cần xem
@@ -229,7 +229,7 @@ export default function QuickConclusionCard({
       </div>
 
       {!['good', 'insufficient'].includes(conclusion.level) && (
-        <div className={`mt-5 flex items-start gap-3 rounded-xl border p-4 ${tone.soft}`}>
+        <div className={`mt-4 flex items-start gap-3 rounded-xl border p-3 ${tone.soft}`}>
           <SmilePlus className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
           <p className="text-xs leading-5 text-slate-300">
             Gợi ý tối ưu: ưu tiên kiểm tra các cụm phàn nàn xuất hiện nhiều lần, sau đó mới kết luận chất lượng tổng thể.

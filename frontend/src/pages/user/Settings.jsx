@@ -115,12 +115,12 @@ export default function Settings() {
 
       await saveUserSettings({
         user_id: userId,
-        custom_threshold: Number(threshold),
+        custom_threshold: Math.round(Number(threshold)),
         custom_sensitive_words: stopWords,
         alert_email: Boolean(alertEmail),
         weekly_report: Boolean(weeklyReport),
-        retention_days: Number(retentionDays),
-        feedback_confidence_threshold: Number(feedbackConfidenceThreshold),
+        retention_days: Math.round(Number(retentionDays)),
+        feedback_confidence_threshold: Math.round(Number(feedbackConfidenceThreshold)),
       });
 
       toast.success('Đã lưu cấu hình thành công!');

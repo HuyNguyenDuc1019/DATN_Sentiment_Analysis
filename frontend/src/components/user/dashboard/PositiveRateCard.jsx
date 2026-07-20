@@ -2,7 +2,7 @@ import { Smile } from 'lucide-react';
 
 export default function PositiveRateCard({ rate }) {
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md transition-colors hover:bg-slate-800">
+    <div className="flex h-full min-h-[120px] flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/50 p-5 backdrop-blur-md transition-colors hover:bg-slate-800 sm:p-6">
       <div className="flex items-start justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tỷ lệ khách hài lòng</h3>
         <Smile className="h-5 w-5 text-emerald-400" />

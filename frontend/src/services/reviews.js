@@ -22,6 +22,12 @@ export async function fetchUserReviews(userId, filters = {}) {
       query = query.lte('created_at', new Date(`${filters.endDate}T23:59:59.999`).toISOString());
     }
 
+    if (Array.isArray(filters.sourceUrls) && filters.sourceUrls.length) {
+      query = query.in('source_url', filters.sourceUrls);
+    } else if (filters.sourceUrl && filters.sourceUrl !== 'all') {
+      query = query.eq('source_url', filters.sourceUrl);
+    }
+
     if (filters.source === 'CSV') query = query.eq('source_url', 'CSV_Upload');
     if (filters.source === 'Foody') query = query.ilike('source_url', '%foody%');
     if (filters.source === 'Goole') query = query.ilike('source_url', '%goole%');

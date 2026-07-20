@@ -133,6 +133,16 @@ export async function fetchUserSettings(userId) {
   return data?.data || data?.settings || data;
 }
 
+function normalizeIntegerSetting(value, fieldName) {
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue)) {
+    throw new Error(`${fieldName} must be a valid number.`);
+  }
+
+  return Math.round(parsedValue);
+}
+
 export async function saveUserSettings(payload) {
   const userId = payload?.user_id || payload?.userId;
 
@@ -140,13 +150,36 @@ export async function saveUserSettings(payload) {
     throw new Error('Thiếu user_id.');
   }
 
+  const normalizedPayload = {
+    ...payload,
+    user_id: userId,
+  };
+
+  if (payload?.custom_threshold != null) {
+    normalizedPayload.custom_threshold = normalizeIntegerSetting(
+      payload.custom_threshold,
+      'custom_threshold',
+    );
+  }
+
+  if (payload?.feedback_confidence_threshold != null) {
+    normalizedPayload.feedback_confidence_threshold = normalizeIntegerSetting(
+      payload.feedback_confidence_threshold,
+      'feedback_confidence_threshold',
+    );
+  }
+
+  if (payload?.retention_days != null) {
+    normalizedPayload.retention_days = normalizeIntegerSetting(
+      payload.retention_days,
+      'retention_days',
+    );
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/user/settings`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...payload,
-      user_id: userId,
-    }),
+    body: JSON.stringify(normalizedPayload),
   });
 
   const data = await readJson(response);

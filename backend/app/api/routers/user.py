@@ -60,6 +60,32 @@ async def update_user_settings(req: UserSettingsUpdate):
             if v is not None and k != "user_id"
         }
 
+        integer_fields = (
+            "custom_threshold",
+            "feedback_confidence_threshold",
+            "retention_days",
+        )
+
+        for field_name in integer_fields:
+            if field_name not in update_data:
+                continue
+
+            numeric_value = float(update_data[field_name])
+
+            if field_name != "retention_days" and not 0 <= numeric_value <= 100:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{field_name} must be between 0 and 100.",
+                )
+
+            if field_name == "retention_days" and numeric_value < 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="retention_days must be at least 1.",
+                )
+
+            update_data[field_name] = int(round(numeric_value))
+
         update_data["updated_at"] = datetime.utcnow().isoformat()
 
         supabase.table("user_settings").upsert({
@@ -72,6 +98,8 @@ async def update_user_settings(req: UserSettingsUpdate):
             "message": "Đã lưu cài đặt thành công!",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Lỗi API update_user_settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))

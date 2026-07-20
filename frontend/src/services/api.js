@@ -198,16 +198,44 @@ export const submitFeedbackBatch = (payloads) => {
   });
 };
 
-export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all' }) => {
+export const fetchDashboardAlerts = ({ userId, sourceUrl = 'all', force = false }) => {
   return get(`${PYTHON_API}/api/dashboard/alerts`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
+    refresh: force ? 'true' : '',
   });
 };
 
-export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all' }) => {
+export const fetchDashboardRestaurants = ({ userId, force = false }) => {
+  return get(`${PYTHON_API}/api/dashboard/restaurants`, {
+    user_id: userId,
+    refresh: force ? 'true' : '',
+  });
+};
+
+export const fetchDashboardSummary = ({ userId, sourceUrls = [], force = false }) => {
+  return get(`${PYTHON_API}/api/dashboard/summary`, {
+    user_id: userId,
+    source_urls: sourceUrls.join(','),
+    refresh: force ? 'true' : '',
+  });
+};
+
+export const fetchReportSummary = ({ userId, startDate, endDate, source = 'all', sourceUrls = [], force = false }) => {
+  return get(`${PYTHON_API}/api/report/summary`, {
+    user_id: userId,
+    start_date: startDate,
+    end_date: endDate,
+    source,
+    source_urls: sourceUrls.join(','),
+    refresh: force ? 'true' : '',
+  });
+};
+
+export const fetchKeywordAnalytics = ({ userId, sourceUrl = 'all', force = false }) => {
   return get(`${PYTHON_API}/api/dashboard/keyword-analytics`, {
     user_id: userId,
     source_url: sourceUrl || 'all',
+    refresh: force ? 'true' : '',
   });
 };
