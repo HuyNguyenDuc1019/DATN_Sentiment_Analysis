@@ -7,7 +7,7 @@ import AiLogicCard from '../../components/admin/settings/AiLogicCard';
 import DataLimitCard from '../../components/admin/settings/DataLimitCard';
 import CrisisAlertCard from '../../components/admin/settings/CrisisAlertCard';
 import AspectDictionaryCard from '../../components/admin/settings/AspectDictionaryCard';
-// Tải component mới quản lý Từ khóa cảm xúc
+// Tải component mới quản lý các Từ khóa cảm xúc
 import SentimentDictionaryCard from '../../components/admin/settings/SentimentDictionaryCard';
 
 import {
