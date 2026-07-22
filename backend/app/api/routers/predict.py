@@ -31,6 +31,11 @@ def extract_insights(text: str, ai_label: int, dynamic_aspects: dict, sensitive_
 
 @router.post("/", response_model=PredictResponse)
 async def predict_sentiment(req_obj: Request, request: PredictRequest):
+    """
+    API dự đoán cảm xúc cho một đoạn văn bản đơn lẻ.
+    Được sử dụng khi người dùng nhập text trực tiếp vào form phân tích trên giao diện.
+    Trả về nhãn Tích cực/Tiêu cực và độ tin cậy.
+    """
     predictor = getattr(req_obj.app.state, 'predictor', None)
     if predictor is None:
         raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng.")
@@ -45,6 +50,12 @@ async def predict_sentiment(req_obj: Request, request: PredictRequest):
         
 @router.post("/batch")
 async def predict_batch(req_obj: Request, request: BatchPredictRequest):
+    """
+    API phân tích cảm xúc hàng loạt cho một danh sách các bình luận.
+    Được gọi bởi NodeJS scraper sau khi cào xong dữ liệu từ Foody/Google Maps.
+    Thực hiện phân tích bằng model, kết hợp từ điển custom của user/admin để trích xuất aspects,
+    lưu kết quả vào Supabase và dọn dẹp các data cũ theo cài đặt retention.
+    """
     predictor = getattr(req_obj.app.state, 'predictor', None)
     if predictor is None:
         raise HTTPException(status_code=503, detail="Mô hình chưa sẵn sàng. Vui lòng thử lại sau.")

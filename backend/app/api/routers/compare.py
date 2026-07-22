@@ -454,6 +454,11 @@ async def fetch_reviews_from_node(url: str, name: str, client: httpx.AsyncClient
 
 @router.post("/restaurants")
 async def compare_restaurants(req_obj: Request, req: CompareRestaurantsRequest):
+    """
+    API so sánh chất lượng giữa 2 hoặc 3 quán ăn dựa trên bình luận.
+    Ưu tiên lấy dữ liệu đã có trong CSDL, nếu thiếu sẽ gọi Node.js Scraper cào mới.
+    Sau đó phân tích bằng PhoBERT và đánh giá trên các khía cạnh (Món ăn, Phục vụ, Không gian...).
+    """
     verify_user(req.user_id)
 
     if len(req.restaurants) < 2 or len(req.restaurants) > 3:
@@ -544,6 +549,10 @@ async def compare_restaurants(req_obj: Request, req: CompareRestaurantsRequest):
 
 @router.get("/history")
 async def get_comparison_history(user_id: str):
+    """
+    Lấy danh sách các phiên so sánh (lịch sử) đã lưu của người dùng.
+    Dùng để hiển thị trong mục "Lịch sử so sánh".
+    """
     verify_user(user_id)
     try:
         sessions_res = supabase.table("comparison_sessions").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
@@ -568,6 +577,9 @@ async def get_comparison_history(user_id: str):
 
 @router.post("/save")
 async def save_comparison(req: SaveComparisonRequest):
+    """
+    Lưu lại một phiên so sánh vào lịch sử để xem lại sau này (tính năng "Lưu kết quả").
+    """
     verify_user(req.user_id)
     if not req.items:
         raise HTTPException(status_code=400, detail="Không có kết quả so sánh để lưu.")

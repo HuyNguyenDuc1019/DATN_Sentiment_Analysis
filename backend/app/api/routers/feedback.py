@@ -114,6 +114,11 @@ def _save_records(records: list[dict]) -> list[dict]:
 
 @router.post("/feedback")
 async def save_feedback(request: FeedbackRequest):
+    """
+    Lưu phản hồi đơn lẻ từ người dùng khi họ sửa nhãn của một bình luận
+    hoặc đánh dấu bỏ qua. Nếu sửa nhãn, hệ thống có thể dùng dữ liệu này
+    để huấn luyện lại model sau này.
+    """
     try:
         _validate_review_ownership([request])
         saved = _save_records([_feedback_record(request)])
@@ -135,6 +140,9 @@ async def save_feedback(request: FeedbackRequest):
 
 @router.post("/feedback/batch")
 async def save_feedback_batch(request: FeedbackBatchRequest):
+    """
+    Lưu một lô phản hồi hàng loạt từ người dùng (Bulk Action).
+    """
     try:
         _validate_review_ownership(request.items)
         records = [_feedback_record(item) for item in request.items]
@@ -157,6 +165,10 @@ async def save_feedback_batch(request: FeedbackBatchRequest):
 
 @router.put("/api/feedback/{feedback_id}/link-source")
 async def link_feedback_source(feedback_id: str, request: FeedbackLinkSource):
+    """
+    Cập nhật/liên kết nguồn gốc (scraped_review_id) cho một phản hồi đã có.
+    Giúp map phản hồi với bình luận gốc được cào về.
+    """
     try:
         current = (
             supabase

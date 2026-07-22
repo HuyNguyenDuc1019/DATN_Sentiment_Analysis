@@ -23,6 +23,10 @@ class UserSettingsUpdate(BaseModel):
 
 @router.get("/settings")
 async def get_user_settings(user_id: str):
+    """
+    Lấy thông tin cài đặt cá nhân của người dùng (như ngưỡng tin cậy custom, từ điển tự định nghĩa, số ngày lưu trữ, v.v.).
+    Nếu chưa có trong DB, trả về một cấu hình mặc định.
+    """
     try:
         res = (
             supabase
@@ -53,6 +57,11 @@ async def get_user_settings(user_id: str):
 
 @router.put("/settings")
 async def update_user_settings(req: UserSettingsUpdate):
+    """
+    Cập nhật thông tin cài đặt cá nhân của người dùng.
+    Dữ liệu được lưu vào bảng 'user_settings' trên Supabase.
+    Xác thực các giá trị kiểu số phải nằm trong khoảng hợp lệ.
+    """
     try:
         update_data = {
             k: v
@@ -107,6 +116,11 @@ async def update_user_settings(req: UserSettingsUpdate):
 
 @router.get("/datasets")
 async def get_user_datasets(user_id: str):
+    """
+    Lấy danh sách các bộ dữ liệu (dataset) đã cào và phân tích của người dùng.
+    Nhóm các bình luận lại theo dataset_id hoặc source_url để đếm tổng số lượng review, 
+    số review tích cực/tiêu cực, và độ tin cậy trung bình của mỗi dataset.
+    """
     try:
         res = (
             supabase
@@ -186,6 +200,11 @@ async def delete_user_dataset(
     dataset_id: str = Query(..., description="Tên, URL hoặc ID của dataset"),
     user_id: str = Query(..., description="ID của user"),
 ):
+    """
+    Xóa một dataset cụ thể của người dùng.
+    Tìm kiếm dataset dựa trên source_url, dataset_name hoặc dataset_id.
+    Sau khi tìm thấy, xóa toàn bộ feedback liên quan và sau đó xóa các bản ghi scraped_reviews.
+    """
     try:
         if not user_id:
             raise HTTPException(status_code=400, detail="Thiếu user_id.")
@@ -293,6 +312,10 @@ async def delete_user_dataset(
 
 @router.delete("/data/clear")
 async def clear_user_data(user_id: str):
+    """
+    Xóa toàn bộ dữ liệu (tất cả dataset và feedback) của một người dùng.
+    Thường được gọi khi người dùng muốn reset tài khoản hoặc xóa tài khoản.
+    """
     try:
         if not user_id:
             raise HTTPException(status_code=400, detail="Thiếu user_id.")

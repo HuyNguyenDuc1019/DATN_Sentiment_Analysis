@@ -139,6 +139,10 @@ def _append_review_history(feedback_id: str, entry: dict):
 
 @router.get("/users")
 async def get_admin_users(admin_id: str = Depends(verify_admin)):
+    """
+    API lấy danh sách toàn bộ người dùng (user) trong hệ thống dành cho Admin.
+    Trả về thông tin id, email, full_name, role, status.
+    """
     try:
         res = (
             supabase
@@ -162,6 +166,10 @@ async def update_user_action(
     request: AdminActionRequest,
     admin_id: str = Depends(verify_admin),
 ):
+    """
+    Cập nhật trạng thái người dùng (Ví dụ: Khóa/Mở khóa tài khoản - ban/unban).
+    Ghi log thao tác của Admin vào bảng 'admin_activity_logs'.
+    """
     now = datetime.utcnow()
     update_payload = {}
 
@@ -227,6 +235,10 @@ async def update_user_action(
 
 @router.get("/feedback")
 async def get_admin_feedbacks(admin_id: str = Depends(verify_admin)):
+    """
+    Lấy danh sách tất cả phản hồi từ người dùng báo cáo sai nhãn.
+    Dữ liệu được lấy từ 'feedback_data' và kết hợp với 'profiles' để hiển thị email.
+    """
     try:
         feedback_res = (
             supabase
@@ -435,6 +447,11 @@ async def review_feedback(
 
 @router.get("/dataset/export")
 async def export_retrain_dataset(admin_id: str = Depends(verify_admin)):
+    """
+    API xuất dữ liệu huấn luyện (Retrain Dataset) thành file CSV.
+    Chỉ xuất các phản hồi đã được Admin phê duyệt (status='approved').
+    File CSV này dùng để đưa vào PhoBERT huấn luyện lại.
+    """
     try:
         response = (
             supabase
@@ -479,6 +496,10 @@ async def export_retrain_dataset(admin_id: str = Depends(verify_admin)):
 
 @router.get("/settings")
 async def get_system_settings(admin_id: str = Depends(verify_admin)):
+    """
+    Lấy cấu hình hệ thống hiện tại của Admin (từ bảng 'system_settings').
+    Cấu hình bao gồm: từ điển tùy chỉnh, cài đặt cảnh báo khủng hoảng, v.v.
+    """
     try:
         res = (
             supabase
@@ -536,6 +557,10 @@ async def update_system_settings(
 
 @router.get("/metrics")
 async def get_admin_metrics(admin_id: str = Depends(verify_admin)):
+    """
+    Lấy các chỉ số đo lường KPI tổng quan cho trang chủ Admin Dashboard.
+    (Tổng người dùng, tổng số phân tích, phản hồi đang chờ xử lý...)
+    """
     try:
         response = supabase.rpc("get_admin_dashboard_metrics").execute()
         data = response.data or {}

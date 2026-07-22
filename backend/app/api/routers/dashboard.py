@@ -386,6 +386,10 @@ def build_alerts(rows, danger_keywords, positive_keywords, negative_signal_keywo
 
 @router.get("/api/last-scraped")
 async def get_last_scraped(source_url: str, user_id: str):
+    """
+    Truy vấn thời gian (review_date) của bình luận mới nhất đã cào từ một nguồn cụ thể.
+    Giúp scraper (NodeJS) biết mốc thời gian để chỉ cào những bình luận mới hơn.
+    """
     try:
         response = (
             supabase
@@ -410,7 +414,11 @@ async def get_last_scraped(source_url: str, user_id: str):
 
 @router.get("/api/dashboard/restaurants")
 async def get_dashboard_restaurants(user_id: str, refresh: bool = False):
-    """Trả về các quán/bộ dữ liệu của một người dùng để lọc Dashboard."""
+    """
+    Trả về danh sách các quán/bộ dữ liệu (datasets) của một người dùng.
+    Dùng để hiển thị ở bộ lọc (filter dropdown) trên màn hình Dashboard.
+    Ưu tiên gọi Postgres RPC để gom nhóm nhanh hơn.
+    """
     cache_key = user_cache_key(user_id, "restaurants")
     cached = None if refresh else analytics_cache.get(cache_key)
     if cached is not None:
@@ -494,7 +502,10 @@ async def get_dashboard_summary(
     source_urls: Optional[str] = None,
     refresh: bool = False,
 ):
-    """KPI, xu huong va khia canh cua Dashboard trong mot truy van PostgreSQL."""
+    """
+    Lấy các chỉ số KPI, xu hướng và tỷ lệ cảm xúc tổng quan để hiển thị biểu đồ trên Dashboard.
+    Sử dụng Postgres RPC để tính toán trực tiếp trên database, giúp giảm tải phía backend Python.
+    """
     normalized_urls = sorted(
         value.strip()
         for value in str(source_urls or "").split(",")
@@ -531,7 +542,10 @@ async def get_report_summary(
     source_urls: Optional[str] = None,
     refresh: bool = False,
 ):
-    """Thong ke Report da tong hop san, khong tra ve tung binh luan."""
+    """
+    Thống kê dữ liệu báo cáo (Report) đã được tổng hợp, có hỗ trợ lọc theo ngày và nguồn.
+    Dùng để xuất dữ liệu báo cáo PDF.
+    """
     selected_urls = sorted(
         value.strip()
         for value in str(source_urls or "").split(",")
@@ -571,6 +585,11 @@ async def get_report_summary(
 
 @router.get("/api/dashboard/alerts")
 async def get_dashboard_alerts(source_url: str, user_id: str, refresh: bool = False):
+    """
+    Lấy danh sách các cảnh báo (alerts) cho người dùng.
+    Dùng cho tính năng Crisis Alert (cảnh báo khủng hoảng), trả về các bình luận 
+    có chứa từ khóa nguy hiểm, cần xử lý gấp.
+    """
     cache_key = user_cache_key(user_id, "alerts", source_url or "all")
     cached = None if refresh else analytics_cache.get(cache_key)
     if cached is not None:
@@ -618,6 +637,11 @@ async def get_keyword_analytics(
     source_url: Optional[str] = None,
     refresh: bool = False,
 ):
+    """
+    Lấy dữ liệu phân tích từ khóa (Keyword Analytics).
+    Trả về dữ liệu Leaderboard (các từ khóa xuất hiện nhiều nhất) 
+    và dữ liệu để vẽ Wordcloud (Đám mây từ khóa) trên Dashboard.
+    """
     cache_key = user_cache_key(user_id, "keywords", source_url or "all")
     cached = None if refresh else analytics_cache.get(cache_key)
     if cached is not None:
