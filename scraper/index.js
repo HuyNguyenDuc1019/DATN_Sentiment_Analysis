@@ -378,7 +378,12 @@ async function scrapeFoodyForCompare(
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
-  const page = await browser.newPage();
+const page = await browser.newPage();
+
+  // 👉 ĐÃ SỬA: Ép trình duyệt ảo dùng Tiếng Việt
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8'
+  });
 
   try {
     console.log(`🌐 Đang truy cập trang: ${url}`);
@@ -581,12 +586,17 @@ async function scrapeGoogleMapsForCompare(
       const reviewRes = await axios.get(nextReviewUrl);
       const rawReviews = reviewRes.data.reviews || [];
 
-      for (const item of rawReviews) {
-        let rawText = item.snippet || item.details || '';
-
+for (const item of rawReviews) {
+    let rawText = '';
+    // 👉 ĐÃ SỬA: Ưu tiên lấy bản dịch Tiếng Việt của Google trước
+    if (item.extracted_snippet && item.extracted_snippet.translated) {
+        rawText = item.extracted_snippet.translated;
+    } else {
+        rawText = item.snippet || item.details || '';
         if (typeof rawText === 'object' && rawText !== null) {
           rawText = rawText.translated || rawText.original || rawText.text || '';
         }
+    }
 
         const content = cleanReviewText(String(rawText));
         const contentKey = content.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -655,7 +665,12 @@ async function scrapeFoody(
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
-  const page = await browser.newPage();
+const page = await browser.newPage();
+
+  // 👉 ĐÃ SỬA: Ép trình duyệt ảo dùng Tiếng Việt
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8'
+  });
 
   try {
     ensureTaskNotStopped(scrapeTask);
@@ -936,14 +951,19 @@ async function scrapeGoogleMaps(
 
       let consecutiveOldReviews = 0;
 
-      for (const item of rawReviews) {
-        ensureTaskNotStopped(scrapeTask);
+for (const item of rawReviews) {
+    ensureTaskNotStopped(scrapeTask);
 
-        let rawText = item.snippet || item.details || '';
-
+    let rawText = '';
+    // 👉 ĐÃ SỬA: Ưu tiên lấy bản dịch Tiếng Việt của Google trước
+    if (item.extracted_snippet && item.extracted_snippet.translated) {
+        rawText = item.extracted_snippet.translated;
+    } else {
+        rawText = item.snippet || item.details || '';
         if (typeof rawText === 'object' && rawText !== null) {
           rawText = rawText.translated || rawText.original || rawText.text || '';
         }
+    }
 
         let safeString = String(rawText);
 
