@@ -886,12 +886,15 @@ async function scrapeGoogleMaps(
     const data = searchRes.data;
 
     let dataId = null;
+    let matchedPlace = null;
 
     if (data.place_results && data.place_results.data_id) {
-      dataId = data.place_results.data_id;
+      matchedPlace = data.place_results;
+      dataId = matchedPlace.data_id;
       console.log('👉 Bắt được quán ở chế độ Exact Match.');
     } else if (data.local_results && data.local_results.length > 0) {
-      dataId = data.local_results[0].data_id;
+      matchedPlace = data.local_results[0];
+      dataId = matchedPlace.data_id;
       console.log('👉 Bắt được quán ở chế độ List Match.');
     }
 
@@ -900,6 +903,10 @@ async function scrapeGoogleMaps(
     }
 
     console.log(`✅ Tìm thấy mã quán data_id: ${dataId}. Bắt đầu tải bình luận...`);
+
+    datasetName = String(
+      matchedPlace?.title || matchedPlace?.name || datasetName || 'Google Maps',
+    ).trim();
 
     const cleanReviews = [];
     const seenContents = new Set();

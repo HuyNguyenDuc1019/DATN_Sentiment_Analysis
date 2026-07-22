@@ -15,6 +15,12 @@ async function readResponseBody(response) {
 
 function getErrorMessage(body, fallbackMessage) {
   if (typeof body === 'string' && body.trim()) return body;
+  if (Array.isArray(body?.detail)) {
+    return body.detail
+      .map((item) => item?.msg || item?.message)
+      .filter(Boolean)
+      .join('; ') || fallbackMessage;
+  }
   if (body?.detail) return String(body.detail);
   if (body?.message) return String(body.message);
   if (body?.error) return String(body.error);
@@ -83,7 +89,9 @@ export async function saveAdminSettings({ adminId, payload }) {
     throw new Error('Dữ liệu cấu hình không hợp lệ.');
   }
 
-  return requestJson('/api/admin/settings', {
+  const query = new URLSearchParams({ admin_id: adminId });
+
+  return requestJson(`/api/admin/settings?${query.toString()}`, {
     method: 'PUT',
     body: JSON.stringify({
       ...payload,

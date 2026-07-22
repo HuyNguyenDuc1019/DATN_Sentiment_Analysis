@@ -5,10 +5,6 @@ export default function RecentUsersCard({ isLoading, recentUsers }) {
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-md">
       <h3 className="mb-2 text-sm font-medium text-slate-200">Người dùng mới gần đây</h3>
-      <p className="mb-6 text-xs text-slate-500">
-        6 tài khoản mới nhất trong bảng profiles.
-      </p>
-
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           Array(6)

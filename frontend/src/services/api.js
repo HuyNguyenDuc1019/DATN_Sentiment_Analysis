@@ -216,7 +216,7 @@ export const fetchDashboardRestaurants = ({ userId, force = false }) => {
 export const fetchDashboardSummary = ({ userId, sourceUrls = [], force = false }) => {
   return get(`${PYTHON_API}/api/dashboard/summary`, {
     user_id: userId,
-    source_urls: sourceUrls.join(','),
+    source_urls: JSON.stringify(sourceUrls),
     refresh: force ? 'true' : '',
   });
 };
@@ -227,7 +227,7 @@ export const fetchReportSummary = ({ userId, startDate, endDate, source = 'all',
     start_date: startDate,
     end_date: endDate,
     source,
-    source_urls: sourceUrls.join(','),
+    source_urls: JSON.stringify(sourceUrls),
     refresh: force ? 'true' : '',
   });
 };

@@ -5,6 +5,7 @@ from datetime import datetime
 from urllib.parse import unquote, urlsplit, urlunsplit
 import unicodedata
 import re
+import json
 import time
 
 from app.database import supabase
@@ -14,6 +15,25 @@ router = APIRouter(tags=["Dashboard & Alerts"])
 
 
 DASHBOARD_PAGE_SIZE = 1000
+
+
+def parse_source_urls(value):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return []
+
+    try:
+        decoded = json.loads(raw_value)
+        if isinstance(decoded, list):
+            return sorted({
+                str(item).strip()
+                for item in decoded
+                if str(item).strip()
+            })
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+    return sorted({item.strip() for item in raw_value.split(",") if item.strip()})
 
 
 def normalize_source_url(value):
@@ -61,20 +81,40 @@ def get_dashboard_group_key(item):
 def get_dashboard_group_name(item):
     dataset_name = str(item.get("dataset_name") or "").strip()
     source_url = str(item.get("source_url") or "").strip()
+    technical_google_name = bool(
+        re.match(r"^(data\s*[=!:]|@|!\d)", dataset_name, re.IGNORECASE)
+        or re.search(r"!\d+[a-z]\d+", dataset_name, re.IGNORECASE)
+    )
 
     if source_url.lower() == "csv_upload" or normalize_text(item.get("dataset_type")) == "csv":
         return "Dữ liệu CSV"
 
-    if dataset_name and dataset_name.lower() not in ["foody", "google", "google maps"]:
+    if dataset_name and not technical_google_name and dataset_name.lower() not in ["foody", "google", "google maps"]:
         return dataset_name
 
     if source_url and source_url.lower() != "csv_upload":
         try:
-            slug = unquote(urlsplit(source_url).path).strip("/").split("/")[-1]
-            if slug:
+            parsed = urlsplit(source_url)
+            decoded_path = unquote(parsed.path or "")
+            host = parsed.netloc.lower()
+
+            if "google." in host or "goo.gl" in host:
+                place_match = re.search(r"/place/([^/]+)", decoded_path, re.IGNORECASE)
+                if place_match:
+                    place_name = re.sub(
+                        r"\s+", " ", place_match.group(1).replace("+", " ")
+                    ).strip()
+                    if place_name and not place_name.lower().startswith("data="):
+                        return place_name
+
+            slug = decoded_path.strip("/").split("/")[-1]
+            if slug and not re.match(r"^(data[=!]|@|!\d)", slug, re.IGNORECASE):
                 return re.sub(r"[-_]+", " ", slug).strip().title()
         except Exception:
             pass
+
+    if technical_google_name:
+        return "Google Maps"
 
     return dataset_name or "Dữ liệu đã phân tích"
 
@@ -423,6 +463,14 @@ async def get_dashboard_restaurants(user_id: str, refresh: bool = False):
             {"p_user_id": user_id},
         ).execute()
         restaurants = rpc_response.data or []
+        for restaurant in restaurants:
+            if not isinstance(restaurant, dict):
+                continue
+            restaurant["name"] = get_dashboard_group_name({
+                "dataset_name": restaurant.get("name"),
+                "dataset_type": restaurant.get("dataset_type"),
+                "source_url": restaurant.get("source_url"),
+            })
 
         payload = {
             "status": "success",
@@ -495,11 +543,7 @@ async def get_dashboard_summary(
     refresh: bool = False,
 ):
     """KPI, xu huong va khia canh cua Dashboard trong mot truy van PostgreSQL."""
-    normalized_urls = sorted(
-        value.strip()
-        for value in str(source_urls or "").split(",")
-        if value.strip()
-    )
+    normalized_urls = parse_source_urls(source_urls)
     cache_key = user_cache_key(user_id, "dashboard-summary", "|".join(normalized_urls) or "all")
     cached = None if refresh else analytics_cache.get(cache_key)
     if cached is not None:
@@ -532,11 +576,7 @@ async def get_report_summary(
     refresh: bool = False,
 ):
     """Thong ke Report da tong hop san, khong tra ve tung binh luan."""
-    selected_urls = sorted(
-        value.strip()
-        for value in str(source_urls or "").split(",")
-        if value.strip()
-    )
+    selected_urls = parse_source_urls(source_urls)
     cache_key = user_cache_key(
         user_id,
         "report-summary",
