@@ -31,6 +31,9 @@ class AdminSettingUpdate(BaseModel):
     crisis_alert_enabled: bool
     aspect_dictionary: dict
     data_retention_days: int
+    danger_keywords: list[str] = []
+    positive_keywords: list[str] = []
+    negative_signal_keywords: list[str] = []
 
 
 class AdminFeedbackDetailReview(BaseModel):
@@ -541,6 +544,9 @@ async def update_system_settings(
                 "crisis_alert_enabled": request.crisis_alert_enabled,
                 "aspect_dictionary": request.aspect_dictionary,
                 "data_retention_days": request.data_retention_days,
+                "danger_keywords": request.danger_keywords,
+                "positive_keywords": request.positive_keywords,
+                "negative_signal_keywords": request.negative_signal_keywords,
             })
             .eq("id", 1)
             .execute()
