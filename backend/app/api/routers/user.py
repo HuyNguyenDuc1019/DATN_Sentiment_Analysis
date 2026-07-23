@@ -204,6 +204,7 @@ async def delete_user_dataset(
     Xóa một dataset cụ thể của người dùng.
     Tìm kiếm dataset dựa trên source_url, dataset_name hoặc dataset_id.
     Sau khi tìm thấy, xóa toàn bộ feedback liên quan và sau đó xóa các bản ghi scraped_reviews.
+    Sử dụng Batch Processing để tránh lỗi quá tải URL của Supabase.
     """
     try:
         if not user_id:
@@ -215,10 +216,11 @@ async def delete_user_dataset(
         dataset_key = dataset_id.strip()
 
         if not dataset_key:
-            raise HTTPException(status_code=400, detail="Thiếu dataset_id.")
+            raise HTTPException(status_code=400, detail="Thiếu dataset_id hợp lệ.")
 
         rows = []
 
+        # 1. Tìm theo source_url
         try:
             res_url = (
                 supabase
@@ -232,6 +234,7 @@ async def delete_user_dataset(
         except Exception as url_error:
             print(f"Không tìm được theo source_url: {url_error}")
 
+        # 2. Tìm theo dataset_name
         try:
             res_name = (
                 supabase
@@ -245,9 +248,9 @@ async def delete_user_dataset(
         except Exception as name_error:
             print(f"Không tìm được theo dataset_name: {name_error}")
 
+        # 3. Tìm theo dataset_id (UUID)
         try:
-            uuid.UUID(dataset_key)
-
+            uuid.UUID(dataset_key) # Kiểm tra xem có phải UUID hợp lệ không
             res_dataset_id = (
                 supabase
                 .table("scraped_reviews")
@@ -258,16 +261,18 @@ async def delete_user_dataset(
             )
             rows.extend(res_dataset_id.data or [])
         except ValueError:
-            pass
+            pass # Nếu không phải UUID thì bỏ qua
         except Exception as dataset_error:
             print(f"Không tìm được theo dataset_id: {dataset_error}")
 
+        # 4. Trích xuất danh sách ID duy nhất cần xóa
         review_ids = list({
             row.get("id")
             for row in rows
             if row.get("id")
         })
 
+        # Nếu không có gì để xóa, trả về luôn
         if not review_ids:
             return {
                 "status": "success",
@@ -275,27 +280,33 @@ async def delete_user_dataset(
                 "deleted_count": 0,
             }
 
-        # feedback_data là bảng con và đang giữ khóa ngoại scraped_review_id.
-        # Phải xóa các phản hồi liên quan trước khi xóa scraped_reviews.
-        (
-            supabase
-            .table("feedback_data")
-            .delete()
-            .in_("scraped_review_id", review_ids)
-            .execute()
-        )
+        # 5. XÓA DỮ LIỆU THEO LÔ (BATCH PROCESSING)
+        # Chia nhỏ danh sách review_ids thành từng cụm 150 ID để tránh lỗi giới hạn URL của Supabase
+        batch_size = 150
+        for i in range(0, len(review_ids), batch_size):
+            batch_ids = review_ids[i : i + batch_size]
 
-        (
-            supabase
-            .table("scraped_reviews")
-            .delete()
-            .in_("id", review_ids)
-            .execute()
-        )
+            # Xóa bảng con (feedback_data) trước để tránh lỗi khóa ngoại
+            (
+                supabase
+                .table("feedback_data")
+                .delete()
+                .in_("scraped_review_id", batch_ids)
+                .execute()
+            )
+
+            # Xóa bảng cha (scraped_reviews) sau
+            (
+                supabase
+                .table("scraped_reviews")
+                .delete()
+                .in_("id", batch_ids)
+                .execute()
+            )
 
         return {
             "status": "success",
-            "message": "Đã xóa dữ liệu đã chọn.",
+            "message": "Đã xóa dữ liệu đã chọn thành công.",
             "deleted_count": len(review_ids),
         }
 
@@ -308,7 +319,6 @@ async def delete_user_dataset(
             status_code=500,
             detail=f"Không thể xóa dữ liệu đã chọn: {str(e)}"
         )
-
 
 @router.delete("/data/clear")
 async def clear_user_data(user_id: str):
