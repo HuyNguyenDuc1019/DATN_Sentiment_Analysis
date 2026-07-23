@@ -322,23 +322,52 @@ async function sendReviewsToPredictBatch({
     };
   }
 
-  console.log('🚀 Đang gửi dữ liệu sang FastAPI để AI phân tích...');
+  console.log(`🚀 Đang chia nhỏ ${cleanReviews.length} bình luận để gửi sang AI (Batch Processing)...`);
+
+  let allResults = [];
+  let totalCount = 0;
+  let finalMessage = 'Đã phân tích xong.';
+  
+  // 👉 GIẢI PHÁP: Chia nhỏ dữ liệu thành các lô 30 bình luận
+  const BATCH_SIZE = 30; 
 
   try {
+    for (let i = 0; i < cleanReviews.length; i += BATCH_SIZE) {
+      ensureTaskNotStopped(scrapeTask);
+
+      const batch = cleanReviews.slice(i, i + BATCH_SIZE);
+      console.log(`⏳ Đang gửi lô thứ ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} bình luận)...`);
+
+      // 👉 GIẢI PHÁP: Thêm timeout 120s (2 phút) để chống đứt kết nối
+      const response = await axios.post(`${PYTHON_API}/predict/batch`, {
+        reviews: batch,
+        user_id: userId,
+        source_url: url,
+        dataset_name: datasetName,
+        dataset_type: datasetType,
+      }, {
+        timeout: 120000 
+      });
+
+      // Gom kết quả của từng lô lại với nhau
+      if (response.data && response.data.results) {
+        allResults = allResults.concat(response.data.results);
+        totalCount += (response.data.count || batch.length);
+        finalMessage = response.data.message || finalMessage;
+      }
+    }
+
     ensureTaskNotStopped(scrapeTask);
 
-    const response = await axios.post(`${PYTHON_API}/predict/batch`, {
-      reviews: cleanReviews,
-      user_id: userId,
-      source_url: url,
-      dataset_name: datasetName,
-      dataset_type: datasetType,
-    });
+    console.log('🎉 AI và Database đã xử lý xong TOÀN BỘ dữ liệu!');
+    
+    // Trả về một khối kết quả tổng nhất quán cho Frontend
+    return {
+      message: finalMessage,
+      results: allResults,
+      count: totalCount
+    };
 
-    ensureTaskNotStopped(scrapeTask);
-
-    console.log('🎉 AI và Database đã xử lý xong!');
-    return response.data;
   } catch (error) {
     const status = error.response?.status;
 
@@ -355,7 +384,6 @@ async function sendReviewsToPredictBatch({
     throw apiError;
   }
 }
-
 async function scrapeFoodyForCompare(
   url,
   maxReviews = COMPARE_MAX_REVIEWS,
