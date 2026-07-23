@@ -172,10 +172,10 @@ export default function Settings() {
 
   const getDatasetKey = (dataset) => {
     return (
+      dataset?.id ||
       dataset?.source_url ||
       dataset?.dataset_name ||
       dataset?.dataset_id ||
-      dataset?.id ||
       ''
     );
   };
